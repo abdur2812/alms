@@ -1,6 +1,14 @@
-# ERP Billing System - REST API
+# Multi-Tenant Invoice & Inventory SaaS
 
-A complete, modular REST API for an ERP-style POS system built with Node.js, Express, and MongoDB/Mongoose.
+A production-ready multi-tenant SaaS built with Next.js 14+ App Router, MongoDB, Mongoose, and Tailwind CSS.
+
+## Backend (Express API - Legacy)
+
+See `/backend` folder for the Express REST API.
+
+## Frontend (Next.js App - Primary)
+
+See `/app` folder for the modern Next.js application with multi-tenancy.
 
 ## 🚀 Features
 

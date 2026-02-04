@@ -53,6 +53,28 @@ const invoiceSchema = new mongoose.Schema(
       min: [0, "Tax rate cannot be negative"],
       max: [100, "Tax rate cannot exceed 100%"],
     },
+    isIGST: {
+      type: Boolean,
+      default: false,
+    },
+    cgstRate: {
+      type: Number,
+      default: 0,
+      min: [0, "CGST rate cannot be negative"],
+      max: [50, "CGST rate cannot exceed 50%"],
+    },
+    sgstRate: {
+      type: Number,
+      default: 0,
+      min: [0, "SGST rate cannot be negative"],
+      max: [50, "SGST rate cannot exceed 50%"],
+    },
+    igstRate: {
+      type: Number,
+      default: 0,
+      min: [0, "IGST rate cannot be negative"],
+      max: [100, "IGST rate cannot exceed 100%"],
+    },
     status: {
       type: String,
       enum: ["Draft", "Pending", "Paid", "Cancelled"],
@@ -79,7 +101,31 @@ invoiceSchema.virtual("subtotal").get(function () {
 
 // Virtual for tax amount
 invoiceSchema.virtual("taxAmount").get(function () {
-  return (this.subtotal * this.taxRate) / 100;
+  if (this.isIGST) {
+    return (this.subtotal * this.igstRate) / 100;
+  } else {
+    const cgst = (this.subtotal * this.cgstRate) / 100;
+    const sgst = (this.subtotal * this.sgstRate) / 100;
+    return cgst + sgst;
+  }
+});
+
+// Virtual for CGST amount
+invoiceSchema.virtual("cgstAmount").get(function () {
+  if (this.isIGST) return 0;
+  return (this.subtotal * this.cgstRate) / 100;
+});
+
+// Virtual for SGST amount
+invoiceSchema.virtual("sgstAmount").get(function () {
+  if (this.isIGST) return 0;
+  return (this.subtotal * this.sgstRate) / 100;
+});
+
+// Virtual for IGST amount
+invoiceSchema.virtual("igstAmount").get(function () {
+  if (!this.isIGST) return 0;
+  return (this.subtotal * this.igstRate) / 100;
 });
 
 // Virtual for grand total (subtotal + tax)
@@ -94,8 +140,15 @@ invoiceSchema.pre("save", function (next) {
     return sum + item.quantity * item.unitPrice;
   }, 0);
 
-  // Calculate tax
-  const tax = (subtotal * this.taxRate) / 100;
+  // Calculate tax based on IGST or CGST+SGST
+  let tax;
+  if (this.isIGST) {
+    tax = (subtotal * this.igstRate) / 100;
+  } else {
+    const cgst = (subtotal * this.cgstRate) / 100;
+    const sgst = (subtotal * this.sgstRate) / 100;
+    tax = cgst + sgst;
+  }
 
   // Set total amount
   this.totalAmount = subtotal + tax;

@@ -9,6 +9,7 @@ const PORT = process.env.PORT || 3000;
 const customerRoutes = require("./routes/customerRoutes");
 const productRoutes = require("./routes/productRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
+const userRoutes = require("./routes/userRoutes");
 
 // Import error handler
 const { errorHandler } = require("./middleware/errorHandler");
@@ -49,6 +50,7 @@ app.get("/", (req, res) => {
       customers: "/api/customers",
       products: "/api/products",
       invoices: "/api/invoices",
+      users: "/api/users",
     },
   });
 });
@@ -57,6 +59,7 @@ app.get("/", (req, res) => {
 app.use("/api/customers", customerRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/invoices", invoiceRoutes);
+app.use("/api/users", userRoutes);
 
 // 404 handler
 app.use((req, res, next) => {

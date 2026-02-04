@@ -9,11 +9,15 @@ const {
   adjustStock,
   getLowStockProducts,
   getOutOfStockProducts,
+  bulkCreateProducts,
 } = require("../controllers/productController");
 
 // Alert routes (must be before :id routes)
 router.get("/alerts/low-stock", getLowStockProducts);
 router.get("/alerts/out-of-stock", getOutOfStockProducts);
+
+// Bulk import route
+router.post("/bulk", bulkCreateProducts);
 
 // Basic CRUD routes
 router.route("/").get(getAllProducts).post(createProduct);

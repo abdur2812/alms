@@ -230,3 +230,65 @@ exports.getOutOfStockProducts = asyncHandler(async (req, res, next) => {
     data: products,
   });
 });
+
+// @desc    Bulk create products
+// @route   POST /api/products/bulk
+// @access  Public
+exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
+  const { products } = req.body;
+
+  if (!Array.isArray(products) || products.length === 0) {
+    return next(new AppError("Products array is required", 400));
+  }
+
+  const results = {
+    success: [],
+    failed: [],
+  };
+
+  for (const productData of products) {
+    try {
+      const { name, description, price, stockQuantity, sku } = productData;
+
+      // Validate required fields
+      if (!name || !price || !sku) {
+        results.failed.push({
+          data: productData,
+          error: "Missing required fields (name, price, sku)",
+        });
+        continue;
+      }
+
+      // Check if product with SKU already exists
+      const existingProduct = await Product.findOne({ sku: sku.toUpperCase() });
+      if (existingProduct) {
+        results.failed.push({
+          data: productData,
+          error: `Product with SKU ${sku} already exists`,
+        });
+        continue;
+      }
+
+      const product = await Product.create({
+        name,
+        description: description || "",
+        price: Number(price),
+        stockQuantity: Number(stockQuantity) || 0,
+        sku: sku.toUpperCase(),
+      });
+
+      results.success.push(product);
+    } catch (error) {
+      results.failed.push({
+        data: productData,
+        error: error.message,
+      });
+    }
+  }
+
+  res.status(201).json({
+    success: true,
+    message: `Bulk import completed: ${results.success.length} succeeded, ${results.failed.length} failed`,
+    data: results,
+  });
+});
