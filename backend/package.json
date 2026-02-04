@@ -1,0 +1,21 @@
+{
+  "name": "erp-billing-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "ERP Billing System REST API with Express, MongoDB, and Mongoose",
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^5.2.1",
+    "mongoose": "^8.22.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
