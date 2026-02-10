@@ -134,7 +134,8 @@ export default function NewInvoicePage() {
 
   const calculateTax = () => {
     return formData.items.reduce((sum, item) => {
-      const itemSubtotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+      const itemSubtotal =
+        (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
       const itemGst = (itemSubtotal * (parseFloat(item.gst) || 0)) / 100;
       return sum + itemGst;
     }, 0);
@@ -311,7 +312,8 @@ export default function NewInvoicePage() {
                         className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded transition-all group-hover:scale-110"
                       />
                       <span className="ml-3 text-sm font-medium text-gray-900">
-                        GST Bill (GST rates will be taken from individual products)
+                        GST Bill (GST rates will be taken from individual
+                        products)
                       </span>
                     </label>
                   </div>

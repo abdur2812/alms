@@ -152,7 +152,10 @@ export default function EditCustomerPage({ params }) {
                 htmlFor="name"
                 className="block text-sm font-medium text-gray-700"
               >
-                {formData.customerType === "business" ? "Business Name" : "Name"} <span className="text-red-500">*</span>
+                {formData.customerType === "business"
+                  ? "Business Name"
+                  : "Name"}{" "}
+                <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -170,7 +173,10 @@ export default function EditCustomerPage({ params }) {
                 htmlFor="pocName"
                 className="block text-sm font-medium text-gray-700"
               >
-                POC Name {formData.customerType === "business" && <span className="text-red-500">*</span>}
+                POC Name{" "}
+                {formData.customerType === "business" && (
+                  <span className="text-red-500">*</span>
+                )}
               </label>
               <input
                 type="text"
