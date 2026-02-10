@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { customersAPI, productsAPI, invoicesAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
+import { useAuth } from "@/context/AuthContext";
 import {
   FiUsers,
   FiPackage,
@@ -11,14 +12,18 @@ import {
   FiDollarSign,
   FiAlertCircle,
   FiTrendingUp,
+  FiShoppingBag,
 } from "react-icons/fi";
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [stats, setStats] = useState({
     totalCustomers: 0,
     totalProducts: 0,
     totalInvoices: 0,
     totalRevenue: 0,
+    totalShops: 0,
+    activeShops: 0,
     lowStockProducts: [],
     recentInvoices: [],
   });
@@ -26,76 +31,160 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
 
-      // Fetch all data in parallel
-      const [customersRes, productsRes, invoicesRes, lowStockRes] =
-        await Promise.all([
-          customersAPI.getAll({ limit: 1 }),
-          productsAPI.getAll({ limit: 1 }),
-          invoicesAPI.getAll({ limit: 5 }),
-          productsAPI.getLowStock(),
-        ]);
+      // Wait for user context to be available
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-      // Calculate total revenue from paid invoices
-      const allInvoicesRes = await invoicesAPI.getAll({
-        status: "Paid",
-        limit: 1000,
-      });
-      const totalRevenue = allInvoicesRes.data.data.reduce(
-        (sum, invoice) => sum + (invoice.totalAmount || 0),
-        0,
-      );
+      if (user?.isSuperAdmin) {
+        // Super admin only fetches shop data
+        try {
+          const shopsData = await fetch("http://localhost:3000/api/shops").then(
+            (r) => r.json(),
+          );
+          const activeShops = shopsData.filter((s) => s.isActive).length;
+          const totalShops = shopsData.length;
 
-      setStats({
-        totalCustomers: customersRes.data.total,
-        totalProducts: productsRes.data.total,
-        totalInvoices: invoicesRes.data.total,
-        totalRevenue: totalRevenue,
-        lowStockProducts: lowStockRes.data.data.slice(0, 5),
-        recentInvoices: invoicesRes.data.data,
-      });
+          setStats({
+            totalCustomers: 0,
+            totalProducts: 0,
+            totalInvoices: 0,
+            totalRevenue: 0,
+            totalShops: totalShops,
+            activeShops: activeShops,
+            lowStockProducts: [],
+            recentInvoices: [],
+          });
+        } catch (error) {
+          console.error("Error fetching shop data:", error);
+          setStats({
+            totalCustomers: 0,
+            totalProducts: 0,
+            totalInvoices: 0,
+            totalRevenue: 0,
+            totalShops: 0,
+            activeShops: 0,
+            lowStockProducts: [],
+            recentInvoices: [],
+          });
+        }
+      } else {
+        // Shop owners fetch operational data
+        try {
+          const [customersRes, productsRes, invoicesRes, lowStockRes] =
+            await Promise.all([
+              customersAPI.getAll({ limit: 1 }),
+              productsAPI.getAll({ limit: 1 }),
+              invoicesAPI.getAll({ limit: 5 }),
+              productsAPI.getLowStock(),
+            ]);
+
+          // Calculate total revenue from paid invoices
+          const allInvoicesRes = await invoicesAPI.getAll({
+            status: "Paid",
+            limit: 1000,
+          });
+          const totalRevenue = allInvoicesRes.data.data.reduce(
+            (sum, invoice) => sum + (invoice.totalAmount || 0),
+            0,
+          );
+
+          setStats({
+            totalCustomers: customersRes.data.total,
+            totalProducts: productsRes.data.total,
+            totalInvoices: invoicesRes.data.total,
+            totalRevenue: totalRevenue,
+            totalShops: 0,
+            activeShops: 0,
+            lowStockProducts: lowStockRes.data.data.slice(0, 5),
+            recentInvoices: invoicesRes.data.data,
+          });
+        } catch (error) {
+          console.error("Error fetching dashboard data:", error);
+          setStats({
+            totalCustomers: 0,
+            totalProducts: 0,
+            totalInvoices: 0,
+            totalRevenue: 0,
+            totalShops: 0,
+            activeShops: 0,
+            lowStockProducts: [],
+            recentInvoices: [],
+          });
+        }
+      }
     } catch (err) {
       console.error("Failed to fetch dashboard data", err);
+      console.error("Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const statCards = [
-    {
-      title: "Total Customers",
-      value: stats.totalCustomers,
-      icon: FiUsers,
-      color: "bg-blue-500",
-      link: "/dashboard/customers",
-    },
-    {
-      title: "Total Products",
-      value: stats.totalProducts,
-      icon: FiPackage,
-      color: "bg-green-500",
-      link: "/dashboard/products",
-    },
-    {
-      title: "Total Invoices",
-      value: stats.totalInvoices,
-      icon: FiFileText,
-      color: "bg-purple-500",
-      link: "/dashboard/invoices",
-    },
-    {
-      title: "Total Revenue",
-      value: formatINR(stats.totalRevenue),
-      icon: FiDollarSign,
-      color: "bg-indigo-500",
-      link: "/dashboard/invoices",
-    },
-  ];
+  const getStatCards = () => {
+    if (user?.isSuperAdmin) {
+      // Super admin sees shop statistics only
+      return [
+        {
+          title: "Total Shops",
+          value: stats.totalShops,
+          icon: FiShoppingBag,
+          color: "bg-blue-500",
+          link: "/dashboard/admin/shops",
+        },
+        {
+          title: "Active Shops",
+          value: stats.activeShops,
+          icon: FiShoppingBag,
+          color: "bg-green-500",
+          link: "/dashboard/admin/shops",
+        },
+      ];
+    }
+
+    // Shop owners see operational statistics
+    return [
+      {
+        title: "Total Customers",
+        value: stats.totalCustomers,
+        icon: FiUsers,
+        color: "bg-blue-500",
+        link: "/dashboard/customers",
+      },
+      {
+        title: "Total Products",
+        value: stats.totalProducts,
+        icon: FiPackage,
+        color: "bg-green-500",
+        link: "/dashboard/products",
+      },
+      {
+        title: "Total Invoices",
+        value: stats.totalInvoices,
+        icon: FiFileText,
+        color: "bg-purple-500",
+        link: "/dashboard/invoices",
+      },
+      {
+        title: "Total Revenue",
+        value: formatINR(stats.totalRevenue),
+        icon: FiDollarSign,
+        color: "bg-indigo-500",
+        link: "/dashboard/invoices",
+      },
+    ];
+  };
 
   const statusColors = {
     Draft: "bg-gray-100 text-gray-800",
@@ -118,182 +207,278 @@ export default function DashboardPage() {
   return (
     <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Welcome to your ERP Billing System
+        <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+          {user?.isSuperAdmin ? "Super Admin Dashboard" : "Dashboard"}
+        </h1>
+        <p className="mt-2 text-sm text-gray-600">
+          {user?.isSuperAdmin
+            ? "Manage all shops and view system-wide statistics"
+            : "Welcome to your ERP Billing System"}
         </p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-        {statCards.map((stat, index) => (
-          <Link
-            key={index}
-            href={stat.link}
-            className="bg-white overflow-hidden shadow-md rounded-lg hover:shadow-lg transition-shadow"
-          >
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className={`flex-shrink-0 ${stat.color} rounded-md p-3`}>
-                  <stat.icon className="h-6 w-6 text-white" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
+      <div
+        className={`grid grid-cols-1 gap-6 sm:grid-cols-2 ${user?.isSuperAdmin ? "lg:grid-cols-2" : "lg:grid-cols-4"} mb-8`}
+      >
+        {getStatCards().map((stat, index) => {
+          const gradients = [
+            "from-blue-500 to-cyan-500",
+            "from-purple-500 to-pink-500",
+            "from-orange-500 to-red-500",
+            "from-green-500 to-emerald-500",
+          ];
+          const gradient = gradients[index % gradients.length];
+
+          return (
+            <Link
+              key={index}
+              href={stat.link}
+              className="group relative bg-white overflow-hidden rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
+            >
+              {/* Gradient background overlay */}
+              <div
+                className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}
+              ></div>
+
+              <div className="relative p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">
                       {stat.title}
-                    </dt>
-                    <dd className="text-2xl font-semibold text-gray-900">
+                    </p>
+                    <p className="mt-2 text-3xl font-bold text-gray-900">
                       {stat.value}
-                    </dd>
-                  </dl>
+                    </p>
+                  </div>
+                  <div
+                    className={`flex-shrink-0 bg-gradient-to-br ${gradient} rounded-2xl p-4 shadow-md`}
+                  >
+                    <stat.icon className="h-8 w-8 text-white" />
+                  </div>
+                </div>
+
+                {/* Decorative element */}
+                <div className="mt-4 flex items-center text-sm text-gray-500">
+                  <svg
+                    className="w-4 h-4 mr-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 7l5 5m0 0l-5 5m5-5H6"
+                    />
+                  </svg>
+                  View details
                 </div>
               </div>
-            </div>
-          </Link>
-        ))}
+            </Link>
+          );
+        })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Invoices */}
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Recent Invoices
-              </h2>
-              <Link
-                href="/dashboard/invoices"
-                className="text-sm text-indigo-600 hover:text-indigo-700"
-              >
-                View all
-              </Link>
-            </div>
-          </div>
-          <div className="divide-y divide-gray-200">
-            {stats.recentInvoices.length === 0 ? (
-              <div className="p-6 text-center text-gray-500">
-                <p>No invoices yet.</p>
-                <Link
-                  href="/dashboard/invoices/new"
-                  className="mt-2 inline-block text-indigo-600 hover:text-indigo-700"
-                >
-                  Create your first invoice
-                </Link>
-              </div>
-            ) : (
-              stats.recentInvoices.map((invoice) => (
-                <Link
-                  key={invoice._id}
-                  href={`/dashboard/invoices/${invoice._id}/view`}
-                  className="block px-6 py-4 hover:bg-gray-50"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {invoice.invoiceNumber}
-                      </p>
-                      <p className="text-sm text-gray-500 truncate">
-                        {invoice.customerId?.name || "N/A"}
-                      </p>
-                    </div>
-                    <div className="ml-4 flex-shrink-0 text-right">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {formatINR(invoice.totalAmount || 0)}
-                      </p>
-                      <span
-                        className={`mt-1 inline-flex px-2 text-xs font-semibold rounded-full ${statusColors[invoice.status]}`}
-                      >
-                        {invoice.status}
-                      </span>
-                    </div>
+      {/* Show operational widgets only for shop owners */}
+      {!user?.isSuperAdmin && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent Invoices */}
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
+            <div className="px-6 py-5 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center mr-3">
+                    <FiFileText className="w-5 h-5 text-white" />
                   </div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Recent Invoices
+                  </h2>
+                </div>
+                <Link
+                  href="/dashboard/invoices"
+                  className="text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center"
+                >
+                  View all
+                  <svg
+                    className="w-4 h-4 ml-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
                 </Link>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Low Stock Alert */}
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <FiAlertCircle className="h-5 w-5 text-yellow-500 mr-2" />
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Low Stock Alerts
-                </h2>
               </div>
-              <Link
-                href="/dashboard/products"
-                className="text-sm text-indigo-600 hover:text-indigo-700"
-              >
-                View all
-              </Link>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {stats.recentInvoices.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FiFileText className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p className="font-medium">No invoices yet.</p>
+                  <Link
+                    href="/dashboard/invoices/new"
+                    className="mt-3 inline-block text-indigo-600 hover:text-indigo-700 font-medium"
+                  >
+                    Create your first invoice →
+                  </Link>
+                </div>
+              ) : (
+                stats.recentInvoices.map((invoice) => (
+                  <Link
+                    key={invoice._id}
+                    href={`/dashboard/invoices/${invoice._id}/view`}
+                    className="block px-6 py-4 hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all duration-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {invoice.invoiceNumber}
+                        </p>
+                        <p className="text-sm text-gray-500 truncate">
+                          {invoice.customerId?.name || "N/A"}
+                        </p>
+                      </div>
+                      <div className="ml-4 flex-shrink-0 text-right">
+                        <p className="text-sm font-semibold text-gray-900">
+                          {formatINR(invoice.totalAmount || 0)}
+                        </p>
+                        <span
+                          className={`mt-1 inline-flex px-2 text-xs font-semibold rounded-full ${statusColors[invoice.status]}`}
+                        >
+                          {invoice.status}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              )}
             </div>
           </div>
-          <div className="divide-y divide-gray-200">
-            {stats.lowStockProducts.length === 0 ? (
-              <div className="p-6 text-center text-gray-500">
-                <p>No low stock products.</p>
-              </div>
-            ) : (
-              stats.lowStockProducts.map((product) => (
-                <Link
-                  key={product._id}
-                  href={`/dashboard/products/${product._id}`}
-                  className="block px-6 py-4 hover:bg-gray-50"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {product.name}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        SKU: {product.sku}
-                      </p>
-                    </div>
-                    <div className="ml-4 flex-shrink-0">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                        {product.stockQuantity} left
-                      </span>
-                    </div>
+
+          {/* Low Stock Alert */}
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
+            <div className="px-6 py-5 bg-gradient-to-r from-orange-50 to-white border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center mr-3">
+                    <FiAlertCircle className="w-5 h-5 text-white" />
                   </div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Low Stock Alerts
+                  </h2>
+                </div>
+                <Link
+                  href="/dashboard/products"
+                  className="text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center"
+                >
+                  View all
+                  <svg
+                    className="w-4 h-4 ml-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
                 </Link>
-              ))
-            )}
+              </div>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {stats.lowStockProducts.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FiPackage className="w-8 h-8 text-green-500" />
+                  </div>
+                  <p className="font-medium">All products are well stocked!</p>
+                </div>
+              ) : (
+                stats.lowStockProducts.map((product) => (
+                  <Link
+                    key={product._id}
+                    href={`/dashboard/products/${product._id}`}
+                    className="block px-6 py-4 hover:bg-gradient-to-r hover:from-orange-50 hover:to-white transition-all duration-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {product.name}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          SKU: {product.sku}
+                        </p>
+                      </div>
+                      <div className="ml-4 flex-shrink-0">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-orange-100 to-red-100 text-orange-800 border border-orange-200">
+                          {product.stockQuantity} left
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Quick Actions */}
-      <div className="mt-8 bg-white shadow-md rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Quick Actions
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Link
-            href="/dashboard/invoices/new"
-            className="flex items-center justify-center px-4 py-3 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-          >
-            <FiFileText className="mr-2" />
-            Create Invoice
-          </Link>
-          <Link
-            href="/dashboard/customers/new"
-            className="flex items-center justify-center px-4 py-3 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <FiUsers className="mr-2" />
-            Add Customer
-          </Link>
-          <Link
-            href="/dashboard/products/new"
-            className="flex items-center justify-center px-4 py-3 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <FiPackage className="mr-2" />
-            Add Product
-          </Link>
+      {/* Quick Actions - only for shop owners */}
+      {!user?.isSuperAdmin && (
+        <div className="mt-8 bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+            <svg
+              className="w-6 h-6 mr-2 text-indigo-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M13 10V3L4 14h7v7l9-11h-7z"
+              />
+            </svg>
+            Quick Actions
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Link
+              href="/dashboard/invoices/new"
+              className="group relative overflow-hidden flex items-center justify-center px-6 py-4 border-2 border-transparent text-sm font-semibold rounded-xl text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1"
+            >
+              <FiFileText className="mr-2 w-5 h-5" />
+              Create Invoice
+            </Link>
+            <Link
+              href="/dashboard/customers/new"
+              className="group flex items-center justify-center px-6 py-4 border-2 border-gray-200 text-sm font-semibold rounded-xl text-gray-700 bg-white hover:border-indigo-300 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 transform hover:-translate-y-1 shadow-md hover:shadow-lg"
+            >
+              <FiUsers className="mr-2 w-5 h-5" />
+              Add Customer
+            </Link>
+            <Link
+              href="/dashboard/products/new"
+              className="group flex items-center justify-center px-6 py-4 border-2 border-gray-200 text-sm font-semibold rounded-xl text-gray-700 bg-white hover:border-purple-300 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 transition-all duration-200 transform hover:-translate-y-1 shadow-md hover:shadow-lg"
+            >
+              <FiPackage className="mr-2 w-5 h-5" />
+              Add Product
+            </Link>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

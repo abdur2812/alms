@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { productsAPI } from "@/lib/api";
-import { FiArrowLeft } from "react-icons/fi";
+import {
+  PageHeader,
+  Card,
+  CardBody,
+  Input,
+  Select,
+  Dropdown,
+  Button,
+} from "@/components/UI";
+import { FiArrowLeft, FiPackage } from "react-icons/fi";
 import Link from "next/link";
 
 export default function NewProductPage() {
@@ -13,9 +22,12 @@ export default function NewProductPage() {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
+    totalProductsAdded: "1",
+    hsnCode: "",
+    partNo: "",
+    gst: "18",
     price: "",
     stockQuantity: "",
-    sku: "",
   });
 
   const handleChange = (e) => {
@@ -32,9 +44,14 @@ export default function NewProductPage() {
       await productsAPI.create({
         ...formData,
         price: parseFloat(formData.price),
+        gst: parseFloat(formData.gst),
+        totalProductsAdded: parseInt(formData.totalProductsAdded),
         stockQuantity: parseInt(formData.stockQuantity),
       });
-      router.push("/dashboard/products");
+      // Wait a moment then redirect to ensure backend has processed
+      setTimeout(() => {
+        router.push("/dashboard/products");
+      }, 500);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to create product");
     } finally {
@@ -44,149 +61,194 @@ export default function NewProductPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <Link
-          href="/dashboard/products"
-          className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
-        >
-          <FiArrowLeft className="mr-2" />
-          Back to Products
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">
-          Add New Product
-        </h1>
-      </div>
+      <PageHeader
+        title="Add New Product"
+        subtitle="Create a new product with all details"
+        action={
+          <Link href="/dashboard/products">
+            <Button variant="secondary" size="md">
+              <FiArrowLeft className="mr-2" />
+              Back to Products
+            </Button>
+          </Link>
+        }
+      />
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
+        <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-sm animate-shake">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg
+                className="h-5 w-5 text-red-400"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-red-800">{error}</p>
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label
-                htmlFor="name"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Product Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
+      <Card className="animate-fadeIn">
+        <CardBody>
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              {/* Product Name */}
+              <Input
+                label="Product Name"
                 name="name"
-                id="name"
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="Enter product name"
+                containerClassName="sm:col-span-2"
               />
-            </div>
 
-            <div className="sm:col-span-2">
-              <label
-                htmlFor="description"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Description
-              </label>
-              <textarea
-                name="description"
-                id="description"
-                rows={3}
-                value={formData.description}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="sku"
-                className="block text-sm font-medium text-gray-700"
-              >
-                SKU <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="sku"
-                id="sku"
+              {/* Total Products Added */}
+              <Input
+                label="Total Products Added"
+                name="totalProductsAdded"
+                type="number"
                 required
-                value={formData.sku}
+                min="1"
+                value={formData.totalProductsAdded}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="e.g., PROD-001"
               />
-              <p className="mt-1 text-sm text-gray-500">
-                Will be automatically converted to uppercase
-              </p>
-            </div>
 
-            <div>
-              <label
-                htmlFor="price"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Price (₹) <span className="text-red-500">*</span>
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-500 sm:text-sm">₹</span>
-                </div>
-                <input
-                  type="number"
-                  name="price"
-                  id="price"
-                  required
-                  min="0"
-                  step="0.01"
-                  value={formData.price}
+              {/* GST */}
+              <Input
+                label="GST (%)"
+                name="gst"
+                type="number"
+                required
+                min="0"
+                max="100"
+                step="0.01"
+                value={formData.gst}
+                onChange={handleChange}
+                placeholder="18"
+              />
+
+              {/* Description */}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  rows={3}
+                  value={formData.description}
                   onChange={handleChange}
-                  className="block w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder="0.00"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900"
+                  placeholder="Enter product description"
                 />
               </div>
-            </div>
 
-            <div>
-              <label
-                htmlFor="stockQuantity"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Stock Quantity <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
+              {/* HSN Code */}
+              <Input
+                label="HSN Code"
+                name="hsnCode"
+                value={formData.hsnCode}
+                onChange={handleChange}
+                placeholder="e.g., 2710"
+              />
+
+              {/* Part No */}
+              <Input
+                label="Part No"
+                name="partNo"
+                value={formData.partNo}
+                onChange={handleChange}
+                placeholder="e.g., ABC123"
+              />
+
+              {/* Price */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Price (₹) <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 sm:text-sm">₹</span>
+                  </div>
+                  <input
+                    type="number"
+                    name="price"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={formData.price}
+                    onChange={handleChange}
+                    className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              {/* Stock Quantity */}
+              <Input
+                label="Stock Quantity"
                 name="stockQuantity"
-                id="stockQuantity"
+                type="number"
                 required
                 min="0"
                 value={formData.stockQuantity}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 placeholder="0"
               />
             </div>
-          </div>
 
-          <div className="mt-6 flex justify-end space-x-3">
-            <Link
-              href="/dashboard/products"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              Cancel
-            </Link>
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {loading ? "Creating..." : "Create Product"}
-            </button>
-          </div>
-        </form>
-      </div>
+            {/* Action Buttons */}
+            <div className="mt-8 flex justify-end space-x-3">
+              <Link href="/dashboard/products">
+                <Button variant="secondary" type="button">
+                  Cancel
+                </Button>
+              </Link>
+              <Button type="submit" disabled={loading} variant="primary">
+                {loading ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <FiPackage className="mr-2" />
+                    Create Product
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
     </div>
   );
 }

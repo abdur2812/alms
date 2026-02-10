@@ -2,32 +2,43 @@ const mongoose = require("mongoose");
 
 const customerSchema = new mongoose.Schema(
   {
+    shopId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shop",
+      required: [true, "Shop ID is required"],
+    },
+    customerType: {
+      type: String,
+      enum: ["individual", "business"],
+      default: "individual",
+      required: [true, "Customer type is required"],
+    },
     name: {
       type: String,
       required: [true, "Customer name is required"],
       trim: true,
       minlength: [2, "Name must be at least 2 characters long"],
     },
-    email: {
+    pocName: {
       type: String,
-      required: [true, "Email is required"],
-      unique: true,
-      lowercase: true,
       trim: true,
-      match: [/^\S+@\S+\.\S+$/, "Please provide a valid email address"],
     },
     phone: {
       type: String,
       required: [true, "Phone number is required"],
       trim: true,
-      match: [/^[0-9+\-() ]{10,}$/, "Please provide a valid phone number"],
+    },
+    gstNumber: {
+      type: String,
+      trim: true,
+      uppercase: true,
     },
     address: {
-      street: { type: String, trim: true },
+      companyAddress: { type: String, trim: true },
       city: { type: String, trim: true },
       state: { type: String, trim: true },
-      zipCode: { type: String, trim: true },
-      country: { type: String, trim: true },
+      postalCode: { type: String, trim: true },
+      country: { type: String, trim: true, default: "India" },
     },
     invoices: [
       {
@@ -43,7 +54,9 @@ const customerSchema = new mongoose.Schema(
 
 // Virtual to get total number of invoices
 customerSchema.virtual("invoiceCount").get(function () {
-  return this.invoices.length;
+  return this.invoices && Array.isArray(this.invoices)
+    ? this.invoices.length
+    : 0;
 });
 
 // Ensure virtuals are included when converting to JSON

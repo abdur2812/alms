@@ -7,6 +7,10 @@ const invoiceItemSchema = new mongoose.Schema(
       ref: "Product",
       required: [true, "Product ID is required"],
     },
+    name: {
+      type: String,
+      required: [true, "Item name is required"],
+    },
     quantity: {
       type: Number,
       required: [true, "Quantity is required"],
@@ -17,17 +21,38 @@ const invoiceItemSchema = new mongoose.Schema(
       required: [true, "Unit price is required"],
       min: [0, "Unit price cannot be negative"],
     },
+    gst: {
+      type: Number,
+      required: [true, "GST rate is required"],
+      min: [0, "GST rate cannot be negative"],
+      max: [100, "GST rate cannot exceed 100%"],
+    },
   },
   { _id: false },
 );
 
-// Virtual for line item subtotal
+// Virtual for line item subtotal (without GST)
 invoiceItemSchema.virtual("subtotal").get(function () {
   return this.quantity * this.unitPrice;
 });
 
+// Virtual for line item GST amount
+invoiceItemSchema.virtual("gstAmount").get(function () {
+  return (this.quantity * this.unitPrice * this.gst) / 100;
+});
+
+// Virtual for line item total (including GST)
+invoiceItemSchema.virtual("total").get(function () {
+  return this.subtotal + this.gstAmount;
+});
+
 const invoiceSchema = new mongoose.Schema(
   {
+    shopId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shop",
+      required: [true, "Shop ID is required"],
+    },
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Customer",
@@ -47,33 +72,14 @@ const invoiceSchema = new mongoose.Schema(
       default: 0,
       min: [0, "Total amount cannot be negative"],
     },
-    taxRate: {
-      type: Number,
-      default: 0,
-      min: [0, "Tax rate cannot be negative"],
-      max: [100, "Tax rate cannot exceed 100%"],
-    },
-    isIGST: {
+    isGstBill: {
       type: Boolean,
-      default: false,
+      default: true,
     },
-    cgstRate: {
-      type: Number,
-      default: 0,
-      min: [0, "CGST rate cannot be negative"],
-      max: [50, "CGST rate cannot exceed 50%"],
-    },
-    sgstRate: {
-      type: Number,
-      default: 0,
-      min: [0, "SGST rate cannot be negative"],
-      max: [50, "SGST rate cannot exceed 50%"],
-    },
-    igstRate: {
-      type: Number,
-      default: 0,
-      min: [0, "IGST rate cannot be negative"],
-      max: [100, "IGST rate cannot exceed 100%"],
+    billType: {
+      type: String,
+      enum: ["credit", "pay"],
+      default: "pay",
     },
     status: {
       type: String,
@@ -91,67 +97,49 @@ const invoiceSchema = new mongoose.Schema(
   },
 );
 
-// Virtual for subtotal (before tax)
+// Virtual for subtotal (before GST)
 invoiceSchema.virtual("subtotal").get(function () {
+  if (!this.items || !Array.isArray(this.items)) return 0;
   return this.items.reduce(
     (sum, item) => sum + item.quantity * item.unitPrice,
     0,
   );
 });
 
-// Virtual for tax amount
-invoiceSchema.virtual("taxAmount").get(function () {
-  if (this.isIGST) {
-    return (this.subtotal * this.igstRate) / 100;
-  } else {
-    const cgst = (this.subtotal * this.cgstRate) / 100;
-    const sgst = (this.subtotal * this.sgstRate) / 100;
-    return cgst + sgst;
-  }
+// Virtual for total GST amount
+invoiceSchema.virtual("gstAmount").get(function () {
+  if (!this.items || !Array.isArray(this.items)) return 0;
+  return this.items.reduce(
+    (sum, item) => sum + (item.quantity * item.unitPrice * item.gst) / 100,
+    0,
+  );
 });
 
-// Virtual for CGST amount
-invoiceSchema.virtual("cgstAmount").get(function () {
-  if (this.isIGST) return 0;
-  return (this.subtotal * this.cgstRate) / 100;
-});
-
-// Virtual for SGST amount
-invoiceSchema.virtual("sgstAmount").get(function () {
-  if (this.isIGST) return 0;
-  return (this.subtotal * this.sgstRate) / 100;
-});
-
-// Virtual for IGST amount
-invoiceSchema.virtual("igstAmount").get(function () {
-  if (!this.isIGST) return 0;
-  return (this.subtotal * this.igstRate) / 100;
-});
-
-// Virtual for grand total (subtotal + tax)
+// Virtual for grand total (subtotal + GST)
 invoiceSchema.virtual("grandTotal").get(function () {
-  return this.subtotal + this.taxAmount;
+  if (!this.items || !Array.isArray(this.items)) return 0;
+  return this.subtotal + this.gstAmount;
 });
 
 // Pre-save hook to calculate totalAmount
 invoiceSchema.pre("save", function (next) {
+  // Ensure items array exists
+  if (!this.items || !Array.isArray(this.items) || this.items.length === 0) {
+    return next(new Error("Invoice must have at least one item"));
+  }
+
   // Calculate subtotal
   const subtotal = this.items.reduce((sum, item) => {
     return sum + item.quantity * item.unitPrice;
   }, 0);
 
-  // Calculate tax based on IGST or CGST+SGST
-  let tax;
-  if (this.isIGST) {
-    tax = (subtotal * this.igstRate) / 100;
-  } else {
-    const cgst = (subtotal * this.cgstRate) / 100;
-    const sgst = (subtotal * this.sgstRate) / 100;
-    tax = cgst + sgst;
-  }
+  // Calculate total GST based on each item's GST rate
+  const totalGst = this.items.reduce((sum, item) => {
+    return sum + (item.quantity * item.unitPrice * item.gst) / 100;
+  }, 0);
 
   // Set total amount
-  this.totalAmount = subtotal + tax;
+  this.totalAmount = subtotal + totalGst;
 
   next();
 });

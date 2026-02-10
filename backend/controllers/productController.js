@@ -5,15 +5,23 @@ const { AppError, asyncHandler } = require("../middleware/errorHandler");
 // @route   GET /api/products
 // @access  Public
 exports.getAllProducts = asyncHandler(async (req, res, next) => {
+  console.log("=== GET ALL PRODUCTS START ===");
+  console.log("Query params:", req.query);
+
   const { page = 1, limit = 10, search, inStock, lowStock } = req.query;
+  const shopId = req.headers["x-shop-id"];
 
   const query = {};
 
-  // Search by name, SKU, or description
+  // Multi-tenancy: Only show products for current shop
+  if (shopId) {
+    query.shopId = shopId;
+  }
+
+  // Search by name or description
   if (search) {
     query.$or = [
       { name: { $regex: search, $options: "i" } },
-      { sku: { $regex: search, $options: "i" } },
       { description: { $regex: search, $options: "i" } },
     ];
   }
@@ -30,28 +38,49 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
     query.stockQuantity = { $gt: 0, $lt: 10 };
   }
 
-  const products = await Product.find(query)
-    .limit(limit * 1)
-    .skip((page - 1) * limit)
-    .sort({ createdAt: -1 });
+  console.log("Query:", JSON.stringify(query));
 
-  const count = await Product.countDocuments(query);
+  try {
+    const products = await Product.find(query)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .sort({ createdAt: -1 });
 
-  res.status(200).json({
-    success: true,
-    count: products.length,
-    total: count,
-    totalPages: Math.ceil(count / limit),
-    currentPage: page,
-    data: products,
-  });
+    console.log("Products found:", products.length);
+
+    const count = await Product.countDocuments(query);
+    console.log("Total count:", count);
+
+    res.status(200).json({
+      success: true,
+      count: products.length,
+      total: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      data: products,
+    });
+
+    console.log("=== GET ALL PRODUCTS SUCCESS ===");
+  } catch (error) {
+    console.error("=== GET ALL PRODUCTS ERROR ===");
+    console.error("Error:", error);
+    throw error;
+  }
 });
 
 // @desc    Get single product by ID
 // @route   GET /api/products/:id
 // @access  Public
 exports.getProductById = asyncHandler(async (req, res, next) => {
-  const product = await Product.findById(req.params.id);
+  const shopId = req.headers["x-shop-id"];
+  let query = { _id: req.params.id };
+
+  // Multi-tenancy: Only allow access to product from same shop
+  if (shopId) {
+    query.shopId = shopId;
+  }
+
+  const product = await Product.findOne(query);
 
   if (!product) {
     return next(
@@ -69,15 +98,25 @@ exports.getProductById = asyncHandler(async (req, res, next) => {
 // @route   POST /api/products
 // @access  Public
 exports.createProduct = asyncHandler(async (req, res, next) => {
+  const shopId = req.headers["x-shop-id"];
+
+  if (!shopId) {
+    return next(new AppError("Shop ID is required", 400));
+  }
+
   const { name, description, price, stockQuantity, sku } = req.body;
 
-  // Check if product with SKU already exists
-  const existingProduct = await Product.findOne({ sku: sku.toUpperCase() });
+  // Check if product with SKU already exists in this shop
+  const existingProduct = await Product.findOne({
+    sku: sku.toUpperCase(),
+    shopId,
+  });
   if (existingProduct) {
     return next(new AppError("Product with this SKU already exists", 400));
   }
 
   const product = await Product.create({
+    shopId,
     name,
     description,
     price,
@@ -97,8 +136,9 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
 // @access  Public
 exports.updateProduct = asyncHandler(async (req, res, next) => {
   const { name, description, price, stockQuantity, sku } = req.body;
+  const shopId = req.headers["x-shop-id"];
 
-  let product = await Product.findById(req.params.id);
+  let product = await Product.findOne({ _id: req.params.id, shopId });
 
   if (!product) {
     return next(
@@ -106,11 +146,17 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // Check if SKU is being changed to an existing SKU
+  // Check if SKU is being changed to an existing SKU in the same shop
   if (sku && sku.toUpperCase() !== product.sku) {
-    const existingProduct = await Product.findOne({ sku: sku.toUpperCase() });
+    const shopId = req.headers["x-shop-id"];
+    const existingProduct = await Product.findOne({
+      sku: sku.toUpperCase(),
+      shopId: shopId,
+    });
     if (existingProduct) {
-      return next(new AppError("SKU already in use by another product", 400));
+      return next(
+        new AppError("SKU already in use by another product in this shop", 400),
+      );
     }
   }
 
@@ -137,7 +183,8 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
 // @route   DELETE /api/products/:id
 // @access  Public
 exports.deleteProduct = asyncHandler(async (req, res, next) => {
-  const product = await Product.findById(req.params.id);
+  const shopId = req.headers["x-shop-id"];
+  const product = await Product.findOne({ _id: req.params.id, shopId });
 
   if (!product) {
     return next(
@@ -158,6 +205,7 @@ exports.deleteProduct = asyncHandler(async (req, res, next) => {
 // @route   PATCH /api/products/:id/stock
 // @access  Public
 exports.adjustStock = asyncHandler(async (req, res, next) => {
+  const shopId = req.headers["x-shop-id"];
   const { adjustment, action } = req.body; // action: 'add' or 'subtract'
 
   if (!adjustment || adjustment <= 0) {
@@ -172,7 +220,7 @@ exports.adjustStock = asyncHandler(async (req, res, next) => {
     );
   }
 
-  const product = await Product.findById(req.params.id);
+  const product = await Product.findOne({ _id: req.params.id, shopId });
 
   if (!product) {
     return next(
@@ -205,9 +253,18 @@ exports.adjustStock = asyncHandler(async (req, res, next) => {
 // @route   GET /api/products/alerts/low-stock
 // @access  Public
 exports.getLowStockProducts = asyncHandler(async (req, res, next) => {
-  const products = await Product.find({
+  const shopId = req.headers["x-shop-id"];
+
+  const query = {
     stockQuantity: { $gt: 0, $lt: 10 },
-  }).sort({ stockQuantity: 1 });
+  };
+
+  // Multi-tenancy: Only show products for current shop
+  if (shopId) {
+    query.shopId = shopId;
+  }
+
+  const products = await Product.find(query).sort({ stockQuantity: 1 });
 
   res.status(200).json({
     success: true,
@@ -220,7 +277,16 @@ exports.getLowStockProducts = asyncHandler(async (req, res, next) => {
 // @route   GET /api/products/alerts/out-of-stock
 // @access  Public
 exports.getOutOfStockProducts = asyncHandler(async (req, res, next) => {
-  const products = await Product.find({ stockQuantity: 0 }).sort({
+  const shopId = req.headers["x-shop-id"];
+
+  const query = { stockQuantity: 0 };
+
+  // Multi-tenancy: Only show products for current shop
+  if (shopId) {
+    query.shopId = shopId;
+  }
+
+  const products = await Product.find(query).sort({
     updatedAt: -1,
   });
 
@@ -236,6 +302,11 @@ exports.getOutOfStockProducts = asyncHandler(async (req, res, next) => {
 // @access  Public
 exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
   const { products } = req.body;
+  const shopId = req.headers["x-shop-id"];
+
+  if (!shopId) {
+    return next(new AppError("Shop ID is required", 400));
+  }
 
   if (!Array.isArray(products) || products.length === 0) {
     return next(new AppError("Products array is required", 400));
@@ -259,17 +330,21 @@ exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
         continue;
       }
 
-      // Check if product with SKU already exists
-      const existingProduct = await Product.findOne({ sku: sku.toUpperCase() });
+      // Check if product with SKU already exists in this shop
+      const existingProduct = await Product.findOne({
+        sku: sku.toUpperCase(),
+        shopId,
+      });
       if (existingProduct) {
         results.failed.push({
           data: productData,
-          error: `Product with SKU ${sku} already exists`,
+          error: `Product with SKU ${sku} already exists in this shop`,
         });
         continue;
       }
 
       const product = await Product.create({
+        shopId,
         name,
         description: description || "",
         price: Number(price),

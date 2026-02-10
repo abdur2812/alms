@@ -7,13 +7,6 @@ import { formatINR } from "@/lib/formatters";
 import { FiArrowLeft, FiPrinter, FiDownload } from "react-icons/fi";
 import Link from "next/link";
 
-const statusColors = {
-  Draft: "bg-gray-100 text-gray-800",
-  Pending: "bg-yellow-100 text-yellow-800",
-  Paid: "bg-green-100 text-green-800",
-  Cancelled: "bg-red-100 text-red-800",
-};
-
 export default function ViewInvoicePage({ params }) {
   const { id } = use(params);
   const router = useRouter();
@@ -126,9 +119,13 @@ export default function ViewInvoicePage({ params }) {
             </div>
             <div className="text-right print:hidden">
               <span
-                className={`px-3 py-1 inline-flex text-sm font-semibold rounded-full ${statusColors[invoice.status]}`}
+                className={`px-3 py-1 inline-flex text-sm font-bold rounded-full border ${
+                  invoice.billType === "credit"
+                    ? "bg-red-50 text-red-700 border-red-100"
+                    : "bg-green-50 text-green-700 border-green-100"
+                }`}
               >
-                {invoice.status}
+                {invoice.billType === "credit" ? "Credit Bill" : "Paid Bill"}
               </span>
             </div>
           </div>
@@ -209,7 +206,7 @@ export default function ViewInvoicePage({ params }) {
                   <tr key={index}>
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900">
-                        {item.productId?.name || "Product"}
+                        {item.name || item.productId?.name || "Product"}
                       </div>
                       {item.productId?.sku && (
                         <div className="text-sm text-gray-500">

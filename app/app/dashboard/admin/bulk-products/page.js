@@ -176,7 +176,7 @@ export default function BulkProductsPage() {
                           handleChange(index, "name", e.target.value)
                         }
                         required
-                        className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-2 py-1 border rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Product name"
                       />
                     </td>
@@ -192,7 +192,7 @@ export default function BulkProductsPage() {
                           )
                         }
                         required
-                        className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-2 py-1 border rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="SKU123"
                       />
                     </td>
@@ -205,7 +205,7 @@ export default function BulkProductsPage() {
                           handleChange(index, "price", e.target.value)
                         }
                         required
-                        className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-2 py-1 border rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="0.00"
                       />
                     </td>
@@ -216,7 +216,7 @@ export default function BulkProductsPage() {
                         onChange={(e) =>
                           handleChange(index, "stockQuantity", e.target.value)
                         }
-                        className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-2 py-1 border rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="0"
                       />
                     </td>
@@ -227,7 +227,7 @@ export default function BulkProductsPage() {
                         onChange={(e) =>
                           handleChange(index, "description", e.target.value)
                         }
-                        className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-2 py-1 border rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Description"
                       />
                     </td>

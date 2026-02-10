@@ -30,24 +30,66 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    // For demo purposes, we'll use a simple authentication
-    // In production, this should call your backend auth endpoint
-    if (email && password) {
+    try {
+      // Check if super admin
+      if (email === "abnusuki@gmail.com") {
+        if (password === "asdf") {
+          const userData = {
+            id: "super-admin",
+            email: email,
+            name: "Abu",
+            isSuperAdmin: true,
+          };
+
+          const token = "super-admin-token-" + Date.now();
+          localStorage.setItem("token", token);
+          localStorage.setItem("user", JSON.stringify(userData));
+          setUser(userData);
+          router.push("/dashboard");
+          return { success: true };
+        }
+        throw new Error("Invalid password");
+      }
+
+      // For regular shops, validate against backend
+      console.log("Logging in via API...");
+      const response = await fetch("http://localhost:3000/api/shops/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Login failed");
+      }
+
+      const data = await response.json();
+      console.log("Login successful:", data);
+
+      if (!data.success || !data.shop) {
+        throw new Error("Invalid response from server");
+      }
+
       const userData = {
-        id: "1",
-        email: email,
-        name: email.split("@")[0],
+        id: data.shop._id,
+        email: data.shop.email,
+        shopName: data.shop.shopName,
+        ownerName: data.shop.ownerName,
+        isSuperAdmin: false,
       };
 
-      const token = "demo-token-" + Date.now();
-      localStorage.setItem("token", token);
+      localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(userData));
       setUser(userData);
       router.push("/dashboard");
       return { success: true };
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
     }
-
-    throw new Error("Invalid credentials");
   };
 
   const logout = () => {

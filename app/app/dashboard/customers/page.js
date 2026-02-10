@@ -10,7 +10,11 @@ import {
   FiSearch,
   FiMail,
   FiPhone,
+  FiFilter,
+  FiFileText,
+  FiUsers,
 } from "react-icons/fi";
+import { PageHeader, Card, CardBody, Button, Select } from "@/components/UI";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -19,15 +23,21 @@ export default function CustomersPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [error, setError] = useState("");
+  const [filterCredit, setFilterCredit] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
-  }, [page, search]);
+  }, [page, search, filterCredit]);
 
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const response = await customersAPI.getAll({ page, limit: 10, search });
+      const response = await customersAPI.getAll({
+        page,
+        limit: 10,
+        search,
+        hasCreditInvoices: filterCredit,
+      });
       setCustomers(response.data.data);
       setTotalPages(response.data.totalPages);
       setError("");
@@ -52,186 +62,266 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
-          <Link
-            href="/dashboard/customers/new"
-            className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+      <PageHeader
+        title="Customers"
+        subtitle="Manage your customer relationships"
+        action={
+          <Button
+            onClick={() => (window.location.href = "/dashboard/customers/new")}
+            variant="primary"
           >
             <FiPlus className="mr-2" />
             Add Customer
-          </Link>
-        </div>
-      </div>
+          </Button>
+        }
+      />
 
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FiSearch className="h-5 w-5 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            placeholder="Search customers by name or email..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
+      {/* Filters and Search */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <Card className="animate-fadeIn">
+          <CardBody>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FiSearch className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                className="block w-full pl-10 pr-3 py-3 border-2 border-gray-100 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                placeholder="Search by name or email..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+              />
+            </div>
+          </CardBody>
+        </Card>
+
+        <Card className="animate-fadeIn">
+          <CardBody className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <FiFilter className="h-5 w-5 text-indigo-600" />
+              </div>
+              <span className="text-sm font-semibold text-gray-700">
+                Filter by Dues
+              </span>
+            </div>
+            <div className="flex bg-gray-100 p-1 rounded-xl">
+              <button
+                onClick={() => setFilterCredit(false)}
+                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
+                  !filterCredit
+                    ? "bg-white text-indigo-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilterCredit(true)}
+                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
+                  filterCredit
+                    ? "bg-white text-red-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Pending (Credit)
+              </button>
+            </div>
+          </CardBody>
+        </Card>
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl animate-shake">
           {error}
         </div>
       )}
 
       {/* Customers table */}
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading customers...</p>
-          </div>
-        ) : customers.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            <p>No customers found.</p>
-            <Link
-              href="/dashboard/customers/new"
-              className="mt-4 inline-flex items-center text-indigo-600 hover:text-indigo-700"
-            >
-              <FiPlus className="mr-2" />
-              Add your first customer
-            </Link>
-          </div>
-        ) : (
-          <>
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contact
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Location
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Invoices
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {customers.map((customer) => (
-                  <tr key={customer._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {customer.name}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col space-y-1">
-                        <div className="flex items-center text-sm text-gray-500">
-                          <FiMail className="mr-2 h-4 w-4" />
-                          {customer.email}
-                        </div>
-                        <div className="flex items-center text-sm text-gray-500">
-                          <FiPhone className="mr-2 h-4 w-4" />
-                          {customer.phone}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500">
-                        {customer.address?.city && customer.address?.country
-                          ? `${customer.address.city}, ${customer.address.country}`
-                          : "-"}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {customer.invoices?.length || 0}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Link
-                        href={`/dashboard/customers/${customer._id}`}
-                        className="text-indigo-600 hover:text-indigo-900 mr-4"
-                      >
-                        <FiEdit className="inline h-4 w-4" />
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(customer._id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <FiTrash2 className="inline h-4 w-4" />
-                      </button>
-                    </td>
+      <Card className="animate-fadeIn">
+        <div className="overflow-x-auto">
+          {loading ? (
+            <div className="p-12 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600 font-medium">
+                Loading customers...
+              </p>
+            </div>
+          ) : customers.length === 0 ? (
+            <div className="p-12 text-center text-gray-500">
+              <div className="mb-4">
+                <FiUsers className="mx-auto h-12 w-12 text-gray-300" />
+              </div>
+              <p className="text-lg font-medium text-gray-900">
+                No customers found
+              </p>
+              <p className="mt-1">
+                Try adjusting your search or filter to find what you're looking
+                for.
+              </p>
+              <Button
+                variant="secondary"
+                className="mt-6"
+                onClick={() =>
+                  (window.location.href = "/dashboard/customers/new")
+                }
+              >
+                <FiPlus className="mr-2" />
+                Add Customer
+              </Button>
+            </div>
+          ) : (
+            <>
+              <table className="min-w-full divide-y divide-gray-100">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      Customer Info
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      Contact Details
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      Location
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      Orders
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-50">
+                  {customers.map((customer, idx) => (
+                    <tr
+                      key={customer._id}
+                      className="hover:bg-indigo-50/30 transition-colors duration-150"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="h-10 w-10 flex-shrink-0">
+                            <div className="h-10 w-10 rounded-full bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                              {customer.name.charAt(0).toUpperCase()}
+                            </div>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-bold text-gray-900">
+                              {customer.name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              ID: {customer._id.substring(0, 8)}...
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col space-y-1">
+                          <div className="flex items-center text-sm text-gray-600 font-medium">
+                            <FiMail className="mr-2 h-3.5 w-3.5 text-indigo-400" />
+                            {customer.email}
+                          </div>
+                          <div className="flex items-center text-sm text-gray-600 font-medium">
+                            <FiPhone className="mr-2 h-3.5 w-3.5 text-purple-400" />
+                            {customer.phone}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-600 font-medium">
+                          {customer.address?.city}
+                          <span className="block text-xs text-gray-400 font-normal">
+                            {customer.address?.state}{" "}
+                            {customer.address?.country &&
+                              `, ${customer.address.country}`}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100">
+                          <FiFileText className="mr-1.5 h-3 w-3" />
+                          {customer.invoices?.length || 0}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                        <div className="flex justify-end space-x-2">
+                          <Link
+                            href={`/dashboard/customers/${customer._id}`}
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200"
+                          >
+                            <FiEdit className="h-4 w-4" />
+                          </Link>
+                          <button
+                            onClick={() => handleDelete(customer._id)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                          >
+                            <FiTrash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                <div className="flex-1 flex justify-between sm:hidden">
-                  <button
-                    onClick={() => setPage(Math.max(1, page - 1))}
-                    disabled={page === 1}
-                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    onClick={() => setPage(Math.min(totalPages, page + 1))}
-                    disabled={page === totalPages}
-                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Next
-                  </button>
-                </div>
-                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm text-gray-700">
-                      Page <span className="font-medium">{page}</span> of{" "}
-                      <span className="font-medium">{totalPages}</span>
-                    </p>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="bg-gray-50/50 px-6 py-4 flex items-center justify-between border-t border-gray-100">
+                  <div className="flex-1 flex justify-between sm:hidden">
+                    <Button
+                      onClick={() => setPage(Math.max(1, page - 1))}
+                      disabled={page === 1}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      onClick={() => setPage(Math.min(totalPages, page + 1))}
+                      disabled={page === totalPages}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      Next
+                    </Button>
                   </div>
-                  <div>
-                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                      <button
+                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500 font-medium">
+                        Showing page{" "}
+                        <span className="text-indigo-600">{page}</span> of{" "}
+                        <span className="text-indigo-600">{totalPages}</span>
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button
                         onClick={() => setPage(Math.max(1, page - 1))}
                         disabled={page === 1}
-                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                        size="sm"
+                        variant="secondary"
                       >
                         Previous
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         onClick={() => setPage(Math.min(totalPages, page + 1))}
                         disabled={page === totalPages}
-                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                        size="sm"
+                        variant="secondary"
                       >
                         Next
-                      </button>
-                    </nav>
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+              )}
+            </>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

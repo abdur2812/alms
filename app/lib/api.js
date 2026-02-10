@@ -10,13 +10,24 @@ const api = axios.create({
   },
 });
 
-// Add auth token to requests if available
+// Add auth token and shop context to requests if available
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
+    const user = localStorage.getItem("user");
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Add shopId to headers for tenant isolation (except for super admin)
+    if (user) {
+      const userData = JSON.parse(user);
+      if (!userData.isSuperAdmin && userData.id) {
+        config.headers["X-Shop-Id"] = userData.id;
+      }
+    }
+
     return config;
   },
   (error) => {

@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const productSchema = new mongoose.Schema(
   {
+    shopId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shop",
+      required: [true, "Shop ID is required"],
+    },
     name: {
       type: String,
       required: [true, "Product name is required"],
@@ -12,6 +17,25 @@ const productSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: [500, "Description cannot exceed 500 characters"],
+    },
+    totalProductsAdded: {
+      type: Number,
+      default: 1,
+      min: [1, "Total products added must be at least 1"],
+    },
+    hsnCode: {
+      type: String,
+      trim: true,
+    },
+    partNo: {
+      type: String,
+      trim: true,
+    },
+    gst: {
+      type: Number,
+      default: 0,
+      min: [0, "GST cannot be negative"],
+      max: [100, "GST cannot exceed 100%"],
     },
     price: {
       type: Number,
@@ -24,18 +48,13 @@ const productSchema = new mongoose.Schema(
       min: [0, "Stock quantity cannot be negative"],
       default: 0,
     },
-    sku: {
-      type: String,
-      required: [true, "SKU is required"],
-      unique: true,
-      uppercase: true,
-      trim: true,
-    },
   },
   {
     timestamps: true,
   },
 );
+
+// Note: Compound unique index (sku + shopId) is created in server startup
 
 // Virtual to check if product is in stock
 productSchema.virtual("inStock").get(function () {

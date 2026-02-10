@@ -12,6 +12,13 @@ class AppError extends Error {
 
 // Error handling middleware
 const errorHandler = (err, req, res, next) => {
+  console.error("=== ERROR HANDLER ===");
+  console.error("Error name:", err.name);
+  console.error("Error message:", err.message);
+  console.error("Error stack:", err.stack);
+  console.error("Request URL:", req.originalUrl);
+  console.error("Request method:", req.method);
+
   let error = { ...err };
   error.message = err.message;
   error.statusCode = err.statusCode || 500;
@@ -44,6 +51,11 @@ const errorHandler = (err, req, res, next) => {
   if (err.name === "TokenExpiredError") {
     error = new AppError("Your token has expired. Please log in again.", 401);
   }
+
+  console.error("Final error response:", {
+    statusCode: error.statusCode,
+    message: error.message,
+  });
 
   // Send error response
   res.status(error.statusCode).json({

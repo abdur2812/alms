@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { customersAPI } from "@/lib/api";
-import { FiArrowLeft } from "react-icons/fi";
+import { FiUser } from "react-icons/fi";
+import {
+  PageHeader,
+  Card,
+  CardBody,
+  Input,
+  Select,
+  Dropdown,
+  Button,
+} from "@/components/UI";
 import Link from "next/link";
 
 export default function NewCustomerPage() {
@@ -11,15 +20,17 @@ export default function NewCustomerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
+    customerType: "individual",
     name: "",
-    email: "",
+    pocName: "",
     phone: "",
+    gstNumber: "",
     address: {
-      street: "",
+      companyAddress: "",
       city: "",
       state: "",
-      zipCode: "",
-      country: "",
+      postalCode: "",
+      country: "India",
     },
   });
 
@@ -55,200 +66,176 @@ export default function NewCustomerPage() {
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <Link
-          href="/dashboard/customers"
-          className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
-        >
-          <FiArrowLeft className="mr-2" />
-          Back to Customers
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">
-          Add New Customer
-        </h1>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+      <PageHeader
+        title="Add New Customer"
+        subtitle="Create a new customer record"
+        backLink="/dashboard/customers"
+      />
 
-      {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      )}
-
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {/* Basic Information */}
-            <div className="sm:col-span-2">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Basic Information
-              </h3>
+      <Card className="animate-fadeIn">
+        <CardBody>
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg animate-shake">
+              {error}
             </div>
+          )}
 
-            <div>
-              <label
-                htmlFor="name"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="name"
-                id="name"
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              {/* Basic Information */}
+              <div className="sm:col-span-2">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mr-3">
+                    <FiUser className="text-white" />
+                  </div>
+                  Basic Information
+                </h3>
+              </div>
+
+              <Dropdown
+                label="Customer Type"
+                name="customerType"
+                value={formData.customerType}
+                onChange={handleChange}
+                placeholder="Select customer type"
+                options={[
+                  { value: "individual", label: "Individual" },
+                  { value: "business", label: "Business" },
+                ]}
                 required
+              />
+
+              <Input
+                label={
+                  formData.customerType === "business"
+                    ? "Business Name"
+                    : "Name"
+                }
+                name="name"
                 value={formData.name}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                name="email"
-                id="email"
                 required
-                value={formData.email}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="Enter name"
               />
-            </div>
 
-            <div>
-              <label
-                htmlFor="phone"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Phone <span className="text-red-500">*</span>
-              </label>
-              <input
+              <Input
+                label="POC Name"
+                name="pocName"
+                value={formData.pocName}
+                onChange={handleChange}
+                required={formData.customerType === "business"}
+                placeholder="Point of Contact Name"
+              />
+
+              <Input
+                label="Phone Number"
                 type="tel"
                 name="phone"
-                id="phone"
-                required
                 value={formData.phone}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                required
+                placeholder="+91 1234567890"
               />
-            </div>
 
-            {/* Address Information */}
-            <div className="sm:col-span-2">
-              <h3 className="text-lg font-medium text-gray-900 mb-4 mt-4">
-                Address
-              </h3>
-            </div>
-
-            <div className="sm:col-span-2">
-              <label
-                htmlFor="address.street"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Street Address
-              </label>
-              <input
-                type="text"
-                name="address.street"
-                id="address.street"
-                value={formData.address.street}
+              <Input
+                label="GST Number"
+                name="gstNumber"
+                value={formData.gstNumber}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="e.g., 22AAAAA0000A1Z5"
+                className="uppercase"
               />
-            </div>
 
-            <div>
-              <label
-                htmlFor="address.city"
-                className="block text-sm font-medium text-gray-700"
-              >
-                City
-              </label>
-              <input
-                type="text"
+              {/* Address Information */}
+              <div className="sm:col-span-2">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-4">
+                  Address
+                </h3>
+              </div>
+
+              <div className="sm:col-span-2">
+                <Input
+                  label="Company Address"
+                  name="address.companyAddress"
+                  value={formData.address.companyAddress}
+                  onChange={handleChange}
+                  placeholder="Full address"
+                />
+              </div>
+
+              <Input
+                label="City"
                 name="address.city"
-                id="address.city"
                 value={formData.address.city}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="City name"
               />
-            </div>
 
-            <div>
-              <label
-                htmlFor="address.state"
-                className="block text-sm font-medium text-gray-700"
-              >
-                State/Province
-              </label>
-              <input
-                type="text"
+              <Input
+                label="State/Province"
                 name="address.state"
-                id="address.state"
                 value={formData.address.state}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="State or Province"
               />
-            </div>
 
-            <div>
-              <label
-                htmlFor="address.zipCode"
-                className="block text-sm font-medium text-gray-700"
-              >
-                ZIP/Postal Code
-              </label>
-              <input
-                type="text"
-                name="address.zipCode"
-                id="address.zipCode"
-                value={formData.address.zipCode}
+              <Input
+                label="Postal Code"
+                name="address.postalCode"
+                value={formData.address.postalCode}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="Postal/ZIP code"
               />
-            </div>
 
-            <div>
-              <label
-                htmlFor="address.country"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Country
-              </label>
-              <input
-                type="text"
+              <Input
+                label="Country"
                 name="address.country"
-                id="address.country"
                 value={formData.address.country}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="Country"
               />
             </div>
-          </div>
 
-          <div className="mt-6 flex justify-end space-x-3">
-            <Link
-              href="/dashboard/customers"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              Cancel
-            </Link>
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {loading ? "Creating..." : "Create Customer"}
-            </button>
-          </div>
-        </form>
-      </div>
+            <div className="mt-8 flex justify-end space-x-3">
+              <Link href="/dashboard/customers">
+                <Button variant="secondary">Cancel</Button>
+              </Link>
+              <Button type="submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <FiUser className="mr-2" />
+                    Create Customer
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
     </div>
   );
 }

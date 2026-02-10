@@ -4,8 +4,17 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { invoicesAPI, customersAPI, productsAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
-import { FiArrowLeft, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiFileText, FiPlus, FiTrash2 } from "react-icons/fi";
 import Link from "next/link";
+import {
+  PageHeader,
+  Card,
+  CardBody,
+  Input,
+  Select,
+  Dropdown,
+  Button,
+} from "@/components/UI";
 
 export default function NewInvoicePage() {
   const router = useRouter();
@@ -15,13 +24,12 @@ export default function NewInvoicePage() {
   const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({
     customerId: "",
-    items: [{ productId: "", quantity: 1, unitPrice: 0 }],
-    isIGST: false,
-    cgstRate: 9,
-    sgstRate: 9,
-    igstRate: 18,
+    items: [{ productId: "", name: "", quantity: 1, unitPrice: 0, gst: 0 }],
+    isGstBill: true,
+    billType: "pay",
     status: "Draft",
   });
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -30,7 +38,7 @@ export default function NewInvoicePage() {
 
   const fetchCustomers = async () => {
     try {
-      const response = await customersAPI.getAll({ limit: 100 });
+      const response = await customersAPI.getAll({ limit: 3 });
       setCustomers(response.data.data);
     } catch (err) {
       console.error("Failed to fetch customers", err);
@@ -39,11 +47,33 @@ export default function NewInvoicePage() {
 
   const fetchProducts = async () => {
     try {
-      const response = await productsAPI.getAll({ limit: 100 });
+      const response = await productsAPI.getAll({ limit: 3 });
       setProducts(response.data.data);
     } catch (err) {
       console.error("Failed to fetch products", err);
     }
+  };
+
+  const searchCustomers = async (searchTerm) => {
+    const response = await customersAPI.getAll({
+      limit: 50,
+      search: searchTerm,
+    });
+    return response.data.data.map((customer) => ({
+      value: customer._id,
+      label: `${customer.name}${customer.phone ? ` - ${customer.phone}` : ""}`,
+    }));
+  };
+
+  const searchProducts = async (searchTerm) => {
+    const response = await productsAPI.getAll({
+      limit: 50,
+      search: searchTerm,
+    });
+    return response.data.data.map((product) => ({
+      value: product._id,
+      label: `${product.name} (${formatINR(product.price)})`,
+    }));
   };
 
   const handleChange = (e) => {
@@ -52,6 +82,12 @@ export default function NewInvoicePage() {
       setFormData({ ...formData, [name]: checked });
     } else {
       setFormData({ ...formData, [name]: value });
+
+      // Auto-fill customer details when customer is selected
+      if (name === "customerId" && value) {
+        const customer = customers.find((c) => c._id === value);
+        setSelectedCustomer(customer);
+      }
     }
   };
 
@@ -59,11 +95,13 @@ export default function NewInvoicePage() {
     const newItems = [...formData.items];
     newItems[index][field] = value;
 
-    // Auto-fill unit price when product is selected
+    // Auto-fill unit price, name, and GST when product is selected
     if (field === "productId" && value) {
       const product = products.find((p) => p._id === value);
       if (product) {
         newItems[index].unitPrice = product.price;
+        newItems[index].name = product.name;
+        newItems[index].gst = product.gst || 0;
       }
     }
 
@@ -73,7 +111,10 @@ export default function NewInvoicePage() {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { productId: "", quantity: 1, unitPrice: 0 }],
+      items: [
+        ...formData.items,
+        { productId: "", name: "", quantity: 1, unitPrice: 0, gst: 0 },
+      ],
     });
   };
 
@@ -92,14 +133,11 @@ export default function NewInvoicePage() {
   };
 
   const calculateTax = () => {
-    const subtotal = calculateSubtotal();
-    if (formData.isIGST) {
-      return (subtotal * parseFloat(formData.igstRate || 0)) / 100;
-    } else {
-      const cgst = (subtotal * parseFloat(formData.cgstRate || 0)) / 100;
-      const sgst = (subtotal * parseFloat(formData.sgstRate || 0)) / 100;
-      return cgst + sgst;
-    }
+    return formData.items.reduce((sum, item) => {
+      const itemSubtotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+      const itemGst = (itemSubtotal * (parseFloat(item.gst) || 0)) / 100;
+      return sum + itemGst;
+    }, 0);
   };
 
   const calculateTotal = () => {
@@ -112,23 +150,37 @@ export default function NewInvoicePage() {
     setError("");
 
     try {
+      // Filter out empty items
+      const validItems = formData.items.filter(
+        (item) => item.productId && item.quantity > 0,
+      );
+
+      if (validItems.length === 0) {
+        setError("Please add at least one product to the invoice");
+        setLoading(false);
+        return;
+      }
+
       const invoiceData = {
         customerId: formData.customerId,
-        items: formData.items.map((item) => ({
+        items: validItems.map((item) => ({
           productId: item.productId,
+          name: item.name,
           quantity: parseInt(item.quantity),
           unitPrice: parseFloat(item.unitPrice),
+          gst: parseFloat(item.gst) || 0,
         })),
-        isIGST: formData.isIGST,
-        cgstRate: parseFloat(formData.cgstRate),
-        sgstRate: parseFloat(formData.sgstRate),
-        igstRate: parseFloat(formData.igstRate),
+        isGstBill: formData.isGstBill,
+        billType: formData.billType,
         status: formData.status,
       };
+
+      console.log("Submitting invoice data:", invoiceData);
 
       await invoicesAPI.create(invoiceData);
       router.push("/dashboard/invoices");
     } catch (err) {
+      console.error("Invoice creation error:", err);
       setError(err.response?.data?.message || "Failed to create invoice");
     } finally {
       setLoading(false);
@@ -136,22 +188,15 @@ export default function NewInvoicePage() {
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <Link
-          href="/dashboard/invoices"
-          className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
-        >
-          <FiArrowLeft className="mr-2" />
-          Back to Invoices
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">
-          Create New Invoice
-        </h1>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+      <PageHeader
+        title="Create New Invoice"
+        subtitle="Generate a new invoice for customer"
+        backLink="/dashboard/invoices"
+      />
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg animate-shake">
           {error}
         </div>
       )}
@@ -159,318 +204,313 @@ export default function NewInvoicePage() {
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Form */}
-          <div className="lg:col-span-2">
-            <div className="bg-white shadow-md rounded-lg p-6 mb-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Invoice Details
-              </h3>
-
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label
-                    htmlFor="customerId"
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    Customer <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="customerId"
-                    id="customerId"
-                    required
-                    value={formData.customerId}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  >
-                    <option value="">Select a customer</option>
-                    {customers.map((customer) => (
-                      <option key={customer._id} value={customer._id}>
-                        {customer.name} - {customer.email}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* GST Toggle */}
-                <div className="sm:col-span-2">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      name="isIGST"
-                      id="isIGST"
-                      checked={formData.isIGST}
-                      onChange={handleChange}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <label
-                      htmlFor="isIGST"
-                      className="ml-2 block text-sm text-gray-900"
-                    >
-                      Interstate (IGST)
-                    </label>
+          <div className="lg:col-span-2 space-y-6">
+            <Card className="animate-fadeIn">
+              <CardBody>
+                <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mr-3">
+                    <FiFileText className="text-white" />
                   </div>
-                </div>
+                  Invoice Details
+                </h3>
 
-                {/* IGST Field - shown when IGST is enabled */}
-                {formData.isIGST ? (
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <label
-                      htmlFor="igstRate"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      IGST Rate (%)
-                    </label>
-                    <input
-                      type="number"
-                      name="igstRate"
-                      id="igstRate"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={formData.igstRate}
+                    <Dropdown
+                      label="Customer"
+                      name="customerId"
+                      value={formData.customerId}
                       onChange={handleChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      placeholder="Select a customer"
+                      options={customers.map((customer) => ({
+                        value: customer._id,
+                        label: `${customer.name}${customer.phone ? ` - ${customer.phone}` : ""}`,
+                      }))}
+                      onSearch={searchCustomers}
+                      required
                     />
                   </div>
-                ) : (
-                  <>
-                    {/* CGST and SGST Fields - shown when IGST is disabled */}
-                    <div>
-                      <label
-                        htmlFor="cgstRate"
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        CGST Rate (%)
-                      </label>
-                      <input
-                        type="number"
-                        name="cgstRate"
-                        id="cgstRate"
-                        min="0"
-                        max="50"
-                        step="0.01"
-                        value={formData.cgstRate}
-                        onChange={handleChange}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
 
-                    <div>
-                      <label
-                        htmlFor="sgstRate"
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        SGST Rate (%)
-                      </label>
-                      <input
-                        type="number"
-                        name="sgstRate"
-                        id="sgstRate"
-                        min="0"
-                        max="50"
-                        step="0.01"
-                        value={formData.sgstRate}
-                        onChange={handleChange}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
+                  {/* Customer Auto-filled Details */}
+                  {selectedCustomer && (
+                    <div className="sm:col-span-2 p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                        Customer Details
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-600">Name:</span>
+                          <p className="font-medium text-gray-900">
+                            {selectedCustomer.name}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Phone:</span>
+                          <p className="font-medium text-gray-900">
+                            {selectedCustomer.phone || "-"}
+                          </p>
+                        </div>
+                        {selectedCustomer.gstNumber && (
+                          <div>
+                            <span className="text-gray-600">GST Number:</span>
+                            <p className="font-medium text-gray-900 uppercase">
+                              {selectedCustomer.gstNumber}
+                            </p>
+                          </div>
+                        )}
+                        {selectedCustomer.address && (
+                          <div className="col-span-2">
+                            <span className="text-gray-600">Address:</span>
+                            <p className="font-medium text-gray-900">
+                              {[
+                                selectedCustomer.address.companyAddress,
+                                selectedCustomer.address.city,
+                                selectedCustomer.address.state,
+                                selectedCustomer.address.postalCode,
+                                selectedCustomer.address.country,
+                              ]
+                                .filter(Boolean)
+                                .join(", ")}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </>
-                )}
+                  )}
 
-                <div className="sm:col-span-2">
-                  <label
-                    htmlFor="status"
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    Status <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="status"
-                    id="status"
+                  {/* Bill Type */}
+                  <Dropdown
+                    label="Bill Type"
+                    name="billType"
+                    value={formData.billType}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData({
+                        ...formData,
+                        billType: val,
+                        status: val === "pay" ? "Paid" : "Pending",
+                      });
+                    }}
+                    placeholder="Select bill type"
+                    options={[
+                      { value: "pay", label: "Paid Bill" },
+                      { value: "credit", label: "Credit Bill" },
+                    ]}
                     required
-                    value={formData.status}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  >
-                    <option value="Draft">Draft</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Paid">Paid</option>
-                    <option value="Cancelled">Cancelled</option>
-                  </select>
+                  />
+
+                  {/* GST Bill Toggle */}
+                  <div className="sm:col-span-2">
+                    <label className="flex items-center cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        name="isGstBill"
+                        id="isGstBill"
+                        checked={formData.isGstBill}
+                        onChange={handleChange}
+                        className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded transition-all group-hover:scale-110"
+                      />
+                      <span className="ml-3 text-sm font-medium text-gray-900">
+                        GST Bill (GST rates will be taken from individual products)
+                      </span>
+                    </label>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </CardBody>
+            </Card>
 
             {/* Items */}
-            <div className="bg-white shadow-md rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Invoice Items
-                </h3>
-                <button
-                  type="button"
-                  onClick={addItem}
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100"
-                >
-                  <FiPlus className="mr-2" />
-                  Add Item
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {formData.items.map((item, index) => (
-                  <div
-                    key={index}
-                    className="grid grid-cols-12 gap-4 items-end border-b pb-4"
+            <Card>
+              <CardBody>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mr-3">
+                      <FiPlus className="text-white" />
+                    </div>
+                    Invoice Items
+                  </h3>
+                  <Button
+                    type="button"
+                    onClick={addItem}
+                    variant="secondary"
+                    size="sm"
                   >
-                    <div className="col-span-12 sm:col-span-5">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Product <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        required
-                        value={item.productId}
-                        onChange={(e) =>
-                          handleItemChange(index, "productId", e.target.value)
-                        }
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      >
-                        <option value="">Select product</option>
-                        {products.map((product) => (
-                          <option key={product._id} value={product._id}>
-                            {product.name} ({formatINR(product.price)})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <FiPlus className="mr-2" />
+                    Add Item
+                  </Button>
+                </div>
 
-                    <div className="col-span-5 sm:col-span-3">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Quantity <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) =>
-                          handleItemChange(index, "quantity", e.target.value)
-                        }
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
+                <div className="space-y-4">
+                  {formData.items.map((item, index) => (
+                    <div
+                      key={index}
+                      className="p-4 bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl border border-gray-200 space-y-4"
+                    >
+                      <div className="flex items-end gap-4">
+                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <Dropdown
+                            label="Search Product"
+                            name="productId"
+                            value={item.productId}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "productId",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Select product"
+                            options={products.map((product) => ({
+                              value: product._id,
+                              label: `${product.name} (${formatINR(product.price)})`,
+                            }))}
+                            onSearch={searchProducts}
+                            required
+                          />
+                          <Input
+                            label="Item Name / Description"
+                            type="text"
+                            value={item.name}
+                            onChange={(e) =>
+                              handleItemChange(index, "name", e.target.value)
+                            }
+                            placeholder="Product name on invoice"
+                            required
+                          />
+                        </div>
 
-                    <div className="col-span-5 sm:col-span-3">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Unit Price <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        min="0"
-                        step="0.01"
-                        value={item.unitPrice}
-                        onChange={(e) =>
-                          handleItemChange(index, "unitPrice", e.target.value)
-                        }
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
+                        {formData.items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="h-10 px-3 flex items-center justify-center text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
+                            title="Remove item"
+                          >
+                            <FiTrash2 />
+                          </button>
+                        )}
+                      </div>
 
-                    <div className="col-span-2 sm:col-span-1">
-                      {formData.items.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeItem(index)}
-                          className="inline-flex items-center justify-center w-full px-3 py-2 border border-transparent text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100"
-                        >
-                          <FiTrash2 />
-                        </button>
-                      )}
+                      <div className="grid grid-cols-3 gap-4">
+                        <Input
+                          label="Quantity"
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) =>
+                            handleItemChange(index, "quantity", e.target.value)
+                          }
+                          required
+                        />
+                        <Input
+                          label="Unit Price (₹)"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.unitPrice}
+                          onChange={(e) =>
+                            handleItemChange(index, "unitPrice", e.target.value)
+                          }
+                          required
+                        />
+                        <Input
+                          label="GST (%)"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={item.gst}
+                          onChange={(e) =>
+                            handleItemChange(index, "gst", e.target.value)
+                          }
+                          required
+                          disabled
+                          className="bg-gray-50"
+                        />
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+                  ))}
+                </div>
+              </CardBody>
+            </Card>
           </div>
 
           {/* Summary Sidebar */}
           <div className="lg:col-span-1">
-            <div className="bg-white shadow-md rounded-lg p-6 sticky top-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Summary
-              </h3>
+            <Card className="sticky top-6 animate-fadeIn">
+              <CardBody>
+                <h3 className="text-lg font-semibold text-gray-900 mb-6">
+                  Summary
+                </h3>
 
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Subtotal:</span>
-                  <span className="font-medium">
-                    {formatINR(calculateSubtotal())}
-                  </span>
-                </div>
-
-                {formData.isIGST ? (
+                <div className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">
-                      IGST ({formData.igstRate}%):
-                    </span>
-                    <span className="font-medium">
-                      {formatINR(calculateTax())}
+                    <span className="text-gray-600">Subtotal:</span>
+                    <span className="font-semibold text-gray-900">
+                      {formatINR(calculateSubtotal())}
                     </span>
                   </div>
-                ) : (
-                  <>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">
-                        CGST ({formData.cgstRate}%):
-                      </span>
-                      <span className="font-medium">
-                        {formatINR(
-                          (calculateSubtotal() *
-                            parseFloat(formData.cgstRate || 0)) /
-                            100,
-                        )}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">
-                        SGST ({formData.sgstRate}%):
-                      </span>
-                      <span className="font-medium">
-                        {formatINR(
-                          (calculateSubtotal() *
-                            parseFloat(formData.sgstRate || 0)) /
-                            100,
-                        )}
-                      </span>
-                    </div>
-                  </>
-                )}
 
-                <div className="border-t pt-3 flex justify-between">
-                  <span className="text-base font-semibold">Total:</span>
-                  <span className="text-xl font-bold text-indigo-600">
-                    {formatINR(calculateTotal())}
-                  </span>
+                  {formData.isGstBill && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Total Tax:</span>
+                      <span className="font-semibold text-gray-900">
+                        {formatINR(calculateTax())}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="border-t border-gray-200 pt-3 mt-3 flex justify-between">
+                    <span className="text-base font-semibold text-gray-900">
+                      Total:
+                    </span>
+                    <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      {formatINR(calculateTotal())}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="mt-6 space-y-3">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
-                  {loading ? "Creating..." : "Create Invoice"}
-                </button>
+                <div className="mt-6 space-y-3">
+                  <Button type="submit" disabled={loading} className="w-full">
+                    {loading ? (
+                      <>
+                        <svg
+                          className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <FiFileText className="mr-2" />
+                        Create Invoice
+                      </>
+                    )}
+                  </Button>
 
-                <Link
-                  href="/dashboard/invoices"
-                  className="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  Cancel
-                </Link>
-              </div>
-            </div>
+                  <Link href="/dashboard/invoices" className="block">
+                    <Button variant="secondary" className="w-full">
+                      Cancel
+                    </Button>
+                  </Link>
+                </div>
+              </CardBody>
+            </Card>
           </div>
         </div>
       </form>

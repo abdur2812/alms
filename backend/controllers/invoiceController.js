@@ -7,9 +7,20 @@ const { AppError, asyncHandler } = require("../middleware/errorHandler");
 // @route   GET /api/invoices
 // @access  Public
 exports.getAllInvoices = asyncHandler(async (req, res, next) => {
-  const { page = 1, limit = 10, status, customerId } = req.query;
+  const { page = 1, limit = 10, status, customerId, billType } = req.query;
+  const shopId = req.headers["x-shop-id"];
 
   const query = {};
+
+  // Multi-tenancy: Only show invoices for current shop
+  if (shopId) {
+    query.shopId = shopId;
+  }
+
+  // Filter by bill type (credit/pay)
+  if (billType) {
+    query.billType = billType;
+  }
 
   // Filter by status
   if (status) {
@@ -22,8 +33,8 @@ exports.getAllInvoices = asyncHandler(async (req, res, next) => {
   }
 
   const invoices = await Invoice.find(query)
-    .populate("customerId", "name email phone")
-    .populate("items.productId", "name sku")
+    .populate("customerId", "name phone")
+    .populate("items.productId", "name")
     .limit(limit * 1)
     .skip((page - 1) * limit)
     .sort({ createdAt: -1 });
@@ -45,8 +56,8 @@ exports.getAllInvoices = asyncHandler(async (req, res, next) => {
 // @access  Public
 exports.getInvoiceById = asyncHandler(async (req, res, next) => {
   const invoice = await Invoice.findById(req.params.id)
-    .populate("customerId", "name email phone address")
-    .populate("items.productId", "name description sku");
+    .populate("customerId", "name phone address")
+    .populate("items.productId", "name description");
 
   if (!invoice) {
     return next(
@@ -64,28 +75,76 @@ exports.getInvoiceById = asyncHandler(async (req, res, next) => {
 // @route   POST /api/invoices
 // @access  Public
 exports.createInvoice = asyncHandler(async (req, res, next) => {
-  const { customerId, items, taxRate, status } = req.body;
+  const {
+    customerId,
+    items,
+    taxRate,
+    status,
+    isGstBill,
+    isIGST,
+    cgstRate,
+    sgstRate,
+    igstRate,
+    billType,
+  } = req.body;
 
-  // Validate customer exists
-  const customer = await Customer.findById(customerId);
+  const shopId = req.headers["x-shop-id"];
+
+  if (!shopId) {
+    return next(new AppError("Shop ID is required", 400));
+  }
+
+  console.log("=== CREATE INVOICE START ===");
+  console.log("Request body:", JSON.stringify(req.body, null, 2));
+  console.log("Shop ID:", shopId);
+
+  // Validate items array
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    console.log("ERROR: Invalid items array");
+    return next(new AppError("Invoice must have at least one item", 400));
+  }
+
+  console.log("Items validation passed:", items.length, "items");
+
+  // Validate customer exists and belongs to same shop
+  const customer = await Customer.findOne({ _id: customerId, shopId });
   if (!customer) {
+    console.log(
+      "ERROR: Customer not found or doesn't belong to shop:",
+      customerId,
+    );
     return next(new AppError("Customer not found", 404));
   }
+
+  console.log("Customer found:", customer.name);
 
   // Validate all products and check stock
   const validatedItems = [];
 
   for (const item of items) {
-    const product = await Product.findById(item.productId);
+    console.log("Validating product:", item.productId);
+    const product = await Product.findOne({ _id: item.productId, shopId });
 
     if (!product) {
+      console.log(
+        "ERROR: Product not found or doesn't belong to shop:",
+        item.productId,
+      );
       return next(
         new AppError(`Product not found with id: ${item.productId}`, 404),
       );
     }
 
+    console.log(
+      "Product found:",
+      product.name,
+      "Stock:",
+      product.stockQuantity,
+    );
+
     // Check if product has sufficient stock
     if (product.stockQuantity < item.quantity) {
+      console.log("ERROR: Insufficient stock");
       return next(
         new AppError(
           `Insufficient stock for ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
@@ -94,32 +153,56 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
       );
     }
 
-    // Snapshot the current price at time of invoice creation
+    // Snapshot the current price and name at time of invoice creation
     validatedItems.push({
       productId: product._id,
+      name: item.name || product.name, // Use provided name (custom) or product name
       quantity: item.quantity,
       unitPrice: item.unitPrice || product.price, // Use provided price or current product price
     });
   }
 
+  console.log("All products validated:", validatedItems.length);
+
   // Generate invoice number
   const invoiceNumber = await Invoice.generateInvoiceNumber();
+  console.log("Invoice number generated:", invoiceNumber);
 
-  // Create invoice
-  const invoice = await Invoice.create({
+  // Create invoice with all new fields
+  const invoiceData = {
     invoiceNumber,
+    shopId,
     customerId,
     items: validatedItems,
     taxRate: taxRate || 0,
+    isGstBill: isGstBill !== undefined ? isGstBill : true,
+    isIGST: isIGST || false,
+    cgstRate: cgstRate || 0,
+    sgstRate: sgstRate || 0,
+    igstRate: igstRate || 0,
+    billType: billType || "pay",
     status: status || "Draft",
-  });
+  };
+
+  console.log(
+    "Creating invoice with data:",
+    JSON.stringify(invoiceData, null, 2),
+  );
+
+  const invoice = await Invoice.create(invoiceData);
+  console.log("Invoice created:", invoice._id);
 
   // Add invoice reference to customer
+  if (!customer.invoices) {
+    customer.invoices = [];
+  }
   customer.invoices.push(invoice._id);
   await customer.save();
+  console.log("Invoice added to customer");
 
   // If invoice is created with 'Paid' status, decrement stock immediately
   if (status === "Paid") {
+    console.log("Decrementing stock for paid invoice");
     for (const item of validatedItems) {
       const product = await Product.findById(item.productId);
       await product.decreaseStock(item.quantity);
@@ -128,8 +211,10 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
 
   // Populate and return the created invoice
   const populatedInvoice = await Invoice.findById(invoice._id)
-    .populate("customerId", "name email phone")
-    .populate("items.productId", "name sku");
+    .populate("customerId", "name phone")
+    .populate("items.productId", "name");
+
+  console.log("=== CREATE INVOICE SUCCESS ===");
 
   res.status(201).json({
     success: true,
@@ -188,6 +273,7 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
 
       validatedItems.push({
         productId: product._id,
+        name: item.name || product.name,
         quantity: item.quantity,
         unitPrice: item.unitPrice || product.price,
       });
@@ -212,8 +298,8 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
 
   // Populate and return updated invoice
   const updatedInvoice = await Invoice.findById(invoice._id)
-    .populate("customerId", "name email phone")
-    .populate("items.productId", "name sku");
+    .populate("customerId", "name phone")
+    .populate("items.productId", "name");
 
   res.status(200).json({
     success: true,
@@ -285,8 +371,8 @@ exports.updateInvoiceStatus = asyncHandler(async (req, res, next) => {
   await invoice.save();
 
   const updatedInvoice = await Invoice.findById(invoice._id)
-    .populate("customerId", "name email phone")
-    .populate("items.productId", "name sku");
+    .populate("customerId", "name phone")
+    .populate("items.productId", "name");
 
   res.status(200).json({
     success: true,
@@ -377,8 +463,8 @@ exports.getInvoicesByDateRange = asyncHandler(async (req, res, next) => {
       $lte: new Date(endDate),
     },
   })
-    .populate("customerId", "name email")
-    .populate("items.productId", "name sku")
+    .populate("customerId", "name")
+    .populate("items.productId", "name")
     .sort({ createdAt: -1 });
 
   const totalRevenue = invoices

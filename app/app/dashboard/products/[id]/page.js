@@ -15,9 +15,12 @@ export default function EditProductPage({ params }) {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
+    totalProductsAdded: "1",
+    hsnCode: "",
+    partNo: "",
+    gst: "18",
     price: "",
     stockQuantity: "",
-    sku: "",
   });
 
   useEffect(() => {
@@ -31,9 +34,12 @@ export default function EditProductPage({ params }) {
       setFormData({
         name: product.name,
         description: product.description || "",
+        totalProductsAdded: product.totalProductsAdded || 1,
+        hsnCode: product.hsnCode || "",
+        partNo: product.partNo || "",
+        gst: product.gst || 18,
         price: product.price,
         stockQuantity: product.stockQuantity,
-        sku: product.sku,
       });
       setLoading(false);
     } catch (err) {
@@ -56,6 +62,8 @@ export default function EditProductPage({ params }) {
       await productsAPI.update(id, {
         ...formData,
         price: parseFloat(formData.price),
+        gst: parseFloat(formData.gst),
+        totalProductsAdded: parseInt(formData.totalProductsAdded),
         stockQuantity: parseInt(formData.stockQuantity),
       });
       router.push("/dashboard/products");
@@ -113,7 +121,7 @@ export default function EditProductPage({ params }) {
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
 
@@ -130,29 +138,82 @@ export default function EditProductPage({ params }) {
                 rows={3}
                 value={formData.description}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
 
             <div>
               <label
-                htmlFor="sku"
+                htmlFor="totalProductsAdded"
                 className="block text-sm font-medium text-gray-700"
               >
-                SKU <span className="text-red-500">*</span>
+                Total Products Added <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                name="totalProductsAdded"
+                id="totalProductsAdded"
+                required
+                min="1"
+                value={formData.totalProductsAdded}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="gst"
+                className="block text-sm font-medium text-gray-700"
+              >
+                GST (%) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                name="gst"
+                id="gst"
+                required
+                min="0"
+                max="100"
+                step="0.01"
+                value={formData.gst}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="hsnCode"
+                className="block text-sm font-medium text-gray-700"
+              >
+                HSN Code
               </label>
               <input
                 type="text"
-                name="sku"
-                id="sku"
-                required
-                value={formData.sku}
+                name="hsnCode"
+                id="hsnCode"
+                value={formData.hsnCode}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
-              <p className="mt-1 text-sm text-gray-500">
-                Will be automatically converted to uppercase
-              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="partNo"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Part Number
+              </label>
+              <input
+                type="text"
+                name="partNo"
+                id="partNo"
+                value={formData.partNo}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
             </div>
 
             <div>
@@ -160,11 +221,11 @@ export default function EditProductPage({ params }) {
                 htmlFor="price"
                 className="block text-sm font-medium text-gray-700"
               >
-                Price <span className="text-red-500">*</span>
+                Price (₹) <span className="text-red-500">*</span>
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-500 sm:text-sm">$</span>
+                  <span className="text-gray-500 sm:text-sm">₹</span>
                 </div>
                 <input
                   type="number"
@@ -175,7 +236,7 @@ export default function EditProductPage({ params }) {
                   step="0.01"
                   value={formData.price}
                   onChange={handleChange}
-                  className="block w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="block w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 />
               </div>
             </div>
@@ -195,7 +256,7 @@ export default function EditProductPage({ params }) {
                 min="0"
                 value={formData.stockQuantity}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
           </div>

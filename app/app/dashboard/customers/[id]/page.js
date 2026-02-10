@@ -13,15 +13,17 @@ export default function EditCustomerPage({ params }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
+    customerType: "individual",
     name: "",
-    email: "",
+    pocName: "",
     phone: "",
+    gstNumber: "",
     address: {
-      street: "",
+      companyAddress: "",
       city: "",
       state: "",
-      zipCode: "",
-      country: "",
+      postalCode: "",
+      country: "India",
     },
   });
 
@@ -34,15 +36,17 @@ export default function EditCustomerPage({ params }) {
       const response = await customersAPI.getById(id);
       const customer = response.data.data;
       setFormData({
+        customerType: customer.customerType || "individual",
         name: customer.name,
-        email: customer.email,
+        pocName: customer.pocName || "",
         phone: customer.phone,
+        gstNumber: customer.gstNumber || "",
         address: customer.address || {
-          street: "",
+          companyAddress: "",
           city: "",
           state: "",
-          zipCode: "",
-          country: "",
+          postalCode: "",
+          country: "India",
         },
       });
       setLoading(false);
@@ -125,10 +129,30 @@ export default function EditCustomerPage({ params }) {
 
             <div>
               <label
+                htmlFor="customerType"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Customer Type <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="customerType"
+                id="customerType"
+                required
+                value={formData.customerType}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              >
+                <option value="individual">Individual</option>
+                <option value="business">Business</option>
+              </select>
+            </div>
+
+            <div>
+              <label
                 htmlFor="name"
                 className="block text-sm font-medium text-gray-700"
               >
-                Name <span className="text-red-500">*</span>
+                {formData.customerType === "business" ? "Business Name" : "Name"} <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -137,25 +161,25 @@ export default function EditCustomerPage({ params }) {
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
 
             <div>
               <label
-                htmlFor="email"
+                htmlFor="pocName"
                 className="block text-sm font-medium text-gray-700"
               >
-                Email <span className="text-red-500">*</span>
+                POC Name {formData.customerType === "business" && <span className="text-red-500">*</span>}
               </label>
               <input
-                type="email"
-                name="email"
-                id="email"
-                required
-                value={formData.email}
+                type="text"
+                name="pocName"
+                id="pocName"
+                required={formData.customerType === "business"}
+                value={formData.pocName}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
 
@@ -173,7 +197,24 @@ export default function EditCustomerPage({ params }) {
                 required
                 value={formData.phone}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="gstNumber"
+                className="block text-sm font-medium text-gray-700"
+              >
+                GST Number
+              </label>
+              <input
+                type="text"
+                name="gstNumber"
+                id="gstNumber"
+                value={formData.gstNumber}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm uppercase"
               />
             </div>
 
@@ -186,18 +227,18 @@ export default function EditCustomerPage({ params }) {
 
             <div className="sm:col-span-2">
               <label
-                htmlFor="address.street"
+                htmlFor="address.companyAddress"
                 className="block text-sm font-medium text-gray-700"
               >
-                Street Address
+                Company Address
               </label>
               <input
                 type="text"
-                name="address.street"
-                id="address.street"
-                value={formData.address.street}
+                name="address.companyAddress"
+                id="address.companyAddress"
+                value={formData.address.companyAddress}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
 
@@ -214,7 +255,7 @@ export default function EditCustomerPage({ params }) {
                 id="address.city"
                 value={formData.address.city}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
 
@@ -231,24 +272,24 @@ export default function EditCustomerPage({ params }) {
                 id="address.state"
                 value={formData.address.state}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
 
             <div>
               <label
-                htmlFor="address.zipCode"
+                htmlFor="address.postalCode"
                 className="block text-sm font-medium text-gray-700"
               >
-                ZIP/Postal Code
+                Postal Code
               </label>
               <input
                 type="text"
-                name="address.zipCode"
-                id="address.zipCode"
-                value={formData.address.zipCode}
+                name="address.postalCode"
+                id="address.postalCode"
+                value={formData.address.postalCode}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
 
@@ -265,7 +306,7 @@ export default function EditCustomerPage({ params }) {
                 id="address.country"
                 value={formData.address.country}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
           </div>

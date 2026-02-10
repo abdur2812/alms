@@ -6,44 +6,84 @@ const { AppError, asyncHandler } = require("../middleware/errorHandler");
 // @route   GET /api/customers
 // @access  Public
 exports.getAllCustomers = asyncHandler(async (req, res, next) => {
-  const { page = 1, limit = 10, search } = req.query;
+  console.log("=== GET ALL CUSTOMERS START ===");
+  console.log("Query params:", req.query);
+
+  const { page = 1, limit = 10, search, hasCreditInvoices } = req.query;
+  const shopId = req.headers["x-shop-id"];
 
   const query = {};
 
-  // Search by name or email
+  // Multi-tenancy: Only show customers for current shop
+  if (shopId) {
+    query.shopId = shopId;
+  }
+
+  // Filter by credit invoices
+  if (hasCreditInvoices === "true") {
+    // Find all customers who have at least one invoice with billType="credit"
+    const creditQuery = { billType: "credit" };
+    if (shopId) creditQuery.shopId = shopId;
+
+    const creditInvoices =
+      await Invoice.find(creditQuery).distinct("customerId");
+    query._id = { $in: creditInvoices };
+  }
+
+  // Search by name or phone
   if (search) {
     query.$or = [
       { name: { $regex: search, $options: "i" } },
-      { email: { $regex: search, $options: "i" } },
+      { phone: { $regex: search, $options: "i" } },
     ];
   }
 
-  const customers = await Customer.find(query)
-    .populate("invoices", "invoiceNumber totalAmount status")
-    .limit(limit * 1)
-    .skip((page - 1) * limit)
-    .sort({ createdAt: -1 });
+  console.log("Query:", JSON.stringify(query));
 
-  const count = await Customer.countDocuments(query);
+  try {
+    const customers = await Customer.find(query)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .sort({ createdAt: -1 });
 
-  res.status(200).json({
-    success: true,
-    count: customers.length,
-    total: count,
-    totalPages: Math.ceil(count / limit),
-    currentPage: page,
-    data: customers,
-  });
+    console.log("Customers found:", customers.length);
+
+    const count = await Customer.countDocuments(query);
+    console.log("Total count:", count);
+
+    res.status(200).json({
+      success: true,
+      count: customers.length,
+      total: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      data: customers,
+    });
+
+    console.log("=== GET ALL CUSTOMERS SUCCESS ===");
+  } catch (error) {
+    console.error("=== GET ALL CUSTOMERS ERROR ===");
+    console.error("Error:", error);
+    throw error;
+  }
 });
 
 // @desc    Get single customer by ID
 // @route   GET /api/customers/:id
 // @access  Public
 exports.getCustomerById = asyncHandler(async (req, res, next) => {
-  const customer = await Customer.findById(req.params.id).populate(
-    "invoices",
-    "invoiceNumber totalAmount status createdAt",
-  );
+  const shopId = req.headers["x-shop-id"];
+  let query = { _id: req.params.id };
+
+  // Multi-tenancy: Only allow access to customer from same shop
+  if (shopId) {
+    query.shopId = shopId;
+  }
+
+  const customer = await Customer.findOne(query).populate({
+    path: "invoices",
+    select: "invoiceNumber totalAmount status createdAt",
+  });
 
   if (!customer) {
     return next(
@@ -61,15 +101,22 @@ exports.getCustomerById = asyncHandler(async (req, res, next) => {
 // @route   POST /api/customers
 // @access  Public
 exports.createCustomer = asyncHandler(async (req, res, next) => {
+  const shopId = req.headers["x-shop-id"];
+
+  if (!shopId) {
+    return next(new AppError("Shop ID is required", 400));
+  }
+
   const { name, email, phone, address } = req.body;
 
-  // Check if customer with email already exists
-  const existingCustomer = await Customer.findOne({ email });
+  // Check if customer with email already exists in this shop
+  const existingCustomer = await Customer.findOne({ email, shopId });
   if (existingCustomer) {
     return next(new AppError("Customer with this email already exists", 400));
   }
 
   const customer = await Customer.create({
+    shopId,
     name,
     email,
     phone,
