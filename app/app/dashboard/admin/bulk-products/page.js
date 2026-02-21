@@ -6,13 +6,29 @@ export default function BulkProductsPage() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [products, setProducts] = useState([
-    { name: "", sku: "", price: "", stockQuantity: "", description: "" },
+    {
+      name: "",
+      price: "",
+      stockQuantity: "",
+      description: "",
+      gst: "18",
+      hsnCode: "",
+      partNo: "",
+    },
   ]);
 
   const addRow = () => {
     setProducts([
       ...products,
-      { name: "", sku: "", price: "", stockQuantity: "", description: "" },
+      {
+        name: "",
+        price: "",
+        stockQuantity: "",
+        description: "",
+        gst: "18",
+        hsnCode: "",
+        partNo: "",
+      },
     ]);
   };
 
@@ -52,10 +68,12 @@ export default function BulkProductsPage() {
           setProducts([
             {
               name: "",
-              sku: "",
               price: "",
               stockQuantity: "",
               description: "",
+              gst: "18",
+              hsnCode: "",
+              partNo: "",
             },
           ]);
         }
@@ -69,22 +87,60 @@ export default function BulkProductsPage() {
   };
 
   const parseCsv = (text) => {
-    const lines = text.split("\n").filter((line) => line.trim());
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(",").map((h) => h.trim());
-    const data = [];
+    // Normalize a single header string to our internal field name
+    const normalizeHeader = (h) => {
+      const cleaned = h
+        .replace(/^\uFEFF/, "")
+        .trim()
+        .toLowerCase();
+      const map = {
+        name: "name",
+        price: "price",
+        stockquantity: "stockQuantity",
+        stock: "stockQuantity",
+        gst: "gst",
+        hsncode: "hsnCode",
+        hsn: "hsnCode",
+        partno: "partNo",
+        part: "partNo",
+        description: "description",
+        desc: "description",
+      };
+      return map[cleaned] || cleaned;
+    };
 
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",").map((v) => v.trim());
-      const product = {};
-      headers.forEach((header, index) => {
-        product[header.toLowerCase()] = values[index] || "";
-      });
-      data.push(product);
-    }
+    const headers = lines[0].split(",").map(normalizeHeader);
 
-    return data;
+    return lines
+      .slice(1)
+      .map((line) => {
+        const values = line
+          .split(",")
+          .map((v) => v.trim().replace(/^"|"$/g, ""));
+        const product = {
+          name: "",
+          price: "",
+          stockQuantity: "",
+          gst: "18",
+          hsnCode: "",
+          partNo: "",
+          description: "",
+        };
+        headers.forEach((field, i) => {
+          if (field in product) {
+            product[field] = values[i] ?? "";
+          }
+        });
+        return product;
+      })
+      .filter((p) => p.name.trim() !== "");
   };
 
   const handleFileUpload = (e) => {
@@ -103,7 +159,7 @@ export default function BulkProductsPage() {
   };
 
   const downloadTemplate = () => {
-    const csv = "name,sku,price,stockQuantity,description\n";
+    const csv = "name,price,stockQuantity,gst,hsnCode,partNo,description\n";
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -149,13 +205,19 @@ export default function BulkProductsPage() {
                     Product Name *
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    SKU *
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Price (₹) *
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Stock Qty
+                    GST (%) *
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Stock Quantity
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    HSN Code
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Part No
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Description
@@ -182,22 +244,6 @@ export default function BulkProductsPage() {
                     </td>
                     <td className="px-4 py-2">
                       <input
-                        type="text"
-                        value={product.sku}
-                        onChange={(e) =>
-                          handleChange(
-                            index,
-                            "sku",
-                            e.target.value.toUpperCase(),
-                          )
-                        }
-                        required
-                        className="w-full px-2 py-1 border rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="SKU123"
-                      />
-                    </td>
-                    <td className="px-4 py-2">
-                      <input
                         type="number"
                         step="0.01"
                         value={product.price}
@@ -212,12 +258,49 @@ export default function BulkProductsPage() {
                     <td className="px-4 py-2">
                       <input
                         type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={product.gst}
+                        onChange={(e) =>
+                          handleChange(index, "gst", e.target.value)
+                        }
+                        required
+                        className="w-full px-2 py-1 border rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="18"
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="number"
                         value={product.stockQuantity}
                         onChange={(e) =>
                           handleChange(index, "stockQuantity", e.target.value)
                         }
                         className="w-full px-2 py-1 border rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="0"
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="text"
+                        value={product.hsnCode || ""}
+                        onChange={(e) =>
+                          handleChange(index, "hsnCode", e.target.value)
+                        }
+                        className="w-full px-2 py-1 border rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="HSN Code"
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="text"
+                        value={product.partNo || ""}
+                        onChange={(e) =>
+                          handleChange(index, "partNo", e.target.value)
+                        }
+                        className="w-full px-2 py-1 border rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Part No"
                       />
                     </td>
                     <td className="px-4 py-2">
@@ -287,7 +370,7 @@ export default function BulkProductsPage() {
                     >
                       <div className="font-medium">{product.name}</div>
                       <div className="text-sm text-gray-600">
-                        SKU: {product.sku} | Price: {formatINR(product.price)}
+                        Price: {formatINR(product.price)}
                       </div>
                     </div>
                   ))}
@@ -310,9 +393,6 @@ export default function BulkProductsPage() {
                     >
                       <div className="font-medium">
                         {item.data.name || "N/A"}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        SKU: {item.data.sku || "N/A"}
                       </div>
                       <div className="text-sm text-red-600 mt-1">
                         Error: {item.error}

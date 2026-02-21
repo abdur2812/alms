@@ -11,6 +11,7 @@ import {
   Select,
   Dropdown,
   Button,
+  NumberInput,
 } from "@/components/UI";
 import { FiArrowLeft, FiPackage } from "react-icons/fi";
 import Link from "next/link";
@@ -22,7 +23,6 @@ export default function NewProductPage() {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    totalProductsAdded: "1",
     hsnCode: "",
     partNo: "",
     gst: "18",
@@ -40,19 +40,27 @@ export default function NewProductPage() {
     setLoading(true);
     setError("");
 
+    const productData = {
+      ...formData,
+      price: parseFloat(formData.price),
+      gst: parseFloat(formData.gst),
+      stockQuantity: parseInt(formData.stockQuantity),
+    };
+
+    console.log("=== CREATING PRODUCT ===");
+    console.log("Form data:", formData);
+    console.log("Product data to send:", productData);
+    console.log("GST value:", productData.gst, "Type:", typeof productData.gst);
+
     try {
-      await productsAPI.create({
-        ...formData,
-        price: parseFloat(formData.price),
-        gst: parseFloat(formData.gst),
-        totalProductsAdded: parseInt(formData.totalProductsAdded),
-        stockQuantity: parseInt(formData.stockQuantity),
-      });
+      const response = await productsAPI.create(productData);
+      console.log("Product created successfully:", response.data);
       // Wait a moment then redirect to ensure backend has processed
       setTimeout(() => {
         router.push("/dashboard/products");
       }, 500);
     } catch (err) {
+      console.error("Error creating product:", err);
       setError(err.response?.data?.message || "Failed to create product");
     } finally {
       setLoading(false);
@@ -112,29 +120,17 @@ export default function NewProductPage() {
                 containerClassName="sm:col-span-2"
               />
 
-              {/* Total Products Added */}
-              <Input
-                label="Total Products Added"
-                name="totalProductsAdded"
-                type="number"
-                required
-                min="1"
-                value={formData.totalProductsAdded}
-                onChange={handleChange}
-              />
-
               {/* GST */}
-              <Input
+              <NumberInput
                 label="GST (%)"
                 name="gst"
-                type="number"
-                required
                 min="0"
                 max="100"
                 step="0.01"
                 value={formData.gst}
                 onChange={handleChange}
                 placeholder="18"
+                required
               />
 
               {/* Description */}
@@ -171,38 +167,27 @@ export default function NewProductPage() {
               />
 
               {/* Price */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Price (₹) <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">₹</span>
-                  </div>
-                  <input
-                    type="number"
-                    name="price"
-                    required
-                    min="0"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={handleChange}
-                    className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
+              <NumberInput
+                label="Price (₹)"
+                name="price"
+                min="0"
+                step="0.01"
+                value={formData.price}
+                onChange={handleChange}
+                prefix="₹"
+                placeholder="0.00"
+                required
+              />
 
               {/* Stock Quantity */}
-              <Input
+              <NumberInput
                 label="Stock Quantity"
                 name="stockQuantity"
-                type="number"
-                required
                 min="0"
                 value={formData.stockQuantity}
                 onChange={handleChange}
                 placeholder="0"
+                required
               />
             </div>
 

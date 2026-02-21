@@ -17,20 +17,7 @@ import {
 } from "react-icons/fi";
 import { useState } from "react";
 
-const getNavigation = (isSuperAdmin) => {
-  if (isSuperAdmin) {
-    // Super admin only sees shop management
-    return [
-      { name: "Dashboard", href: "/dashboard", icon: FiHome },
-      {
-        name: "Shop Management",
-        href: "/dashboard/admin/shops",
-        icon: FiSettings,
-      },
-    ];
-  }
-
-  // Shop owners see operational features
+const getNavigation = () => {
   return [
     { name: "Dashboard", href: "/dashboard", icon: FiHome },
     { name: "Customers", href: "/dashboard/customers", icon: FiUsers },
@@ -49,7 +36,7 @@ export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
-  const navigation = getNavigation(user?.isSuperAdmin);
+  const navigation = getNavigation();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50">

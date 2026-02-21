@@ -10,22 +10,13 @@ const api = axios.create({
   },
 });
 
-// Add auth token and shop context to requests if available
+// Add auth token to requests if available
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
-    const user = localStorage.getItem("user");
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    }
-
-    // Add shopId to headers for tenant isolation (except for super admin)
-    if (user) {
-      const userData = JSON.parse(user);
-      if (!userData.isSuperAdmin && userData.id) {
-        config.headers["X-Shop-Id"] = userData.id;
-      }
     }
 
     return config;
@@ -64,7 +55,6 @@ export const invoicesAPI = {
   create: (data) => api.post("/invoices", data),
   update: (id, data) => api.put(`/invoices/${id}`, data),
   delete: (id) => api.delete(`/invoices/${id}`),
-  updateStatus: (id, data) => api.patch(`/invoices/${id}/status`, data),
   getStats: () => api.get("/invoices/stats/summary"),
   getByDateRange: (params) =>
     api.get("/invoices/reports/date-range", { params }),

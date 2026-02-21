@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { invoicesAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
@@ -13,25 +14,38 @@ import {
   FiFilter,
   FiSearch,
   FiFileText,
+  FiDownload,
 } from "react-icons/fi";
 
 export default function InvoicesPage() {
+  const searchParams = useSearchParams();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [billTypeFilter, setBillTypeFilter] = useState("");
+  const [customerFilter, setCustomerFilter] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // Read URL parameters
+    const customer = searchParams.get("customer");
+    const billType = searchParams.get("billType");
+
+    if (customer) setCustomerFilter(customer);
+    if (billType) setBillTypeFilter(billType);
+  }, [searchParams]);
+
+  useEffect(() => {
     fetchInvoices();
-  }, [page, billTypeFilter]);
+  }, [page, billTypeFilter, customerFilter]);
 
   const fetchInvoices = async () => {
     try {
       setLoading(true);
       const params = { page, limit: 10 };
       if (billTypeFilter) params.billType = billTypeFilter;
+      if (customerFilter) params.customerId = customerFilter;
 
       const response = await invoicesAPI.getAll(params);
       setInvoices(response.data.data);
@@ -57,19 +71,88 @@ export default function InvoicesPage() {
     }
   };
 
+  const downloadBulkInvoiceCSV = async () => {
+    try {
+      const response = await fetch(
+        "http://localhost:3000/api/invoices/reports/bulk-pdf",
+      );
+      const result = await response.json();
+
+      if (!result.success) {
+        alert("Failed to fetch invoice data");
+        return;
+      }
+
+      const invoiceData = result.data;
+
+      // Create CSV content
+      const headers = [
+        "Invoice ID",
+        "Customer Name",
+        "Customer GST",
+        "Customer Phone",
+        "Subtotal",
+        "CGST",
+        "SGST",
+        "Total Amount",
+        "Type",
+      ];
+
+      const csvContent = [
+        headers.join(","),
+        ...invoiceData.map((inv) =>
+          [
+            inv.invoiceId,
+            `"${inv.customerName || "N/A"}"`,
+            inv.customerGST || "-",
+            inv.customerPhone || "-",
+            inv.subtotal,
+            inv.cgst,
+            inv.sgst,
+            inv.total,
+            inv.type,
+          ].join(","),
+        ),
+      ].join("\n");
+
+      // Download CSV
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        `invoices_${new Date().toISOString().split("T")[0]}.csv`,
+      );
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      alert("Failed to download CSV");
+      console.error(err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
       <PageHeader
         title="Invoices"
         subtitle="Manage and track your customer bills"
         action={
-          <Button
-            onClick={() => (window.location.href = "/dashboard/invoices/new")}
-            variant="primary"
-          >
-            <FiPlus className="mr-2" />
-            Create Invoice
-          </Button>
+          <div className="flex gap-3">
+            <Button onClick={downloadBulkInvoiceCSV} variant="secondary">
+              <FiDownload className="mr-2" />
+              Download CSV
+            </Button>
+            <Button
+              onClick={() => (window.location.href = "/dashboard/invoices/new")}
+              variant="primary"
+            >
+              <FiPlus className="mr-2" />
+              Create Invoice
+            </Button>
+          </div>
         }
       />
 
@@ -83,48 +166,69 @@ export default function InvoicesPage() {
             <span className="text-sm font-semibold text-gray-700">
               Filter by Type
             </span>
+            {customerFilter && (
+              <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-medium">
+                Filtered by Customer
+              </span>
+            )}
           </div>
 
-          <div className="flex bg-gray-100 p-1 rounded-xl">
-            <button
-              onClick={() => {
-                setBillTypeFilter("");
-                setPage(1);
-              }}
-              className={`px-6 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-                billTypeFilter === ""
-                  ? "bg-white text-indigo-600 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              All Bills
-            </button>
-            <button
-              onClick={() => {
-                setBillTypeFilter("pay");
-                setPage(1);
-              }}
-              className={`px-6 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-                billTypeFilter === "pay"
-                  ? "bg-white text-green-600 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Paid Bill
-            </button>
-            <button
-              onClick={() => {
-                setBillTypeFilter("credit");
-                setPage(1);
-              }}
-              className={`px-6 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-                billTypeFilter === "credit"
-                  ? "bg-white text-red-600 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Credit Bill
-            </button>
+          <div className="flex gap-2">
+            {customerFilter && (
+              <Button
+                onClick={() => {
+                  setCustomerFilter("");
+                  setBillTypeFilter("");
+                  window.history.pushState({}, "", "/dashboard/invoices");
+                  setPage(1);
+                }}
+                variant="secondary"
+                size="sm"
+              >
+                Clear Filters
+              </Button>
+            )}
+            <div className="flex bg-gray-100 p-1 rounded-xl">
+              <button
+                onClick={() => {
+                  setBillTypeFilter("");
+                  setPage(1);
+                }}
+                className={`px-6 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
+                  billTypeFilter === ""
+                    ? "bg-white text-indigo-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                All Bills
+              </button>
+              <button
+                onClick={() => {
+                  setBillTypeFilter("pay");
+                  setPage(1);
+                }}
+                className={`px-6 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
+                  billTypeFilter === "pay"
+                    ? "bg-white text-green-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Paid Bill
+              </button>
+              <button
+                onClick={() => {
+                  setBillTypeFilter("credit");
+                  setPage(1);
+                }}
+                className={`px-6 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
+                  billTypeFilter === "credit"
+                    ? "bg-white text-red-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Credit Bill
+              </button>
+            </div>
           </div>
         </CardBody>
       </Card>
@@ -226,18 +330,21 @@ export default function InvoicesPage() {
                           <Link
                             href={`/dashboard/invoices/${invoice._id}/view`}
                             className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200"
+                            title="View Invoice"
                           >
                             <FiEye className="h-4 w-4" />
                           </Link>
                           <Link
-                            href={`/dashboard/invoices/${invoice._id}`}
-                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200"
+                            href={`/dashboard/invoices/${invoice._id}/edit`}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
+                            title="Edit Invoice"
                           >
                             <FiEdit className="h-4 w-4" />
                           </Link>
                           <button
                             onClick={() => handleDelete(invoice._id)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                            title="Delete Invoice"
                           >
                             <FiTrash2 className="h-4 w-4" />
                           </button>

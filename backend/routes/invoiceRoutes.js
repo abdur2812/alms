@@ -6,14 +6,15 @@ const {
   createInvoice,
   updateInvoice,
   deleteInvoice,
-  updateInvoiceStatus,
   getInvoiceStats,
   getInvoicesByDateRange,
+  getBulkInvoicePDF,
 } = require("../controllers/invoiceController");
 
 // Statistics and reports routes (must be before :id routes)
 router.get("/stats/summary", getInvoiceStats);
 router.get("/reports/date-range", getInvoicesByDateRange);
+router.get("/reports/bulk-pdf", getBulkInvoicePDF);
 
 // Basic CRUD routes
 router.route("/").get(getAllInvoices).post(createInvoice);
@@ -23,8 +24,5 @@ router
   .get(getInvoiceById)
   .put(updateInvoice)
   .delete(deleteInvoice);
-
-// Status update route
-router.patch("/:id/status", updateInvoiceStatus);
 
 module.exports = router;

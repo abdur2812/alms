@@ -11,6 +11,7 @@ import {
   Input,
   Dropdown,
   Button,
+  NumberInput,
 } from "@/components/UI";
 import Link from "next/link";
 
@@ -133,11 +134,9 @@ export default function EditInvoicePage({ params }) {
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
                 {formData.isIGST ? (
                   <div className="sm:col-span-3">
-                    <Input
+                    <NumberInput
                       label="IGST Rate (%)"
-                      type="number"
                       name="igstRate"
-                      id="igstRate"
                       min="0"
                       max="100"
                       step="0.01"
@@ -148,11 +147,9 @@ export default function EditInvoicePage({ params }) {
                   </div>
                 ) : (
                   <>
-                    <Input
+                    <NumberInput
                       label="CGST Rate (%)"
-                      type="number"
                       name="cgstRate"
-                      id="cgstRate"
                       min="0"
                       max="100"
                       step="0.01"
@@ -160,11 +157,9 @@ export default function EditInvoicePage({ params }) {
                       onChange={handleChange}
                       required
                     />
-                    <Input
+                    <NumberInput
                       label="SGST Rate (%)"
-                      type="number"
                       name="sgstRate"
-                      id="sgstRate"
                       min="0"
                       max="100"
                       step="0.01"
@@ -185,13 +180,28 @@ export default function EditInvoicePage({ params }) {
                   setFormData({
                     ...formData,
                     billType: val,
-                    status: val === "pay" ? "Paid" : "Pending",
+                    status: val === "pay" ? "Paid" : formData.status,
                   });
                 }}
                 placeholder="Select bill type"
                 options={[
                   { value: "pay", label: "Paid Bill" },
                   { value: "credit", label: "Credit Bill" },
+                ]}
+                required
+              />
+
+              <Dropdown
+                label="Payment Status"
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                placeholder="Select status"
+                options={[
+                  { value: "Draft", label: "Draft" },
+                  { value: "Pending", label: "Pending" },
+                  { value: "Paid", label: "Paid" },
+                  { value: "Cancelled", label: "Cancelled" },
                 ]}
                 required
               />

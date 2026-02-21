@@ -300,6 +300,124 @@ export function ConfirmDialog({
   );
 }
 
+export function NumberInput({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = Infinity,
+  step = 1,
+  className = "",
+  disabled = false,
+  required = false,
+  error = "",
+  placeholder = "0",
+  prefix = "",
+  ...props
+}) {
+  const handleIncrement = () => {
+    const currentValue = parseFloat(value || 0);
+    const newValue = Math.min(max, currentValue + parseFloat(step));
+    onChange({ target: { value: newValue, name: props.name } });
+  };
+
+  const handleDecrement = () => {
+    const currentValue = parseFloat(value || 0);
+    const newValue = Math.max(min, currentValue - parseFloat(step));
+    onChange({ target: { value: newValue, name: props.name } });
+  };
+
+  const handleInputChange = (e) => {
+    const inputValue = e.target.value;
+    if (
+      inputValue === "" ||
+      (!isNaN(inputValue) && inputValue >= min && inputValue <= max)
+    ) {
+      onChange(e);
+    }
+  };
+
+  return (
+    <div className={className}>
+      {label && (
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          {label}
+          {required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+      )}
+      <div className="relative">
+        {prefix && (
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <span className="text-gray-500 text-sm font-medium">{prefix}</span>
+          </div>
+        )}
+        <input
+          type="number"
+          value={value}
+          onChange={handleInputChange}
+          min={min}
+          max={max}
+          step={step}
+          disabled={disabled}
+          required={required}
+          placeholder={placeholder}
+          className={`w-full ${prefix ? "pl-8" : "pl-4"} pr-20 py-3 border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white hover:border-indigo-300 hover:shadow-md number-input-hide-arrows ${error ? "border-red-500 focus:ring-red-200" : ""} ${disabled ? "bg-gray-100 cursor-not-allowed opacity-60" : ""}`}
+          {...props}
+        />
+
+        {/* Custom Arrow Buttons */}
+        <div className="absolute inset-y-0 right-0 flex flex-col">
+          <button
+            type="button"
+            onClick={handleIncrement}
+            disabled={disabled || parseFloat(value || 0) >= max}
+            className="flex-1 px-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-tr-xl border-l border-gray-200 transition-all duration-200 flex items-center justify-center group hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100"
+            title="Increase"
+          >
+            <svg
+              className="w-4 h-4 group-hover:scale-110 transition-transform"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={3}
+                d="M5 15l7-7 7 7"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={handleDecrement}
+            disabled={disabled || parseFloat(value || 0) <= min}
+            className="flex-1 px-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-br-xl border-l border-t border-gray-200 transition-all duration-200 flex items-center justify-center group hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100"
+            title="Decrease"
+          >
+            <svg
+              className="w-4 h-4 group-hover:scale-110 transition-transform"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={3}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+      {error && (
+        <p className="mt-1 text-sm text-red-500 font-medium">{error}</p>
+      )}
+    </div>
+  );
+}
+
 export function Dropdown({
   label,
   name,
@@ -319,8 +437,13 @@ export function Dropdown({
   const [searchOptions, setSearchOptions] = require("react").useState([]);
   const dropdownRef = require("react").useRef(null);
 
-  // Use search results if searching, otherwise use regular options limited to 3
-  const displayOptions = searchTerm ? searchOptions : options.slice(0, 3);
+  // Use search results if searching, otherwise use regular options
+  // Limit to 3 only if onSearch is provided (large dynamic lists)
+  const displayOptions = searchTerm
+    ? searchOptions
+    : onSearch
+      ? options.slice(0, 3)
+      : options;
 
   const selectedLabel = (searchTerm ? searchOptions : options).find(
     (opt) => opt.value === value,
@@ -507,15 +630,57 @@ export function Dropdown({
                 }
               }
             `}</style>
-            {(options.length > 3 || searchTerm) && (
+            {/* Only show search for dynamic lists (customers/products) */}
+            {(onSearch || options.length > 5) && (
               <div className="px-3 py-3 border-b border-indigo-100 bg-gradient-to-r from-indigo-50 to-purple-50">
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-white border-2 border-indigo-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition-all duration-400 placeholder-gray-400"
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg
+                      className="h-4 w-4 text-indigo-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder={
+                      onSearch ? "Type to search..." : "Search options..."
+                    }
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border-2 border-indigo-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition-all duration-400 placeholder-gray-400 hover:border-indigo-300"
+                    autoFocus={isOpen}
+                  />
+                  {searchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchTerm("")}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-indigo-600 transition-colors"
+                    >
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 

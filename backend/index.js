@@ -9,7 +9,6 @@ const PORT = process.env.PORT || 3000;
 const customerRoutes = require("./routes/customerRoutes");
 const productRoutes = require("./routes/productRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
-const shopRoutes = require("./routes/shopRoutes");
 
 // Import error handler
 const { errorHandler } = require("./middleware/errorHandler");
@@ -25,10 +24,7 @@ app.use((req, res, next) => {
     "Access-Control-Allow-Methods",
     "GET, POST, PUT, PATCH, DELETE, OPTIONS",
   );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Shop-Id",
-  );
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   // Handle preflight requests
   if (req.method === "OPTIONS") {
@@ -40,48 +36,12 @@ app.use((req, res, next) => {
 });
 
 // Database connection
-const MONGODB_URI =
-  process.env.MONGODB_URI || "mongodb://localhost:27017/erp_billing";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/test";
 
 mongoose
   .connect(MONGODB_URI)
   .then(async () => {
     console.log("✅ MongoDB connected successfully");
-
-    // Fix Product indexes for multi-tenancy
-    try {
-      const Product = require("./models/Product");
-
-      // Get all indexes
-      const indexes = await Product.collection.getIndexes();
-      console.log("Current indexes:", Object.keys(indexes));
-
-      // Drop the problematic single sku index if it exists
-      for (const indexName of Object.keys(indexes)) {
-        if (indexName === "sku_1") {
-          console.log("🔧 Dropping old unique sku index...");
-          await Product.collection.dropIndex(indexName);
-          console.log("✅ Old unique sku index dropped");
-        }
-      }
-
-      // Ensure the compound index exists with the correct name
-      try {
-        await Product.collection.createIndex(
-          { sku: 1, shopId: 1 },
-          { unique: true, name: "sku_shopId_unique" },
-        );
-        console.log("✅ Compound unique index (sku + shopId) created");
-      } catch (err) {
-        if (err.code === 85) {
-          console.log("ℹ️  Compound index already exists");
-        } else {
-          console.log("ℹ️  Index error:", err.message);
-        }
-      }
-    } catch (error) {
-      console.log("ℹ️  Index management error:", error.message);
-    }
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err.message);
@@ -98,7 +58,6 @@ app.get("/", (req, res) => {
       customers: "/api/customers",
       products: "/api/products",
       invoices: "/api/invoices",
-      shops: "/api/shops",
     },
   });
 });
@@ -107,7 +66,6 @@ app.get("/", (req, res) => {
 app.use("/api/customers", customerRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/invoices", invoiceRoutes);
-app.use("/api/shops", shopRoutes);
 
 // 404 handler
 app.use((req, res, next) => {
@@ -124,3 +82,19 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
+
+// add customer changes:
+// permanent address
+// delivery address
+
+// customer changes:
+// need a separate field for shipping address.
+
+// invoice edit changes:
+// able to edit customer, product details
+
+// invoice create changes:
+// when creating invoice, give option to select if address(shipping address in invoice) is same as permanent address.
+
+// bulk invoice pdf (new functionality):
+// invoice id, cust name, cust gst, cust phone, amount separated by cgst sgst, credit or paid. (this is the format)

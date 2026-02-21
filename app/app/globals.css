@@ -99,6 +99,22 @@ html {
   animation: float 3s ease-in-out infinite;
 }
 
+/* Hide default number input arrows */
+.number-input-hide-arrows::-webkit-outer-spin-button,
+.number-input-hide-arrows::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.number-input-hide-arrows[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Custom focus styles for better accessibility */
+.number-input-hide-arrows:focus {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
 /* Print styles for invoices */
 @media print {
   @page {

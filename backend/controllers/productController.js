@@ -9,14 +9,8 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
   console.log("Query params:", req.query);
 
   const { page = 1, limit = 10, search, inStock, lowStock } = req.query;
-  const shopId = req.headers["x-shop-id"];
 
   const query = {};
-
-  // Multi-tenancy: Only show products for current shop
-  if (shopId) {
-    query.shopId = shopId;
-  }
 
   // Search by name or description
   if (search) {
@@ -72,15 +66,7 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
 // @route   GET /api/products/:id
 // @access  Public
 exports.getProductById = asyncHandler(async (req, res, next) => {
-  const shopId = req.headers["x-shop-id"];
-  let query = { _id: req.params.id };
-
-  // Multi-tenancy: Only allow access to product from same shop
-  if (shopId) {
-    query.shopId = shopId;
-  }
-
-  const product = await Product.findOne(query);
+  const product = await Product.findById(req.params.id);
 
   if (!product) {
     return next(
@@ -98,31 +84,35 @@ exports.getProductById = asyncHandler(async (req, res, next) => {
 // @route   POST /api/products
 // @access  Public
 exports.createProduct = asyncHandler(async (req, res, next) => {
-  const shopId = req.headers["x-shop-id"];
+  const { name, description, price, stockQuantity, gst, hsnCode, partNo } =
+    req.body;
 
-  if (!shopId) {
-    return next(new AppError("Shop ID is required", 400));
-  }
+  console.log("=== CREATE PRODUCT ===");
+  console.log("Request body:", req.body);
+  console.log("GST value:", gst, "Type:", typeof gst);
 
-  const { name, description, price, stockQuantity, sku } = req.body;
-
-  // Check if product with SKU already exists in this shop
-  const existingProduct = await Product.findOne({
-    sku: sku.toUpperCase(),
-    shopId,
-  });
+  // Check if product with this name already exists
+  const existingProduct = await Product.findOne({ name });
   if (existingProduct) {
-    return next(new AppError("Product with this SKU already exists", 400));
+    return next(new AppError("Product with this name already exists", 400));
   }
 
-  const product = await Product.create({
-    shopId,
+  const productData = {
     name,
     description,
     price,
     stockQuantity,
-    sku: sku.toUpperCase(),
-  });
+    gst: Number(gst) || 0,
+    hsnCode,
+    partNo,
+  };
+
+  console.log("Product data to create:", productData);
+
+  const product = await Product.create(productData);
+
+  console.log("Created product:", product.toObject());
+  console.log("=== END CREATE PRODUCT ===");
 
   res.status(201).json({
     success: true,
@@ -135,10 +125,15 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/products/:id
 // @access  Public
 exports.updateProduct = asyncHandler(async (req, res, next) => {
-  const { name, description, price, stockQuantity, sku } = req.body;
-  const shopId = req.headers["x-shop-id"];
+  const { name, description, price, stockQuantity, gst, hsnCode, partNo } =
+    req.body;
 
-  let product = await Product.findOne({ _id: req.params.id, shopId });
+  console.log("=== UPDATE PRODUCT ===");
+  console.log("Product ID:", req.params.id);
+  console.log("Request body:", req.body);
+  console.log("GST value:", gst, "Type:", typeof gst);
+
+  let product = await Product.findById(req.params.id);
 
   if (!product) {
     return next(
@@ -146,31 +141,33 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // Check if SKU is being changed to an existing SKU in the same shop
-  if (sku && sku.toUpperCase() !== product.sku) {
-    const shopId = req.headers["x-shop-id"];
-    const existingProduct = await Product.findOne({
-      sku: sku.toUpperCase(),
-      shopId: shopId,
-    });
+  // Check if name is being changed to an existing name
+  if (name && name !== product.name) {
+    const existingProduct = await Product.findOne({ name });
     if (existingProduct) {
-      return next(
-        new AppError("SKU already in use by another product in this shop", 400),
-      );
+      return next(new AppError("Product name already in use", 400));
     }
   }
 
-  product = await Product.findByIdAndUpdate(
-    req.params.id,
-    {
-      name,
-      description,
-      price,
-      stockQuantity,
-      sku: sku ? sku.toUpperCase() : product.sku,
-    },
-    { new: true, runValidators: true },
-  );
+  const updateData = {
+    name,
+    description,
+    price,
+    stockQuantity,
+    gst: Number(gst) || 0,
+    hsnCode,
+    partNo,
+  };
+
+  console.log("Update data:", updateData);
+
+  product = await Product.findByIdAndUpdate(req.params.id, updateData, {
+    new: true,
+    runValidators: true,
+  });
+
+  console.log("Updated product:", product.toObject());
+  console.log("=== END UPDATE PRODUCT ===");
 
   res.status(200).json({
     success: true,
@@ -183,8 +180,7 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
 // @route   DELETE /api/products/:id
 // @access  Public
 exports.deleteProduct = asyncHandler(async (req, res, next) => {
-  const shopId = req.headers["x-shop-id"];
-  const product = await Product.findOne({ _id: req.params.id, shopId });
+  const product = await Product.findById(req.params.id);
 
   if (!product) {
     return next(
@@ -205,7 +201,6 @@ exports.deleteProduct = asyncHandler(async (req, res, next) => {
 // @route   PATCH /api/products/:id/stock
 // @access  Public
 exports.adjustStock = asyncHandler(async (req, res, next) => {
-  const shopId = req.headers["x-shop-id"];
   const { adjustment, action } = req.body; // action: 'add' or 'subtract'
 
   if (!adjustment || adjustment <= 0) {
@@ -220,7 +215,7 @@ exports.adjustStock = asyncHandler(async (req, res, next) => {
     );
   }
 
-  const product = await Product.findOne({ _id: req.params.id, shopId });
+  const product = await Product.findById(req.params.id);
 
   if (!product) {
     return next(
@@ -253,16 +248,9 @@ exports.adjustStock = asyncHandler(async (req, res, next) => {
 // @route   GET /api/products/alerts/low-stock
 // @access  Public
 exports.getLowStockProducts = asyncHandler(async (req, res, next) => {
-  const shopId = req.headers["x-shop-id"];
-
   const query = {
     stockQuantity: { $gt: 0, $lt: 10 },
   };
-
-  // Multi-tenancy: Only show products for current shop
-  if (shopId) {
-    query.shopId = shopId;
-  }
 
   const products = await Product.find(query).sort({ stockQuantity: 1 });
 
@@ -277,14 +265,7 @@ exports.getLowStockProducts = asyncHandler(async (req, res, next) => {
 // @route   GET /api/products/alerts/out-of-stock
 // @access  Public
 exports.getOutOfStockProducts = asyncHandler(async (req, res, next) => {
-  const shopId = req.headers["x-shop-id"];
-
   const query = { stockQuantity: 0 };
-
-  // Multi-tenancy: Only show products for current shop
-  if (shopId) {
-    query.shopId = shopId;
-  }
 
   const products = await Product.find(query).sort({
     updatedAt: -1,
@@ -302,11 +283,6 @@ exports.getOutOfStockProducts = asyncHandler(async (req, res, next) => {
 // @access  Public
 exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
   const { products } = req.body;
-  const shopId = req.headers["x-shop-id"];
-
-  if (!shopId) {
-    return next(new AppError("Shop ID is required", 400));
-  }
 
   if (!Array.isArray(products) || products.length === 0) {
     return next(new AppError("Products array is required", 400));
@@ -319,37 +295,36 @@ exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
 
   for (const productData of products) {
     try {
-      const { name, description, price, stockQuantity, sku } = productData;
+      const { name, description, price, stockQuantity, gst, hsnCode, partNo } =
+        productData;
 
       // Validate required fields
-      if (!name || !price || !sku) {
+      if (!name || !price) {
         results.failed.push({
           data: productData,
-          error: "Missing required fields (name, price, sku)",
+          error: "Missing required fields (name, price)",
         });
         continue;
       }
 
-      // Check if product with SKU already exists in this shop
-      const existingProduct = await Product.findOne({
-        sku: sku.toUpperCase(),
-        shopId,
-      });
+      // Check if product with this name already exists
+      const existingProduct = await Product.findOne({ name });
       if (existingProduct) {
         results.failed.push({
           data: productData,
-          error: `Product with SKU ${sku} already exists in this shop`,
+          error: `Product with name "${name}" already exists`,
         });
         continue;
       }
 
       const product = await Product.create({
-        shopId,
         name,
         description: description || "",
         price: Number(price),
         stockQuantity: Number(stockQuantity) || 0,
-        sku: sku.toUpperCase(),
+        gst: Number(gst) || 0,
+        hsnCode,
+        partNo,
       });
 
       results.success.push(product);
@@ -365,5 +340,28 @@ exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
     success: true,
     message: `Bulk import completed: ${results.success.length} succeeded, ${results.failed.length} failed`,
     data: results,
+  });
+});
+// @desc    Get stock data for PDF generation
+// @route   GET /api/products/reports/stock-pdf
+// @access  Public
+exports.getStockPDF = asyncHandler(async (req, res, next) => {
+  const products = await Product.find({})
+    .select("name price gst hsnCode stockQuantity")
+    .sort({ name: 1 });
+
+  // Format data for PDF: name, price, gst, hsn, stock qty
+  const stockData = products.map((product) => ({
+    name: product.name,
+    price: product.price,
+    gst: product.gst,
+    hsnCode: product.hsnCode || "-",
+    stockQuantity: product.stockQuantity,
+  }));
+
+  res.status(200).json({
+    success: true,
+    count: stockData.length,
+    data: stockData,
   });
 });

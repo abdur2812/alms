@@ -62,7 +62,7 @@ export default function LoginPage() {
               ERP Billing System
             </h2>
             <p className="mt-2 text-center text-sm text-gray-600">
-              Sign in with your registered shop email
+              Sign in to access your billing system
             </p>
           </div>
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>

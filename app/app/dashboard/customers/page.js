@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { customersAPI } from "@/lib/api";
 import {
@@ -13,6 +13,8 @@ import {
   FiFilter,
   FiFileText,
   FiUsers,
+  FiChevronDown,
+  FiChevronUp,
 } from "react-icons/fi";
 import { PageHeader, Card, CardBody, Button, Select } from "@/components/UI";
 
@@ -24,6 +26,7 @@ export default function CustomersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [error, setError] = useState("");
   const [filterCredit, setFilterCredit] = useState(false);
+  const [expandedCustomer, setExpandedCustomer] = useState(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -41,6 +44,17 @@ export default function CustomersPage() {
       setCustomers(response.data.data);
       setTotalPages(response.data.totalPages);
       setError("");
+
+      // Debug logging
+      console.log("Filter Credit:", filterCredit);
+      console.log(
+        "Customers:",
+        response.data.data.map((c) => ({
+          name: c.name,
+          creditAmount: c.creditAmount,
+          creditInvoices: c.creditInvoices?.length || 0,
+        })),
+      );
     } catch (err) {
       setError("Failed to fetch customers");
       console.error(err);
@@ -59,6 +73,10 @@ export default function CustomersPage() {
       alert("Failed to delete customer");
       console.error(err);
     }
+  };
+
+  const toggleExpandCustomer = (customerId) => {
+    setExpandedCustomer(expandedCustomer === customerId ? null : customerId);
   };
 
   return (
@@ -189,6 +207,9 @@ export default function CustomersPage() {
                       Location
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      Credit
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                       Orders
                     </th>
                     <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -198,72 +219,204 @@ export default function CustomersPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-50">
                   {customers.map((customer, idx) => (
-                    <tr
-                      key={customer._id}
-                      className="hover:bg-indigo-50/30 transition-colors duration-150"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="h-10 w-10 flex-shrink-0">
-                            <div className="h-10 w-10 rounded-full bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                              {customer.name.charAt(0).toUpperCase()}
+                    <React.Fragment key={customer._id}>
+                      <tr className="hover:bg-indigo-50/30 transition-colors duration-150">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="h-10 w-10 flex-shrink-0">
+                              <div className="h-10 w-10 rounded-full bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                                {customer.name.charAt(0).toUpperCase()}
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-bold text-gray-900">
+                                {customer.name}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                ID: {customer._id.substring(0, 8)}...
+                              </div>
                             </div>
                           </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-bold text-gray-900">
-                              {customer.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex flex-col space-y-1">
+                            <div className="flex items-center text-sm text-gray-600 font-medium">
+                              <FiMail className="mr-2 h-3.5 w-3.5 text-indigo-400" />
+                              {customer.email}
                             </div>
-                            <div className="text-xs text-gray-500">
-                              ID: {customer._id.substring(0, 8)}...
+                            <div className="flex items-center text-sm text-gray-600 font-medium">
+                              <FiPhone className="mr-2 h-3.5 w-3.5 text-purple-400" />
+                              {customer.phone}
                             </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col space-y-1">
-                          <div className="flex items-center text-sm text-gray-600 font-medium">
-                            <FiMail className="mr-2 h-3.5 w-3.5 text-indigo-400" />
-                            {customer.email}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-600 font-medium">
+                            {customer.address?.city}
+                            <span className="block text-xs text-gray-400 font-normal">
+                              {customer.address?.state}{" "}
+                              {customer.address?.country &&
+                                `, ${customer.address.country}`}
+                            </span>
                           </div>
-                          <div className="flex items-center text-sm text-gray-600 font-medium">
-                            <FiPhone className="mr-2 h-3.5 w-3.5 text-purple-400" />
-                            {customer.phone}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {customer.creditAmount > 0 ? (
+                            <div className="flex flex-col items-start">
+                              <button
+                                onClick={() =>
+                                  toggleExpandCustomer(customer._id)
+                                }
+                                className="inline-flex items-center px-3 py-1 rounded-full bg-orange-50 text-orange-700 text-sm font-bold border border-orange-200 hover:bg-orange-100 transition-colors"
+                              >
+                                ₹{customer.creditAmount.toFixed(2)}
+                                {expandedCustomer === customer._id ? (
+                                  <FiChevronUp className="ml-2 h-3 w-3" />
+                                ) : (
+                                  <FiChevronDown className="ml-2 h-3 w-3" />
+                                )}
+                              </button>
+                              {customer.creditInvoices &&
+                                customer.creditInvoices.length > 0 && (
+                                  <span className="text-xs text-gray-500 mt-1">
+                                    {customer.creditInvoices.length} invoice
+                                    {customer.creditInvoices.length !== 1
+                                      ? "s"
+                                      : ""}
+                                  </span>
+                                )}
+                            </div>
+                          ) : (
+                            <div className="text-sm text-gray-400">
+                              No Credit
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100">
+                            <FiFileText className="mr-1.5 h-3 w-3" />
+                            {customer.totalInvoices || 0}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-600 font-medium">
-                          {customer.address?.city}
-                          <span className="block text-xs text-gray-400 font-normal">
-                            {customer.address?.state}{" "}
-                            {customer.address?.country &&
-                              `, ${customer.address.country}`}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100">
-                          <FiFileText className="mr-1.5 h-3 w-3" />
-                          {customer.invoices?.length || 0}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        <div className="flex justify-end space-x-2">
-                          <Link
-                            href={`/dashboard/customers/${customer._id}`}
-                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200"
-                          >
-                            <FiEdit className="h-4 w-4" />
-                          </Link>
-                          <button
-                            onClick={() => handleDelete(customer._id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
-                          >
-                            <FiTrash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                          <div className="flex justify-end space-x-2">
+                            <Link
+                              href={`/dashboard/customers/${customer._id}`}
+                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200"
+                            >
+                              <FiEdit className="h-4 w-4" />
+                            </Link>
+                            <button
+                              onClick={() => handleDelete(customer._id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedCustomer === customer._id && (
+                        <tr key={`${customer._id}-expanded`}>
+                          <td colSpan="6" className="px-6 py-4 bg-orange-50/30">
+                            <div className="rounded-lg bg-white border border-orange-200 p-4">
+                              <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                                Credit Invoices{" "}
+                                {customer.creditInvoices &&
+                                  customer.creditInvoices.length > 0 &&
+                                  `(${customer.creditInvoices.length})`}
+                              </h4>
+                              {customer.creditInvoices &&
+                              customer.creditInvoices.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                          Invoice #
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                          Date
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                          Due Date
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                          Status
+                                        </th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                          Amount
+                                        </th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                          Action
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                      {customer.creditInvoices.map(
+                                        (invoice) => (
+                                          <tr
+                                            key={invoice._id}
+                                            className="hover:bg-gray-50"
+                                          >
+                                            <td className="px-4 py-2 text-sm font-medium text-indigo-600">
+                                              <Link
+                                                href={`/dashboard/invoices/${invoice._id}`}
+                                                className="hover:text-indigo-900"
+                                              >
+                                                {invoice.invoiceNumber}
+                                              </Link>
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-600">
+                                              {new Date(
+                                                invoice.date,
+                                              ).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-600">
+                                              {new Date(
+                                                invoice.dueDate,
+                                              ).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm">
+                                              <span
+                                                className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
+                                                  invoice.status === "Overdue"
+                                                    ? "bg-red-100 text-red-800"
+                                                    : invoice.status ===
+                                                        "Partially Paid"
+                                                      ? "bg-yellow-100 text-yellow-800"
+                                                      : "bg-orange-100 text-orange-800"
+                                                }`}
+                                              >
+                                                {invoice.status}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-right font-medium text-gray-900">
+                                              ₹{invoice.totalAmount.toFixed(2)}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-right">
+                                              <Link
+                                                href={`/dashboard/invoices/${invoice._id}`}
+                                                className="inline-flex items-center px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                                              >
+                                                View & Pay
+                                              </Link>
+                                            </td>
+                                          </tr>
+                                        ),
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-gray-500 text-center py-4">
+                                  No unpaid invoices found for this customer.
+                                </p>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

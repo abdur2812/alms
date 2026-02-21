@@ -7,24 +7,13 @@ const { AppError, asyncHandler } = require("../middleware/errorHandler");
 // @route   GET /api/invoices
 // @access  Public
 exports.getAllInvoices = asyncHandler(async (req, res, next) => {
-  const { page = 1, limit = 10, status, customerId, billType } = req.query;
-  const shopId = req.headers["x-shop-id"];
+  const { page = 1, limit = 10, customerId, billType } = req.query;
 
   const query = {};
-
-  // Multi-tenancy: Only show invoices for current shop
-  if (shopId) {
-    query.shopId = shopId;
-  }
 
   // Filter by bill type (credit/pay)
   if (billType) {
     query.billType = billType;
-  }
-
-  // Filter by status
-  if (status) {
-    query.status = status;
   }
 
   // Filter by customer
@@ -77,9 +66,9 @@ exports.getInvoiceById = asyncHandler(async (req, res, next) => {
 exports.createInvoice = asyncHandler(async (req, res, next) => {
   const {
     customerId,
+    customerData,
     items,
     taxRate,
-    status,
     isGstBill,
     isIGST,
     cgstRate,
@@ -88,15 +77,8 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     billType,
   } = req.body;
 
-  const shopId = req.headers["x-shop-id"];
-
-  if (!shopId) {
-    return next(new AppError("Shop ID is required", 400));
-  }
-
   console.log("=== CREATE INVOICE START ===");
   console.log("Request body:", JSON.stringify(req.body, null, 2));
-  console.log("Shop ID:", shopId);
 
   // Validate items array
   if (!items || !Array.isArray(items) || items.length === 0) {
@@ -106,60 +88,129 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
 
   console.log("Items validation passed:", items.length, "items");
 
-  // Validate customer exists and belongs to same shop
-  const customer = await Customer.findOne({ _id: customerId, shopId });
-  if (!customer) {
-    console.log(
-      "ERROR: Customer not found or doesn't belong to shop:",
-      customerId,
-    );
-    return next(new AppError("Customer not found", 404));
+  // Validate customer - either customerId OR customerData must be provided
+  if (!customerId && !customerData) {
+    console.log("ERROR: No customer information provided");
+    return next(new AppError("Customer information is required", 400));
   }
 
-  console.log("Customer found:", customer.name);
+  let customer = null;
+  let snapshotCustomerData = {};
+
+  if (customerId) {
+    // Existing customer flow
+    customer = await Customer.findById(customerId);
+    if (!customer) {
+      console.log("ERROR: Customer not found:", customerId);
+      return next(new AppError("Customer not found", 404));
+    }
+    console.log("Customer found:", customer.name);
+
+    // Snapshot customer data - use provided customerData or get from customer record
+    if (customerData) {
+      snapshotCustomerData = customerData;
+    } else {
+      snapshotCustomerData = {
+        name: customer.name,
+        phone: customer.phone,
+        gstNumber: customer.gstNumber,
+        address: customer.permanentAddress || customer.address,
+        shippingAddress:
+          customer.shippingAddress ||
+          customer.permanentAddress ||
+          customer.address,
+        sameAsPermanent: false,
+      };
+    }
+  } else {
+    // New customer flow (one-time billing)
+    console.log("One-time customer billing");
+    snapshotCustomerData = customerData;
+  }
 
   // Validate all products and check stock
   const validatedItems = [];
 
   for (const item of items) {
-    console.log("Validating product:", item.productId);
-    const product = await Product.findOne({ _id: item.productId, shopId });
+    console.log("=== Validating item ===");
+    console.log("Item from request:", JSON.stringify(item, null, 2));
+    console.log("Item GST:", item.gst, "Type:", typeof item.gst);
 
-    if (!product) {
+    let validatedItem;
+
+    if (item.productId) {
+      // Existing product flow
+      const product = await Product.findById(item.productId);
+
+      if (!product) {
+        console.log("ERROR: Product not found:", item.productId);
+        return next(
+          new AppError(`Product not found with id: ${item.productId}`, 404),
+        );
+      }
+
       console.log(
-        "ERROR: Product not found or doesn't belong to shop:",
-        item.productId,
+        "Product found:",
+        product.name,
+        "Stock:",
+        product.stockQuantity,
+        "Product GST:",
+        product.gst,
       );
-      return next(
-        new AppError(`Product not found with id: ${item.productId}`, 404),
-      );
+
+      // Check if product has sufficient stock
+      if (product.stockQuantity < item.quantity) {
+        console.log("ERROR: Insufficient stock");
+        return next(
+          new AppError(
+            `Insufficient stock for ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
+            400,
+          ),
+        );
+      }
+
+      // Snapshot the current price and name at time of invoice creation
+      validatedItem = {
+        productId: product._id,
+        name: item.name || product.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice || product.price,
+        gst: Number(item.gst) || Number(product.gst) || 0,
+        hsnCode: item.hsnCode || product.hsnCode || "",
+      };
+    } else {
+      // New product flow (one-time billing, no database record)
+      console.log("One-time product billing");
+
+      // Validate required fields for new products
+      if (!item.name || !item.quantity || item.unitPrice === undefined) {
+        return next(
+          new AppError(
+            "Product name, quantity, and price are required for new products",
+            400,
+          ),
+        );
+      }
+
+      validatedItem = {
+        productId: null,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        gst: Number(item.gst) || 0,
+        hsnCode: item.hsnCode || "",
+      };
     }
 
+    console.log("Validated item:", JSON.stringify(validatedItem, null, 2));
     console.log(
-      "Product found:",
-      product.name,
-      "Stock:",
-      product.stockQuantity,
+      "Final GST value:",
+      validatedItem.gst,
+      "Type:",
+      typeof validatedItem.gst,
     );
 
-    // Check if product has sufficient stock
-    if (product.stockQuantity < item.quantity) {
-      console.log("ERROR: Insufficient stock");
-      return next(
-        new AppError(
-          `Insufficient stock for ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
-          400,
-        ),
-      );
-    }
-
-    // Snapshot the current price and name at time of invoice creation
-    validatedItems.push({
-      productId: product._id,
-      name: item.name || product.name, // Use provided name (custom) or product name
-      quantity: item.quantity,
-      unitPrice: item.unitPrice || product.price, // Use provided price or current product price
-    });
+    validatedItems.push(validatedItem);
   }
 
   console.log("All products validated:", validatedItems.length);
@@ -171,8 +222,8 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
   // Create invoice with all new fields
   const invoiceData = {
     invoiceNumber,
-    shopId,
     customerId,
+    customerData: snapshotCustomerData,
     items: validatedItems,
     taxRate: taxRate || 0,
     isGstBill: isGstBill !== undefined ? isGstBill : true,
@@ -181,7 +232,6 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     sgstRate: sgstRate || 0,
     igstRate: igstRate || 0,
     billType: billType || "pay",
-    status: status || "Draft",
   };
 
   console.log(
@@ -192,20 +242,30 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
   const invoice = await Invoice.create(invoiceData);
   console.log("Invoice created:", invoice._id);
 
-  // Add invoice reference to customer
-  if (!customer.invoices) {
-    customer.invoices = [];
+  // Add invoice reference to customer (only for existing customers)
+  if (customer && customerId) {
+    if (!customer.invoices) {
+      customer.invoices = [];
+    }
+    customer.invoices.push(invoice._id);
+    await customer.save();
+    console.log("Invoice added to customer");
+  } else {
+    console.log("One-time customer - invoice not linked to customer record");
   }
-  customer.invoices.push(invoice._id);
-  await customer.save();
-  console.log("Invoice added to customer");
 
-  // If invoice is created with 'Paid' status, decrement stock immediately
-  if (status === "Paid") {
-    console.log("Decrementing stock for paid invoice");
+  // If invoice is billType pay, decrement stock immediately (only for existing products)
+  if (billType === "pay") {
+    console.log("Decrementing stock for paid bill");
     for (const item of validatedItems) {
-      const product = await Product.findById(item.productId);
-      await product.decreaseStock(item.quantity);
+      if (item.productId) {
+        const product = await Product.findById(item.productId);
+        if (product) {
+          await product.decreaseStock(item.quantity);
+        }
+      } else {
+        console.log("One-time product - no stock decrement");
+      }
     }
   }
 
@@ -227,7 +287,7 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/invoices/:id
 // @access  Public
 exports.updateInvoice = asyncHandler(async (req, res, next) => {
-  const { items, taxRate, status } = req.body;
+  const { items, taxRate, customerData, billType } = req.body;
 
   let invoice = await Invoice.findById(req.params.id);
 
@@ -237,46 +297,55 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // Don't allow updating paid or cancelled invoices
-  if (invoice.status === "Paid") {
-    return next(new AppError("Cannot update a paid invoice", 400));
+  // Update customer data if provided
+  if (customerData) {
+    invoice.customerData = customerData;
   }
-
-  if (invoice.status === "Cancelled") {
-    return next(new AppError("Cannot update a cancelled invoice", 400));
-  }
-
-  const previousStatus = invoice.status;
 
   // If items are being updated, validate them
-  if (items) {
+  if (items && Array.isArray(items)) {
     const validatedItems = [];
 
     for (const item of items) {
-      const product = await Product.findById(item.productId);
+      let validatedItem;
 
-      if (!product) {
-        return next(
-          new AppError(`Product not found with id: ${item.productId}`, 404),
-        );
+      if (item.productId) {
+        // Existing product - validate it exists
+        const product = await Product.findById(item.productId);
+
+        if (!product) {
+          return next(
+            new AppError(`Product not found with id: ${item.productId}`, 404),
+          );
+        }
+
+        validatedItem = {
+          productId: product._id,
+          name: item.name || product.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice || product.price,
+          gst: Number(item.gst) || Number(product.gst) || 0,
+          hsnCode: item.hsnCode || product.hsnCode || "",
+        };
+      } else {
+        // One-time product - no database record
+        if (!item.name || !item.quantity || item.unitPrice === undefined) {
+          return next(
+            new AppError("Product name, quantity, and price are required", 400),
+          );
+        }
+
+        validatedItem = {
+          productId: null,
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          gst: Number(item.gst) || 0,
+          hsnCode: item.hsnCode || "",
+        };
       }
 
-      // Check stock only if status is changing to Paid
-      if (status === "Paid" && product.stockQuantity < item.quantity) {
-        return next(
-          new AppError(
-            `Insufficient stock for ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
-            400,
-          ),
-        );
-      }
-
-      validatedItems.push({
-        productId: product._id,
-        name: item.name || product.name,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice || product.price,
-      });
+      validatedItems.push(validatedItem);
     }
 
     invoice.items = validatedItems;
@@ -284,17 +353,9 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
 
   // Update other fields
   if (taxRate !== undefined) invoice.taxRate = taxRate;
-  if (status) invoice.status = status;
+  if (billType) invoice.billType = billType;
 
   await invoice.save();
-
-  // Handle stock management when status changes to 'Paid'
-  if (previousStatus !== "Paid" && status === "Paid") {
-    for (const item of invoice.items) {
-      const product = await Product.findById(item.productId);
-      await product.decreaseStock(item.quantity);
-    }
-  }
 
   // Populate and return updated invoice
   const updatedInvoice = await Invoice.findById(invoice._id)
@@ -308,79 +369,6 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Update invoice status
-// @route   PATCH /api/invoices/:id/status
-// @access  Public
-exports.updateInvoiceStatus = asyncHandler(async (req, res, next) => {
-  const { status } = req.body;
-
-  if (!status || !["Draft", "Pending", "Paid", "Cancelled"].includes(status)) {
-    return next(new AppError("Please provide a valid status", 400));
-  }
-
-  const invoice = await Invoice.findById(req.params.id);
-
-  if (!invoice) {
-    return next(
-      new AppError(`Invoice not found with id: ${req.params.id}`, 404),
-    );
-  }
-
-  const previousStatus = invoice.status;
-
-  // Don't allow changing from Paid or Cancelled
-  if (previousStatus === "Paid" && status !== "Paid") {
-    return next(new AppError("Cannot change status of a paid invoice", 400));
-  }
-
-  if (previousStatus === "Cancelled" && status !== "Cancelled") {
-    return next(
-      new AppError("Cannot change status of a cancelled invoice", 400),
-    );
-  }
-
-  // When changing to Paid, check stock availability
-  if (previousStatus !== "Paid" && status === "Paid") {
-    for (const item of invoice.items) {
-      const product = await Product.findById(item.productId);
-
-      if (!product) {
-        return next(
-          new AppError(`Product not found with id: ${item.productId}`, 404),
-        );
-      }
-
-      if (product.stockQuantity < item.quantity) {
-        return next(
-          new AppError(
-            `Insufficient stock for ${product.name}. Available: ${product.stockQuantity}, Required: ${item.quantity}`,
-            400,
-          ),
-        );
-      }
-    }
-
-    // Decrement stock for all items
-    for (const item of invoice.items) {
-      const product = await Product.findById(item.productId);
-      await product.decreaseStock(item.quantity);
-    }
-  }
-
-  invoice.status = status;
-  await invoice.save();
-
-  const updatedInvoice = await Invoice.findById(invoice._id)
-    .populate("customerId", "name phone")
-    .populate("items.productId", "name");
-
-  res.status(200).json({
-    success: true,
-    message: "Invoice status updated successfully",
-    data: updatedInvoice,
-  });
-});
-
 // @desc    Delete invoice
 // @route   DELETE /api/invoices/:id
 // @access  Public
@@ -390,16 +378,6 @@ exports.deleteInvoice = asyncHandler(async (req, res, next) => {
   if (!invoice) {
     return next(
       new AppError(`Invoice not found with id: ${req.params.id}`, 404),
-    );
-  }
-
-  // Don't allow deleting paid invoices
-  if (invoice.status === "Paid") {
-    return next(
-      new AppError(
-        "Cannot delete a paid invoice. Please cancel it instead.",
-        400,
-      ),
     );
   }
 
@@ -424,7 +402,7 @@ exports.getInvoiceStats = asyncHandler(async (req, res, next) => {
   const stats = await Invoice.aggregate([
     {
       $group: {
-        _id: "$status",
+        _id: "$billType",
         count: { $sum: 1 },
         totalAmount: { $sum: "$totalAmount" },
       },
@@ -433,7 +411,7 @@ exports.getInvoiceStats = asyncHandler(async (req, res, next) => {
 
   const totalInvoices = await Invoice.countDocuments();
   const totalRevenue = await Invoice.aggregate([
-    { $match: { status: "Paid" } },
+    { $match: { billType: "pay" } },
     { $group: { _id: null, total: { $sum: "$totalAmount" } } },
   ]);
 
@@ -442,7 +420,7 @@ exports.getInvoiceStats = asyncHandler(async (req, res, next) => {
     data: {
       totalInvoices,
       totalRevenue: totalRevenue[0]?.total || 0,
-      byStatus: stats,
+      byBillType: stats,
     },
   });
 });
@@ -468,7 +446,7 @@ exports.getInvoicesByDateRange = asyncHandler(async (req, res, next) => {
     .sort({ createdAt: -1 });
 
   const totalRevenue = invoices
-    .filter((inv) => inv.status === "Paid")
+    .filter((inv) => inv.billType === "pay")
     .reduce((sum, inv) => sum + inv.totalAmount, 0);
 
   res.status(200).json({
@@ -476,5 +454,74 @@ exports.getInvoicesByDateRange = asyncHandler(async (req, res, next) => {
     count: invoices.length,
     totalRevenue,
     data: invoices,
+  });
+});
+// @desc    Get bulk invoice data for PDF generation
+// @route   GET /api/invoices/reports/bulk-pdf
+// @access  Public
+// Format: invoice id, cust name, cust gst, cust phone, amount separated by cgst sgst, credit or paid
+exports.getBulkInvoicePDF = asyncHandler(async (req, res, next) => {
+  const { startDate, endDate, billType } = req.query;
+
+  const query = {};
+
+  // Filter by date range if provided
+  if (startDate && endDate) {
+    query.createdAt = {
+      $gte: new Date(startDate),
+      $lte: new Date(endDate),
+    };
+  }
+
+  // Filter by bill type
+  if (billType) {
+    query.billType = billType;
+  }
+
+  const invoices = await Invoice.find(query)
+    .populate("customerId", "name phone gstNumber")
+    .sort({ createdAt: -1 });
+
+  // Format data for PDF: invoice id, cust name, cust gst, cust phone,
+  // subtotal, cgst, sgst, total, credit or paid
+  const bulkData = invoices.map((invoice) => {
+    const subtotal = invoice.subtotal;
+    const gstAmount = invoice.gstAmount;
+    const cgst = gstAmount / 2; // Assuming CGST and SGST are equal (50% each)
+    const sgst = gstAmount / 2;
+    const total = invoice.totalAmount;
+
+    // Use customerData snapshot if available, otherwise fall back to populated customer
+    let customerName = "N/A";
+    let customerPhone = "-";
+    let customerGST = "-";
+
+    if (invoice.customerData && invoice.customerData.name) {
+      customerName = invoice.customerData.name;
+      customerPhone = invoice.customerData.phone || "-";
+      customerGST = invoice.customerData.gstNumber || "-";
+    } else if (invoice.customerId) {
+      customerName = invoice.customerId.name || "N/A";
+      customerPhone = invoice.customerId.phone || "-";
+      customerGST = invoice.customerId.gstNumber || "-";
+    }
+
+    return {
+      invoiceId: invoice.invoiceNumber,
+      customerName,
+      customerGST,
+      customerPhone,
+      subtotal: subtotal.toFixed(2),
+      cgst: cgst.toFixed(2),
+      sgst: sgst.toFixed(2),
+      total: total.toFixed(2),
+      type: invoice.billType === "credit" ? "Credit" : "Paid",
+    };
+  });
+
+  res.status(200).json({
+    success: true,
+    count: bulkData.length,
+    data: bulkData,
   });
 });

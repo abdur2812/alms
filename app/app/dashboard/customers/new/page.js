@@ -32,7 +32,22 @@ export default function NewCustomerPage() {
       postalCode: "",
       country: "India",
     },
+    permanentAddress: {
+      companyAddress: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      country: "India",
+    },
+    shippingAddress: {
+      companyAddress: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      country: "India",
+    },
   });
+  const [sameAsPermanent, setSameAsPermanent] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -45,8 +60,39 @@ export default function NewCustomerPage() {
           [addressField]: value,
         },
       });
+    } else if (name.startsWith("permanentAddress.")) {
+      const addressField = name.split(".")[1];
+      const newPermanentAddress = {
+        ...formData.permanentAddress,
+        [addressField]: value,
+      };
+      setFormData({
+        ...formData,
+        permanentAddress: newPermanentAddress,
+        ...(sameAsPermanent && { shippingAddress: newPermanentAddress }),
+      });
+    } else if (name.startsWith("shippingAddress.")) {
+      const addressField = name.split(".")[1];
+      setFormData({
+        ...formData,
+        shippingAddress: {
+          ...formData.shippingAddress,
+          [addressField]: value,
+        },
+      });
     } else {
       setFormData({ ...formData, [name]: value });
+    }
+  };
+
+  const handleSameAsPermanent = (e) => {
+    const checked = e.target.checked;
+    setSameAsPermanent(checked);
+    if (checked) {
+      setFormData({
+        ...formData,
+        shippingAddress: { ...formData.permanentAddress },
+      });
     }
   };
 
@@ -147,10 +193,126 @@ export default function NewCustomerPage() {
                 className="uppercase"
               />
 
-              {/* Address Information */}
+              {/* Permanent Address Information */}
               <div className="sm:col-span-2">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-4">
-                  Address
+                  Permanent Address
+                </h3>
+              </div>
+
+              <div className="sm:col-span-2">
+                <Input
+                  label="Company Address"
+                  name="permanentAddress.companyAddress"
+                  value={formData.permanentAddress.companyAddress}
+                  onChange={handleChange}
+                  placeholder="Full address"
+                />
+              </div>
+
+              <Input
+                label="City"
+                name="permanentAddress.city"
+                value={formData.permanentAddress.city}
+                onChange={handleChange}
+                placeholder="City name"
+              />
+
+              <Input
+                label="State/Province"
+                name="permanentAddress.state"
+                value={formData.permanentAddress.state}
+                onChange={handleChange}
+                placeholder="State or Province"
+              />
+
+              <Input
+                label="Postal Code"
+                name="permanentAddress.postalCode"
+                value={formData.permanentAddress.postalCode}
+                onChange={handleChange}
+                placeholder="Postal/ZIP code"
+              />
+
+              <Input
+                label="Country"
+                name="permanentAddress.country"
+                value={formData.permanentAddress.country}
+                onChange={handleChange}
+                placeholder="Country"
+              />
+
+              {/* Shipping Address Information */}
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between mb-4 mt-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Shipping Address
+                  </h3>
+                  <label className="flex items-center cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={sameAsPermanent}
+                      onChange={handleSameAsPermanent}
+                      className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded transition-all group-hover:scale-110"
+                    />
+                    <span className="ml-3 text-sm font-medium text-gray-900">
+                      Same as Permanent Address
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="sm:col-span-2">
+                <Input
+                  label="Company Address"
+                  name="shippingAddress.companyAddress"
+                  value={formData.shippingAddress.companyAddress}
+                  onChange={handleChange}
+                  placeholder="Full address"
+                  disabled={sameAsPermanent}
+                />
+              </div>
+
+              <Input
+                label="City"
+                name="shippingAddress.city"
+                value={formData.shippingAddress.city}
+                onChange={handleChange}
+                placeholder="City name"
+                disabled={sameAsPermanent}
+              />
+
+              <Input
+                label="State/Province"
+                name="shippingAddress.state"
+                value={formData.shippingAddress.state}
+                onChange={handleChange}
+                placeholder="State or Province"
+                disabled={sameAsPermanent}
+              />
+
+              <Input
+                label="Postal Code"
+                name="shippingAddress.postalCode"
+                value={formData.shippingAddress.postalCode}
+                onChange={handleChange}
+                placeholder="Postal/ZIP code"
+                disabled={sameAsPermanent}
+              />
+
+              <Input
+                label="Country"
+                name="shippingAddress.country"
+                value={formData.shippingAddress.country}
+                onChange={handleChange}
+                placeholder="Country"
+                disabled={sameAsPermanent}
+              />
+
+              {/* Old Address (kept for compatibility) */}
+              <div className="sm:col-span-2">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-4">
+                  Billing Address
                 </h3>
               </div>
 

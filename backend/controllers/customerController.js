@@ -10,23 +10,15 @@ exports.getAllCustomers = asyncHandler(async (req, res, next) => {
   console.log("Query params:", req.query);
 
   const { page = 1, limit = 10, search, hasCreditInvoices } = req.query;
-  const shopId = req.headers["x-shop-id"];
 
   const query = {};
-
-  // Multi-tenancy: Only show customers for current shop
-  if (shopId) {
-    query.shopId = shopId;
-  }
 
   // Filter by credit invoices
   if (hasCreditInvoices === "true") {
     // Find all customers who have at least one invoice with billType="credit"
-    const creditQuery = { billType: "credit" };
-    if (shopId) creditQuery.shopId = shopId;
-
-    const creditInvoices =
-      await Invoice.find(creditQuery).distinct("customerId");
+    const creditInvoices = await Invoice.find({ billType: "credit" }).distinct(
+      "customerId",
+    );
     query._id = { $in: creditInvoices };
   }
 
@@ -44,9 +36,37 @@ exports.getAllCustomers = asyncHandler(async (req, res, next) => {
     const customers = await Customer.find(query)
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "invoices",
+        select: "invoiceNumber totalAmount status date dueDate billType",
+        options: { sort: { date: -1 } },
+      });
 
     console.log("Customers found:", customers.length);
+
+    // Calculate credit for each customer and separate credit invoices
+    const customersWithCredit = customers.map((customer) => {
+      const customerObj = customer.toObject();
+
+      // Filter credit invoices (billType "credit" only)
+      const creditInvoices = customer.invoices.filter(
+        (inv) => inv.billType === "credit",
+      );
+
+      customerObj.creditAmount = creditInvoices.reduce(
+        (sum, inv) => sum + inv.totalAmount,
+        0,
+      );
+      customerObj.creditInvoices = creditInvoices;
+      customerObj.totalInvoices = customer.invoices.length;
+
+      console.log(
+        `Customer ${customer.name}: creditAmount=${customerObj.creditAmount}, creditInvoices=${creditInvoices.length}`,
+      );
+
+      return customerObj;
+    });
 
     const count = await Customer.countDocuments(query);
     console.log("Total count:", count);
@@ -57,7 +77,7 @@ exports.getAllCustomers = asyncHandler(async (req, res, next) => {
       total: count,
       totalPages: Math.ceil(count / limit),
       currentPage: page,
-      data: customers,
+      data: customersWithCredit,
     });
 
     console.log("=== GET ALL CUSTOMERS SUCCESS ===");
@@ -72,15 +92,7 @@ exports.getAllCustomers = asyncHandler(async (req, res, next) => {
 // @route   GET /api/customers/:id
 // @access  Public
 exports.getCustomerById = asyncHandler(async (req, res, next) => {
-  const shopId = req.headers["x-shop-id"];
-  let query = { _id: req.params.id };
-
-  // Multi-tenancy: Only allow access to customer from same shop
-  if (shopId) {
-    query.shopId = shopId;
-  }
-
-  const customer = await Customer.findOne(query).populate({
+  const customer = await Customer.findById(req.params.id).populate({
     path: "invoices",
     select: "invoiceNumber totalAmount status createdAt",
   });
@@ -101,22 +113,17 @@ exports.getCustomerById = asyncHandler(async (req, res, next) => {
 // @route   POST /api/customers
 // @access  Public
 exports.createCustomer = asyncHandler(async (req, res, next) => {
-  const shopId = req.headers["x-shop-id"];
-
-  if (!shopId) {
-    return next(new AppError("Shop ID is required", 400));
-  }
-
   const { name, email, phone, address } = req.body;
 
-  // Check if customer with email already exists in this shop
-  const existingCustomer = await Customer.findOne({ email, shopId });
-  if (existingCustomer) {
-    return next(new AppError("Customer with this email already exists", 400));
+  // Check if customer with email already exists
+  if (email) {
+    const existingCustomer = await Customer.findOne({ email });
+    if (existingCustomer) {
+      return next(new AppError("Customer with this email already exists", 400));
+    }
   }
 
   const customer = await Customer.create({
-    shopId,
     name,
     email,
     phone,
@@ -230,6 +237,35 @@ exports.getCustomerStats = asyncHandler(async (req, res, next) => {
         email: customer.email,
       },
       stats,
+    },
+  });
+});
+
+// Get customer credit invoices
+exports.getCreditInvoices = asyncHandler(async (req, res, next) => {
+  const customer = await Customer.findById(req.params.id).populate({
+    path: "invoices",
+    match: { billType: "credit" },
+    select: "invoiceNumber totalAmount dueDate date billType",
+    options: { sort: { date: -1 } },
+  });
+
+  if (!customer) {
+    return next(
+      new AppError(`Customer not found with id: ${req.params.id}`, 404),
+    );
+  }
+
+  const totalCredit = customer.invoices.reduce(
+    (sum, inv) => sum + inv.totalAmount,
+    0,
+  );
+
+  res.status(200).json({
+    success: true,
+    data: {
+      totalCredit,
+      creditInvoices: customer.invoices,
     },
   });
 });

@@ -2,14 +2,10 @@ const mongoose = require("mongoose");
 
 const productSchema = new mongoose.Schema(
   {
-    shopId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Shop",
-      required: [true, "Shop ID is required"],
-    },
     name: {
       type: String,
       required: [true, "Product name is required"],
+      unique: true,
       trim: true,
       minlength: [2, "Product name must be at least 2 characters long"],
     },
@@ -17,11 +13,6 @@ const productSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: [500, "Description cannot exceed 500 characters"],
-    },
-    totalProductsAdded: {
-      type: Number,
-      default: 1,
-      min: [1, "Total products added must be at least 1"],
     },
     hsnCode: {
       type: String,
@@ -54,8 +45,6 @@ const productSchema = new mongoose.Schema(
   },
 );
 
-// Note: Compound unique index (sku + shopId) is created in server startup
-
 // Virtual to check if product is in stock
 productSchema.virtual("inStock").get(function () {
   return this.stockQuantity > 0;
@@ -86,5 +75,8 @@ productSchema.methods.increaseStock = async function (quantity) {
 // Ensure virtuals are included when converting to JSON
 productSchema.set("toJSON", { virtuals: true });
 productSchema.set("toObject", { virtuals: true });
+
+// Explicit index definition (removes any old SKU indexes)
+productSchema.index({ name: 1 }, { unique: true });
 
 module.exports = mongoose.model("Product", productSchema);

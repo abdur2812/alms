@@ -3,7 +3,7 @@
 import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { customersAPI } from "@/lib/api";
-import { FiArrowLeft } from "react-icons/fi";
+import { FiArrowLeft, FiChevronDown, FiChevronUp } from "react-icons/fi";
 import Link from "next/link";
 
 export default function EditCustomerPage({ params }) {
@@ -12,6 +12,8 @@ export default function EditCustomerPage({ params }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [creditData, setCreditData] = useState(null);
+  const [showCreditInvoices, setShowCreditInvoices] = useState(false);
   const [formData, setFormData] = useState({
     customerType: "individual",
     name: "",
@@ -29,6 +31,7 @@ export default function EditCustomerPage({ params }) {
 
   useEffect(() => {
     fetchCustomer();
+    fetchCreditInvoices();
   }, []);
 
   const fetchCustomer = async () => {
@@ -53,6 +56,20 @@ export default function EditCustomerPage({ params }) {
     } catch (err) {
       setError("Failed to fetch customer");
       setLoading(false);
+    }
+  };
+
+  const fetchCreditInvoices = async () => {
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/customers/${id}/credit`,
+      );
+      const data = await response.json();
+      if (data.success) {
+        setCreditData(data.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch credit invoices:", err);
     }
   };
 
@@ -334,6 +351,103 @@ export default function EditCustomerPage({ params }) {
           </div>
         </form>
       </div>
+
+      {/* Credit Invoices Section */}
+      {creditData && creditData.totalCredit > 0 && (
+        <div className="mt-6 bg-white shadow-md rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">
+                Credit Invoices
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Total Outstanding Credit:{" "}
+                <span className="font-bold text-orange-600">
+                  ₹{creditData.totalCredit.toFixed(2)}
+                </span>
+              </p>
+            </div>
+            <button
+              onClick={() => setShowCreditInvoices(!showCreditInvoices)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              {showCreditInvoices ? (
+                <>
+                  <FiChevronUp className="mr-2" />
+                  Hide Invoices
+                </>
+              ) : (
+                <>
+                  <FiChevronDown className="mr-2" />
+                  Show Invoices ({creditData.creditInvoices.length})
+                </>
+              )}
+            </button>
+          </div>
+
+          {showCreditInvoices && (
+            <div className="border-t border-gray-200 pt-4">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Invoice Number
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Due Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Amount
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {creditData.creditInvoices.map((invoice) => (
+                    <tr key={invoice._id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <Link
+                          href={`/dashboard/invoices/${invoice._id}`}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
+                          {invoice.invoiceNumber}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(invoice.date).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(invoice.dueDate).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            invoice.status === "Overdue"
+                              ? "bg-red-100 text-red-800"
+                              : invoice.status === "Partially Paid"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-orange-100 text-orange-800"
+                          }`}
+                        >
+                          {invoice.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
+                        ₹{invoice.totalAmount.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

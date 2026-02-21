@@ -5,7 +5,7 @@ const invoiceItemSchema = new mongoose.Schema(
     productId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
-      required: [true, "Product ID is required"],
+      required: false, // Allow null for one-time products
     },
     name: {
       type: String,
@@ -26,6 +26,10 @@ const invoiceItemSchema = new mongoose.Schema(
       required: [true, "GST rate is required"],
       min: [0, "GST rate cannot be negative"],
       max: [100, "GST rate cannot exceed 100%"],
+    },
+    hsnCode: {
+      type: String,
+      trim: true,
     },
   },
   { _id: false },
@@ -48,15 +52,30 @@ invoiceItemSchema.virtual("total").get(function () {
 
 const invoiceSchema = new mongoose.Schema(
   {
-    shopId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Shop",
-      required: [true, "Shop ID is required"],
-    },
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Customer",
-      required: [true, "Customer ID is required"],
+      required: false, // Allow null for one-time customers
+    },
+    customerData: {
+      name: { type: String },
+      phone: { type: String },
+      gstNumber: { type: String },
+      address: {
+        companyAddress: { type: String },
+        city: { type: String },
+        state: { type: String },
+        postalCode: { type: String },
+        country: { type: String },
+      },
+      shippingAddress: {
+        companyAddress: { type: String },
+        city: { type: String },
+        state: { type: String },
+        postalCode: { type: String },
+        country: { type: String },
+      },
+      sameAsPermanent: { type: Boolean, default: false },
     },
     items: {
       type: [invoiceItemSchema],
@@ -80,11 +99,6 @@ const invoiceSchema = new mongoose.Schema(
       type: String,
       enum: ["credit", "pay"],
       default: "pay",
-    },
-    status: {
-      type: String,
-      enum: ["Draft", "Pending", "Paid", "Cancelled"],
-      default: "Draft",
     },
     invoiceNumber: {
       type: String,
@@ -141,16 +155,54 @@ invoiceSchema.pre("save", function (next) {
   // Set total amount
   this.totalAmount = subtotal + totalGst;
 
+  console.log("=== INVOICE PRE-SAVE HOOK ===");
+  console.log("Items:", JSON.stringify(this.items, null, 2));
+  console.log("Subtotal:", subtotal);
+  console.log("Total GST:", totalGst);
+  console.log("Total Amount:", this.totalAmount);
+  console.log("=== END INVOICE PRE-SAVE ===");
+
   next();
 });
 
-// Static method to generate invoice number
+// Static method to generate invoice number with format ALMS0001-2526
+// Fiscal year April 1 to March 31, resets to 0001 each fiscal year
 invoiceSchema.statics.generateInvoiceNumber = async function () {
-  const count = await this.countDocuments();
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `INV-${year}${month}-${String(count + 1).padStart(5, "0")}`;
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed (0=Jan, 3=April)
+
+  // Determine fiscal year (April 1 to March 31)
+  // If current month is Jan-Mar (0-2), fiscal year started last year
+  // If current month is Apr-Dec (3-11), fiscal year started this year
+  let fiscalYearStart;
+  if (currentMonth < 3) {
+    // Jan-Mar: fiscal year started last year
+    fiscalYearStart = currentYear - 1;
+  } else {
+    // Apr-Dec: fiscal year started this year
+    fiscalYearStart = currentYear;
+  }
+
+  const fiscalYearEnd = fiscalYearStart + 1;
+
+  // Format fiscal year as 2526 (25-26)
+  const fiscalYearLabel = `${String(fiscalYearStart).slice(-2)}${String(fiscalYearEnd).slice(-2)}`;
+
+  // Count invoices created in current fiscal year
+  const fiscalYearStartDate = new Date(fiscalYearStart, 3, 1); // April 1
+  const fiscalYearEndDate = new Date(fiscalYearEnd, 2, 31, 23, 59, 59); // March 31
+
+  const count = await this.countDocuments({
+    createdAt: {
+      $gte: fiscalYearStartDate,
+      $lte: fiscalYearEndDate,
+    },
+  });
+
+  const sequenceNumber = String(count + 1).padStart(4, "0");
+
+  return `ALMS${sequenceNumber}-${fiscalYearLabel}`;
 };
 
 // Post-save hook to handle stock management when status changes to 'Paid'

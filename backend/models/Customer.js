@@ -2,11 +2,6 @@ const mongoose = require("mongoose");
 
 const customerSchema = new mongoose.Schema(
   {
-    shopId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Shop",
-      required: [true, "Shop ID is required"],
-    },
     customerType: {
       type: String,
       enum: ["individual", "business"],
@@ -34,6 +29,20 @@ const customerSchema = new mongoose.Schema(
       uppercase: true,
     },
     address: {
+      companyAddress: { type: String, trim: true },
+      city: { type: String, trim: true },
+      state: { type: String, trim: true },
+      postalCode: { type: String, trim: true },
+      country: { type: String, trim: true, default: "India" },
+    },
+    permanentAddress: {
+      companyAddress: { type: String, trim: true },
+      city: { type: String, trim: true },
+      state: { type: String, trim: true },
+      postalCode: { type: String, trim: true },
+      country: { type: String, trim: true, default: "India" },
+    },
+    shippingAddress: {
       companyAddress: { type: String, trim: true },
       city: { type: String, trim: true },
       state: { type: String, trim: true },

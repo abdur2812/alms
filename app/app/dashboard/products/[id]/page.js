@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { productsAPI } from "@/lib/api";
 import { FiArrowLeft } from "react-icons/fi";
 import Link from "next/link";
+import { NumberInput } from "@/components/UI";
 
 export default function EditProductPage({ params }) {
   const { id } = use(params);
@@ -15,7 +16,6 @@ export default function EditProductPage({ params }) {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    totalProductsAdded: "1",
     hsnCode: "",
     partNo: "",
     gst: "18",
@@ -34,7 +34,6 @@ export default function EditProductPage({ params }) {
       setFormData({
         name: product.name,
         description: product.description || "",
-        totalProductsAdded: product.totalProductsAdded || 1,
         hsnCode: product.hsnCode || "",
         partNo: product.partNo || "",
         gst: product.gst || 18,
@@ -58,16 +57,24 @@ export default function EditProductPage({ params }) {
     setSaving(true);
     setError("");
 
+    const productData = {
+      ...formData,
+      price: parseFloat(formData.price),
+      gst: parseFloat(formData.gst),
+      stockQuantity: parseInt(formData.stockQuantity),
+    };
+
+    console.log("=== UPDATING PRODUCT ===");
+    console.log("Form data:", formData);
+    console.log("Product data to send:", productData);
+    console.log("GST value:", productData.gst, "Type:", typeof productData.gst);
+
     try {
-      await productsAPI.update(id, {
-        ...formData,
-        price: parseFloat(formData.price),
-        gst: parseFloat(formData.gst),
-        totalProductsAdded: parseInt(formData.totalProductsAdded),
-        stockQuantity: parseInt(formData.stockQuantity),
-      });
+      const response = await productsAPI.update(id, productData);
+      console.log("Product updated successfully:", response.data);
       router.push("/dashboard/products");
     } catch (err) {
+      console.error("Error updating product:", err);
       setError(err.response?.data?.message || "Failed to update product");
     } finally {
       setSaving(false);
@@ -142,45 +149,16 @@ export default function EditProductPage({ params }) {
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="totalProductsAdded"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Total Products Added <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                name="totalProductsAdded"
-                id="totalProductsAdded"
-                required
-                min="1"
-                value={formData.totalProductsAdded}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="gst"
-                className="block text-sm font-medium text-gray-700"
-              >
-                GST (%) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                name="gst"
-                id="gst"
-                required
-                min="0"
-                max="100"
-                step="0.01"
-                value={formData.gst}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
+            <NumberInput
+              label="GST (%)"
+              name="gst"
+              min="0"
+              max="100"
+              step="0.01"
+              value={formData.gst}
+              onChange={handleChange}
+              required
+            />
 
             <div>
               <label
@@ -216,49 +194,25 @@ export default function EditProductPage({ params }) {
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="price"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Price (₹) <span className="text-red-500">*</span>
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-500 sm:text-sm">₹</span>
-                </div>
-                <input
-                  type="number"
-                  name="price"
-                  id="price"
-                  required
-                  min="0"
-                  step="0.01"
-                  value={formData.price}
-                  onChange={handleChange}
-                  className="block w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                />
-              </div>
-            </div>
+            <NumberInput
+              label="Price (₹)"
+              name="price"
+              min="0"
+              step="0.01"
+              value={formData.price}
+              onChange={handleChange}
+              prefix="₹"
+              required
+            />
 
-            <div>
-              <label
-                htmlFor="stockQuantity"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Stock Quantity <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                name="stockQuantity"
-                id="stockQuantity"
-                required
-                min="0"
-                value={formData.stockQuantity}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
+            <NumberInput
+              label="Stock Quantity"
+              name="stockQuantity"
+              min="0"
+              value={formData.stockQuantity}
+              onChange={handleChange}
+              required
+            />
           </div>
 
           <div className="mt-6 flex justify-end space-x-3">

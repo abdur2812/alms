@@ -13,7 +13,6 @@ export default function ViewInvoicePage({ params }) {
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
     fetchInvoice();
@@ -27,21 +26,6 @@ export default function ViewInvoicePage({ params }) {
     } catch (err) {
       setError("Failed to fetch invoice");
       setLoading(false);
-    }
-  };
-
-  const handleStatusChange = async (newStatus) => {
-    if (!confirm(`Are you sure you want to change the status to ${newStatus}?`))
-      return;
-
-    setUpdatingStatus(true);
-    try {
-      await invoicesAPI.updateStatus(id, { status: newStatus });
-      fetchInvoice();
-    } catch (err) {
-      alert("Failed to update status");
-    } finally {
-      setUpdatingStatus(false);
     }
   };
 
@@ -208,11 +192,6 @@ export default function ViewInvoicePage({ params }) {
                       <div className="text-sm font-medium text-gray-900">
                         {item.name || item.productId?.name || "Product"}
                       </div>
-                      {item.productId?.sku && (
-                        <div className="text-sm text-gray-500">
-                          SKU: {item.productId.sku}
-                        </div>
-                      )}
                     </td>
                     <td className="px-6 py-4 text-right text-sm text-gray-900">
                       {item.quantity}
@@ -238,35 +217,12 @@ export default function ViewInvoicePage({ params }) {
                   {formatINR(invoice.subtotal || 0)}
                 </span>
               </div>
-              {invoice.isIGST ? (
-                <div className="flex justify-between py-2 text-sm">
-                  <span className="text-gray-600">
-                    IGST ({invoice.igstRate}%):
-                  </span>
-                  <span className="font-medium">
-                    {formatINR(invoice.igstAmount || 0)}
-                  </span>
-                </div>
-              ) : (
-                <>
-                  <div className="flex justify-between py-2 text-sm">
-                    <span className="text-gray-600">
-                      CGST ({invoice.cgstRate}%):
-                    </span>
-                    <span className="font-medium">
-                      {formatINR(invoice.cgstAmount || 0)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-2 text-sm">
-                    <span className="text-gray-600">
-                      SGST ({invoice.sgstRate}%):
-                    </span>
-                    <span className="font-medium">
-                      {formatINR(invoice.sgstAmount || 0)}
-                    </span>
-                  </div>
-                </>
-              )}
+              <div className="flex justify-between py-2 text-sm">
+                <span className="text-gray-600">GST:</span>
+                <span className="font-medium">
+                  {formatINR(invoice.gstAmount || 0)}
+                </span>
+              </div>
               <div className="flex justify-between py-3 border-t-2 border-gray-200">
                 <span className="text-lg font-semibold">Total:</span>
                 <span className="text-2xl font-bold text-indigo-600">
@@ -276,40 +232,6 @@ export default function ViewInvoicePage({ params }) {
             </div>
           </div>
         </div>
-
-        {/* Status Actions - Hidden when printing */}
-        {invoice.status !== "Paid" && invoice.status !== "Cancelled" && (
-          <div className="bg-gray-50 px-8 py-4 border-t print:hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Update Status:</span>
-              <div className="flex space-x-3">
-                {invoice.status !== "Pending" && (
-                  <button
-                    onClick={() => handleStatusChange("Pending")}
-                    disabled={updatingStatus}
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50"
-                  >
-                    Mark as Pending
-                  </button>
-                )}
-                <button
-                  onClick={() => handleStatusChange("Paid")}
-                  disabled={updatingStatus}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
-                >
-                  Mark as Paid
-                </button>
-                <button
-                  onClick={() => handleStatusChange("Cancelled")}
-                  disabled={updatingStatus}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
-                >
-                  Cancel Invoice
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
