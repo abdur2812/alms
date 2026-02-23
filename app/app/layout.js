@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "ERP Billing System",
+  title: "ALMS Billing System",
   description: "Manage invoices, customers, and products",
 };
 

@@ -12,6 +12,7 @@
   "description": "ERP Billing System REST API with Express, MongoDB, and Mongoose",
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
     "mongoose": "^8.22.0"

@@ -32,11 +32,11 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       // Simple admin login
-      if (email === "abnusuki@gmail.com" && password === "asdf") {
+      if (email === "alms@gmail.com" && password === "alms") {
         const userData = {
           id: "admin",
           email: email,
-          name: "Abu",
+          name: "Al Ms Admin",
         };
 
         const token = "admin-token-" + Date.now();

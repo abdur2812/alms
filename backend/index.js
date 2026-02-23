@@ -1,5 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
@@ -17,23 +18,42 @@ const { errorHandler } = require("./middleware/errorHandler");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// CORS middleware (optional)
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-  );
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+// CORS middleware - configured for production
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, curl, postman)
+      if (!origin) return callback(null, true);
 
-  // Handle preflight requests
-  if (req.method === "OPTIONS") {
-    res.sendStatus(200);
-    return;
-  }
+      if (process.env.CORS_ORIGIN === "*") {
+        return callback(null, true);
+      }
 
-  next();
-});
+      const allowedOrigins = [
+        "http://localhost:3001",
+        "http://localhost:3000",
+        "https://almsonline.in",
+        process.env.CORS_ORIGIN,
+      ].filter(Boolean);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(null, true); // Allow all for now - debug mode
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+    ],
+    credentials: false,
+    preflightContinue: false,
+    optionsSuccessStatus: 200, // For legacy browser support
+  }),
+);
 
 // Database connection
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/test";
@@ -82,19 +102,3 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
-
-// add customer changes:
-// permanent address
-// delivery address
-
-// customer changes:
-// need a separate field for shipping address.
-
-// invoice edit changes:
-// able to edit customer, product details
-
-// invoice create changes:
-// when creating invoice, give option to select if address(shipping address in invoice) is same as permanent address.
-
-// bulk invoice pdf (new functionality):
-// invoice id, cust name, cust gst, cust phone, amount separated by cgst sgst, credit or paid. (this is the format)

@@ -3,14 +3,41 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import api from "@/lib/api";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult] = useState(null);
   const { login } = useAuth();
   const router = useRouter();
+
+  const testConnection = async () => {
+    setTestLoading(true);
+    setTestResult(null);
+
+    try {
+      const response = await api.get("/");
+      setTestResult({
+        success: true,
+        message: "✅ Backend connection successful!",
+        data: response.data,
+      });
+    } catch (error) {
+      setTestResult({
+        success: false,
+        message: "❌ Backend connection failed",
+        error: error.message,
+        details:
+          error.response?.data || "Network error - check server URL and CORS",
+      });
+    } finally {
+      setTestLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -178,6 +205,78 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
+
+          {/* API Connection Test */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={testConnection}
+              disabled={testLoading}
+              className="w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white/70 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              {testLoading ? (
+                <>
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-gray-700"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Testing connection...
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-5 h-5 mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                    />
+                  </svg>
+                  Test Backend Connection
+                </>
+              )}
+            </button>
+
+            {/* Test Result Display */}
+            {testResult && (
+              <div
+                className={`mt-4 p-3 rounded-lg text-sm ${testResult.success ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}
+              >
+                <div className="font-medium">{testResult.message}</div>
+                {testResult.success && testResult.data && (
+                  <div className="mt-1 text-xs opacity-75">
+                    Server: {testResult.data.message} v{testResult.data.version}
+                  </div>
+                )}
+                {!testResult.success && (
+                  <div className="mt-1 text-xs opacity-75">
+                    {testResult.error} - {testResult.details}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
