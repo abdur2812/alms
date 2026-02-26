@@ -1,402 +1,693 @@
-const puppeteer = require("puppeteer");
+const pdfMake = require("pdfmake/build/pdfmake");
+const pdfFonts = require("pdfmake/build/vfs_fonts");
+pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts.vfs;
 const businessConfig = require("../config/business");
+
+// ─── Custom table layouts ─────────────────────────────────────────────────────
+
+/** Outer border: 1.5pt #555 on all four sides, no inner lines, 0 padding */
+const outerLayout = {
+  hLineWidth: (i, node) => (i === 0 || i === node.table.body.length ? 1.5 : 0),
+  vLineWidth: (i, node) =>
+    i === 0 || i === node.table.widths.length ? 1.5 : 0,
+  hLineColor: () => "#555555",
+  vLineColor: () => "#555555",
+  paddingLeft: () => 0,
+  paddingRight: () => 0,
+  paddingTop: () => 0,
+  paddingBottom: () => 0,
+};
+
+/**
+ * 2-column section splitter:
+ * outer v-lines = 0 (outer table draws them), single divider between cols,
+ * no h-lines.
+ */
+const splitLayout = {
+  hLineWidth: () => 0,
+  vLineWidth: (i, node) => (i === 0 || i === node.table.widths.length ? 0 : 1),
+  vLineColor: () => "#555555",
+  paddingLeft: (i) => (i === 0 ? 6 : 7),
+  paddingRight: (i, node) => (i === node.table.widths.length - 1 ? 6 : 7),
+  paddingTop: () => 5,
+  paddingBottom: () => 5,
+};
+
+/** No borders, tight padding for inner data grids */
+const noBorder = {
+  hLineWidth: () => 0,
+  vLineWidth: () => 0,
+  paddingLeft: () => 0,
+  paddingRight: () => 4,
+  paddingTop: () => 2,
+  paddingBottom: () => 2,
+};
+
+// ─── Number helpers ───────────────────────────────────────────────────────────
+
+function fmt(n) {
+  return new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n || 0);
+}
+
+const ones = [
+  "",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+  "Nine",
+  "Ten",
+  "Eleven",
+  "Twelve",
+  "Thirteen",
+  "Fourteen",
+  "Fifteen",
+  "Sixteen",
+  "Seventeen",
+  "Eighteen",
+  "Nineteen",
+];
+const tens = [
+  "",
+  "",
+  "Twenty",
+  "Thirty",
+  "Forty",
+  "Fifty",
+  "Sixty",
+  "Seventy",
+  "Eighty",
+  "Ninety",
+];
+
+function numToWords(n) {
+  if (n === 0) return "Zero";
+  if (n < 0) return "Minus " + numToWords(-n);
+  let str = "";
+  if (n >= 10000000) {
+    str += numToWords(Math.floor(n / 10000000)) + " Crore ";
+    n %= 10000000;
+  }
+  if (n >= 100000) {
+    str += numToWords(Math.floor(n / 100000)) + " Lakh ";
+    n %= 100000;
+  }
+  if (n >= 1000) {
+    str += numToWords(Math.floor(n / 1000)) + " Thousand ";
+    n %= 1000;
+  }
+  if (n >= 100) {
+    str += ones[Math.floor(n / 100)] + " Hundred ";
+    n %= 100;
+  }
+  if (n >= 20) {
+    str += tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
+  } else if (n > 0) {
+    str += ones[n];
+  }
+  return str.trim();
+}
+
+function convertToWords(amount) {
+  const intPart = Math.floor(amount);
+  const decPart = Math.round((amount - intPart) * 100);
+  let result = "Rupees " + numToWords(intPart);
+  if (decPart > 0) result += " and " + numToWords(decPart) + " Paise";
+  return result + " Only";
+}
+
+// ─── Main class ───────────────────────────────────────────────────────────────
 
 class PDFService {
   constructor() {
-    this.browser = null;
-    this.pdfCache = new Map(); // invoiceId -> { buffer, updatedAt }
+    this.pdfCache = new Map(); // key: "invoiceId:updatedAt" → Buffer
   }
 
-  async initBrowser() {
-    if (!this.browser) {
-      this.browser = await puppeteer.launch({
-        headless: "new",
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  clearCache(invoiceId) {
+    const prefix = invoiceId.toString() + ":";
+    for (const key of this.pdfCache.keys()) {
+      if (key.startsWith(prefix)) this.pdfCache.delete(key);
+    }
+  }
+
+  async generateInvoicePDF(invoice) {
+    const cacheKey = `${invoice._id}:${invoice.updatedAt}`;
+    if (this.pdfCache.has(cacheKey)) return this.pdfCache.get(cacheKey);
+    const buffer = await this._createPDF(invoice);
+    this.pdfCache.set(cacheKey, buffer);
+    return buffer;
+  }
+
+  _createPDF(invoice) {
+    return new Promise((resolve, reject) => {
+      const docDef = this._buildDoc(invoice);
+      pdfMake.createPdf(docDef).getBuffer((buffer) => {
+        if (!buffer || buffer.length === 0) {
+          reject(new Error("PDF generation produced empty buffer"));
+        } else {
+          resolve(Buffer.from(buffer));
+        }
       });
-    }
-    return this.browser;
+    });
   }
 
-  async closeBrowser() {
-    if (this.browser) {
-      await this.browser.close();
-      this.browser = null;
-    }
-  }
-
-  generateInvoiceHTML(invoice) {
-    const business = businessConfig.business_details;
+  _buildDoc(invoice) {
+    const biz = businessConfig.business_details;
     const bank = businessConfig.bank_details;
-    const declaration = businessConfig.declaration;
+    const decl = businessConfig.declaration;
+    const addr = biz.address;
 
-    // Calculate totals
+    const customer = invoice.customerData || {};
+    const permAddr = customer.permanentAddress || {};
+
+    // ── Totals ───────────────────────────────────────────────────────────────
     let subtotal = 0;
-    let totalTax = 0;
+    const gstGroups = {};
+    const items = invoice.items || [];
 
-    const rows = (invoice.items || []).map((item, index) => {
-      const itemSubtotal = item.quantity * item.unitPrice;
-      const taxAmt = (itemSubtotal * (item.gst || 0)) / 100;
-      subtotal += itemSubtotal;
-      totalTax += taxAmt;
-      return { ...item, index: index + 1, itemSubtotal, taxAmt };
+    items.forEach((item) => {
+      const ls = item.quantity * item.unitPrice;
+      subtotal += ls;
+      if (invoice.isGstBill && item.gst > 0) {
+        if (!gstGroups[item.gst]) gstGroups[item.gst] = 0;
+        gstGroups[item.gst] += (ls * item.gst) / 100;
+      }
     });
 
-    const grandTotal = subtotal + totalTax;
+    const totalGst = Object.values(gstGroups).reduce((s, v) => s + v, 0);
+    const grandTotal = subtotal + totalGst;
 
-    const fmt = (n) =>
-      new Intl.NumberFormat("en-IN", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(n || 0);
+    // ── Item rows ─────────────────────────────────────────────────────────────
+    const itemHeaderRow = [
+      { text: "S.No", style: "th", alignment: "center" },
+      { text: "Particulars", style: "th" },
+      { text: "HSN", style: "th", alignment: "center" },
+      { text: "Qty", style: "th", alignment: "center" },
+      { text: "Unit", style: "th", alignment: "center" },
+      { text: "Rate", style: "th", alignment: "right" },
+      { text: "GST%", style: "th", alignment: "center" },
+      { text: "GST Amt", style: "th", alignment: "right" },
+      { text: "Amount", style: "th", alignment: "right" },
+    ];
 
-    const invoiceDate = new Date(invoice.createdAt).toLocaleDateString(
-      "en-IN",
-      {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      },
-    );
+    const cell = (text, alignment, bg) => ({
+      text: String(text),
+      style: "td",
+      alignment: alignment || "left",
+      ...(bg ? { fillColor: bg } : {}),
+    });
 
-    const customerData = invoice.customerData || {};
-    const customerRef = invoice.customerId || {};
-    const custName = customerData.name || customerRef.name || "N/A";
-    const custPhone = customerData.phone || customerRef.phone || "";
-    const custGst = customerData.gstNumber || customerRef.gstNumber || "";
-    const custAddr = customerData.address || customerRef.address || {};
-    const custAddrLine1 = custAddr.companyAddress || custAddr.street || "";
-    const custAddrLine2 = [
-      custAddr.city,
-      custAddr.state,
-      custAddr.postalCode || custAddr.zipCode,
+    const itemRows = items.map((item, idx) => {
+      const ls = item.quantity * item.unitPrice;
+      const gstAmt = invoice.isGstBill ? (ls * item.gst) / 100 : 0;
+      const total = ls + gstAmt;
+      const bg = idx % 2 === 1 ? "#fafafa" : null;
+      return [
+        cell(idx + 1, "center", bg),
+        cell(item.name || "", "left", bg),
+        cell(item.hsnCode || "-", "center", bg),
+        cell(item.quantity, "center", bg),
+        cell("Nos", "center", bg),
+        cell(fmt(item.unitPrice), "right", bg),
+        cell(invoice.isGstBill ? (item.gst || 0) + "%" : "-", "center", bg),
+        cell(invoice.isGstBill ? fmt(gstAmt) : "-", "right", bg),
+        cell(fmt(total), "right", bg),
+      ];
+    });
+
+    // Pad to min 5 visible rows
+    while (itemRows.length < 5) {
+      itemRows.push(Array(9).fill({ text: " ", style: "td" }));
+    }
+
+    // ── GST breakdown ─────────────────────────────────────────────────────────
+    const gstRows = [];
+    if (invoice.isGstBill) {
+      Object.keys(gstGroups)
+        .sort((a, b) => a - b)
+        .forEach((rate) => {
+          const half = gstGroups[rate] / 2;
+          gstRows.push([
+            { text: `CGST @ ${rate / 2}%`, style: "totalsLabel" },
+            { text: fmt(half), style: "totalsValue" },
+          ]);
+          gstRows.push([
+            { text: `SGST @ ${rate / 2}%`, style: "totalsLabel" },
+            { text: fmt(half), style: "totalsValue" },
+          ]);
+        });
+    }
+
+    // ── Address strings ───────────────────────────────────────────────────────
+    const bizAddress =
+      `${addr.door_no_old}/${addr.door_no_new}, ${addr.street}, ${addr.area},\n` +
+      `${addr.landmark}, ${addr.district} - ${addr.pincode}`;
+    const bizPhones = biz.phone_numbers.join(" | ");
+
+    const custAddrStr = [
+      permAddr.companyAddress,
+      permAddr.city,
+      permAddr.state,
+      permAddr.postalCode,
     ]
       .filter(Boolean)
       .join(", ");
 
-    const amountInWords = this.convertToWords(grandTotal);
+    const invoiceDate = invoice.createdAt
+      ? new Date(invoice.createdAt).toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : "-";
 
-    // Filler rows for short invoices
-    const fillerCount = rows.length < 5 ? 5 - rows.length : 0;
-    const fillerRows = Array.from({ length: fillerCount })
-      .map(
-        (_, i) => `
-      <tr style="background:${(rows.length + i) % 2 === 0 ? "#fff" : "#fafafa"}">
-        ${Array.from({ length: 9 })
-          .map(
-            (__, ci) =>
-              `<td style="padding:9px 8px;border-bottom:${i < fillerCount - 1 ? "1px solid #e8e8e8" : "none"};border-right:${ci < 8 ? "1px solid #e8e8e8" : "none"};font-size:11px;">&nbsp;</td>`,
-          )
-          .join("")}
-      </tr>`,
-      )
-      .join("");
+    const billLabel =
+      invoice.billType === "credit" ? "Credit Bill" : "Cash Bill";
 
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Invoice ${invoice.invoiceNumber}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 12px;
-      color: #111;
-      background: #fff;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    .page {
-      width: 794px;
-      min-height: 1122px;
-      margin: 0 auto;
-      border: 2px solid #555;
-      border-radius: 4px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-    .spacer { flex: 1; }
-  </style>
-</head>
-<body>
-<div class="page">
+    // ── Items table layout ────────────────────────────────────────────────────
+    const itemsLayout = {
+      hLineWidth: (i, node) =>
+        i === 0 || i === 1 || i === node.table.body.length ? 0.5 : 0,
+      vLineWidth: (i, node) =>
+        i === 0 || i === node.table.widths.length ? 0 : 0.4,
+      hLineColor: () => "#cccccc",
+      vLineColor: () => "#cccccc",
+      paddingLeft: (i) => (i === 0 ? 4 : 3),
+      paddingRight: (i, node) => (i === node.table.widths.length - 1 ? 4 : 3),
+      paddingTop: () => 3,
+      paddingBottom: () => 3,
+    };
 
-  <!-- ① SHOP HEADER -->
-  <div style="background:#f5f5f5;border-bottom:2px solid #555;padding:20px 24px;display:flex;justify-content:space-between;align-items:flex-start;">
-    <div>
-      <div style="font-size:24px;font-weight:800;letter-spacing:0.5px;margin-bottom:4px;">${business.business_name}</div>
-      <div style="font-size:11px;color:#444;margin-bottom:8px;">${business.tagline}</div>
-      <div style="font-size:11px;line-height:1.8;color:#222;">
-        📍 ${business.address.door_no_old}, ${business.address.door_no_new}, ${business.address.street}, ${business.address.area}<br>
-        ${business.address.landmark}, ${business.address.district} – ${business.address.pincode}, ${business.address.state}<br>
-        📞 ${business.phone_numbers.join("  |  ")}
-      </div>
-    </div>
-    <div style="text-align:right;font-size:11px;line-height:1.8;color:#222;">
-      <div style="font-weight:700;font-size:13px;margin-bottom:4px;">GSTIN</div>
-      <div style="font-weight:700;font-family:monospace;letter-spacing:1px;margin-bottom:8px;">${business.gst_number}</div>
-      <div><span style="font-weight:600;">State: </span>${business.address.state}</div>
-      <div><span style="font-weight:600;">State Code: </span>33</div>
-    </div>
-  </div>
+    // ── Totals right-side layout ──────────────────────────────────────────────
+    const totalsLayout = {
+      hLineWidth: (i, node) =>
+        i === 0 || i === node.table.body.length ? 0 : 0.3,
+      vLineWidth: () => 0,
+      hLineColor: () => "#dddddd",
+      paddingLeft: () => 4,
+      paddingRight: () => 4,
+      paddingTop: () => 2,
+      paddingBottom: () => 2,
+    };
 
-  <!-- ② TAX INVOICE TITLE -->
-  <div style="border-bottom:2px solid #555;text-align:center;padding:8px 0;font-size:14px;font-weight:800;letter-spacing:4px;background:#fff;">
-    TAX INVOICE
-  </div>
+    // ── Document definition ───────────────────────────────────────────────────
+    return {
+      pageSize: "A4",
+      pageMargins: [20, 20, 20, 20],
+      defaultStyle: { font: "Roboto", fontSize: 8 },
+      styles: {
+        th: { fontSize: 7.5, bold: true, fillColor: "#eeeeee" },
+        td: { fontSize: 7.5 },
+        totalsLabel: { fontSize: 8, alignment: "right" },
+        totalsValue: { fontSize: 8, alignment: "right" },
+      },
 
-  <!-- ③ CUSTOMER + INVOICE META -->
-  <div style="display:flex;border-bottom:2px solid #555;">
-    <div style="flex:1;padding:14px 18px;border-right:2px solid #555;">
-      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555;border-bottom:1px solid #ddd;padding-bottom:5px;margin-bottom:8px;">Billed To</div>
-      <div style="font-size:15px;font-weight:800;margin-bottom:4px;">${custName}</div>
-      <div style="font-size:11px;line-height:1.8;color:#333;">
-        ${custPhone ? `📞 ${custPhone}<br>` : ""}
-        ${custGst ? `GSTIN: <strong>${custGst}</strong><br>` : ""}
-        ${custAddrLine1 ? `${custAddrLine1}<br>` : ""}
-        ${custAddrLine2 || ""}
-      </div>
-    </div>
-    <div style="width:240px;padding:14px 18px;">
-      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555;border-bottom:1px solid #ddd;padding-bottom:5px;margin-bottom:10px;">Invoice Details</div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:7px;">
-        <span style="color:#555;font-weight:600;">Invoice No.</span>
-        <span style="font-weight:700;">#${invoice.invoiceNumber}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:7px;">
-        <span style="color:#555;font-weight:600;">Date</span>
-        <span style="font-weight:700;">${invoiceDate}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:7px;">
-        <span style="color:#555;font-weight:600;">Bill Type</span>
-        <span style="font-weight:700;background:${invoice.billType === "credit" ? "#fee2e2" : "#dcfce7"};color:${invoice.billType === "credit" ? "#b91c1c" : "#15803d"};padding:1px 10px;border-radius:10px;font-size:10px;">
-          ${invoice.billType === "credit" ? "Credit Bill" : "Cash Bill"}
-        </span>
-      </div>
-    </div>
-  </div>
+      content: [
+        {
+          table: {
+            widths: ["*"],
+            body: [
+              // ① HEADER ────────────────────────────────────────────────────
+              [
+                {
+                  fillColor: "#f5f5f5",
+                  table: {
+                    widths: ["65%", "35%"],
+                    body: [
+                      [
+                        {
+                          stack: [
+                            {
+                              text: biz.business_name,
+                              bold: true,
+                              fontSize: 18,
+                              color: "#111111",
+                              margin: [0, 0, 0, 3],
+                            },
+                            {
+                              text: biz.tagline,
+                              fontSize: 7.5,
+                              color: "#555555",
+                              margin: [0, 0, 0, 4],
+                            },
+                            {
+                              text: bizAddress,
+                              fontSize: 7.5,
+                              color: "#333333",
+                            },
+                            {
+                              text: `Ph: ${bizPhones}`,
+                              fontSize: 7.5,
+                              color: "#333333",
+                              margin: [0, 3, 0, 0],
+                            },
+                          ],
+                        },
+                        {
+                          stack: [
+                            { text: "GSTIN", fontSize: 7, color: "#888888" },
+                            { text: biz.gst_number, bold: true, fontSize: 9 },
+                            {
+                              text: `State: ${addr.state}`,
+                              fontSize: 7.5,
+                              color: "#555555",
+                              margin: [0, 6, 0, 0],
+                            },
+                          ],
+                          alignment: "center",
+                        },
+                      ],
+                    ],
+                  },
+                  layout: splitLayout,
+                },
+              ],
 
-  <!-- ④ ITEMS TABLE -->
-  <table style="width:100%;border-collapse:collapse;border-bottom:2px solid #555;">
-    <thead>
-      <tr style="background:#eeeeee;">
-        <th style="padding:9px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;border-bottom:2px solid #555;border-right:1px solid #bbb;width:32px;white-space:nowrap;">Sl.</th>
-        <th style="padding:9px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;border-bottom:2px solid #555;border-right:1px solid #bbb;width:160px;">Product Name</th>
-        <th style="padding:9px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;border-bottom:2px solid #555;border-right:1px solid #bbb;">Description</th>
-        <th style="padding:9px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;border-bottom:2px solid #555;border-right:1px solid #bbb;width:64px;">HSN/SAC</th>
-        <th style="padding:9px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;border-bottom:2px solid #555;border-right:1px solid #bbb;width:40px;">Qty</th>
-        <th style="padding:9px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;border-bottom:2px solid #555;border-right:1px solid #bbb;width:80px;">Unit Price</th>
-        <th style="padding:9px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;border-bottom:2px solid #555;border-right:1px solid #bbb;width:48px;">Tax %</th>
-        <th style="padding:9px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;border-bottom:2px solid #555;border-right:1px solid #bbb;width:76px;">Tax Amt</th>
-        <th style="padding:9px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;border-bottom:2px solid #555;width:84px;">Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows
-        .map(
-          (item, ri) => `
-      <tr style="background:${ri % 2 === 0 ? "#fff" : "#fafafa"}">
-        <td style="padding:9px 8px;text-align:center;font-size:11px;border-bottom:${ri < rows.length - 1 ? "1px solid #e8e8e8" : "none"};border-right:1px solid #e8e8e8;vertical-align:top;">${item.index}</td>
-        <td style="padding:9px 8px;font-size:11px;border-bottom:${ri < rows.length - 1 ? "1px solid #e8e8e8" : "none"};border-right:1px solid #e8e8e8;vertical-align:top;"><strong>${item.name || item.productId?.name || "–"}</strong></td>
-        <td style="padding:9px 8px;font-size:10px;color:#555;border-bottom:${ri < rows.length - 1 ? "1px solid #e8e8e8" : "none"};border-right:1px solid #e8e8e8;vertical-align:top;">${item.description || "–"}</td>
-        <td style="padding:9px 8px;text-align:center;font-size:11px;border-bottom:${ri < rows.length - 1 ? "1px solid #e8e8e8" : "none"};border-right:1px solid #e8e8e8;vertical-align:top;">${item.hsnCode || "–"}</td>
-        <td style="padding:9px 8px;text-align:center;font-size:11px;border-bottom:${ri < rows.length - 1 ? "1px solid #e8e8e8" : "none"};border-right:1px solid #e8e8e8;vertical-align:top;">${item.quantity}</td>
-        <td style="padding:9px 8px;text-align:right;font-size:11px;border-bottom:${ri < rows.length - 1 ? "1px solid #e8e8e8" : "none"};border-right:1px solid #e8e8e8;vertical-align:top;">₹${fmt(item.unitPrice)}</td>
-        <td style="padding:9px 8px;text-align:center;font-size:11px;border-bottom:${ri < rows.length - 1 ? "1px solid #e8e8e8" : "none"};border-right:1px solid #e8e8e8;vertical-align:top;">${item.gst || 0}%</td>
-        <td style="padding:9px 8px;text-align:right;font-size:11px;border-bottom:${ri < rows.length - 1 ? "1px solid #e8e8e8" : "none"};border-right:1px solid #e8e8e8;vertical-align:top;">₹${fmt(item.taxAmt)}</td>
-        <td style="padding:9px 8px;text-align:right;font-size:11px;border-bottom:${ri < rows.length - 1 ? "1px solid #e8e8e8" : "none"};vertical-align:top;"><strong>₹${fmt(item.itemSubtotal + item.taxAmt)}</strong></td>
-      </tr>`,
-        )
-        .join("")}
-      ${fillerRows}
-    </tbody>
-  </table>
+              // ② TAX INVOICE TITLE ─────────────────────────────────────────
+              [
+                {
+                  text: "TAX INVOICE",
+                  alignment: "center",
+                  bold: true,
+                  fontSize: 11,
+                  characterSpacing: 4,
+                  margin: [0, 6, 0, 6],
+                  border: [false, true, false, true],
+                },
+              ],
 
-  <!-- ⑤ TOTALS + AMOUNT IN WORDS -->
-  <div style="display:flex;border-bottom:2px solid #555;">
-    <div style="flex:1;padding:14px 18px;border-right:2px solid #555;display:flex;flex-direction:column;justify-content:center;">
-      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555;margin-bottom:5px;">Amount in Words</div>
-      <div style="font-size:12px;font-weight:700;font-style:italic;">Rupees ${amountInWords} Only</div>
-    </div>
-    <div style="width:280px;">
-      <div style="display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid #e8e8e8;font-size:11px;">
-        <span style="color:#444;">Sub Total</span>
-        <span style="font-weight:600;">₹${fmt(subtotal)}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid #e8e8e8;font-size:11px;">
-        <span style="color:#444;">Total Tax (GST)</span>
-        <span style="font-weight:600;">₹${fmt(totalTax)}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:9px 14px;background:#111;color:#fff;font-size:13px;font-weight:800;">
-        <span style="color:#ddd;">Grand Total</span>
-        <span>₹${fmt(grandTotal)}</span>
-      </div>
-    </div>
-  </div>
+              // ③ CUSTOMER + META ────────────────────────────────────────────
+              [
+                {
+                  table: {
+                    widths: ["60%", "40%"],
+                    body: [
+                      [
+                        {
+                          stack: [
+                            {
+                              text: "Bill To",
+                              fontSize: 7,
+                              color: "#888888",
+                              margin: [0, 0, 0, 2],
+                            },
+                            {
+                              text: customer.name || "-",
+                              bold: true,
+                              fontSize: 12,
+                            },
+                            ...(customer.phone
+                              ? [
+                                  {
+                                    text: `Ph: ${customer.phone}`,
+                                    fontSize: 7.5,
+                                    margin: [0, 2, 0, 0],
+                                  },
+                                ]
+                              : []),
+                            ...(customer.gstNumber
+                              ? [
+                                  {
+                                    text: `GST: ${customer.gstNumber}`,
+                                    fontSize: 7.5,
+                                  },
+                                ]
+                              : []),
+                            ...(custAddrStr
+                              ? [
+                                  {
+                                    text: custAddrStr,
+                                    fontSize: 7.5,
+                                    color: "#555555",
+                                    margin: [0, 2, 0, 0],
+                                  },
+                                ]
+                              : []),
+                          ],
+                        },
+                        {
+                          table: {
+                            widths: ["auto", "*"],
+                            body: [
+                              [
+                                {
+                                  text: "Invoice No",
+                                  fontSize: 7,
+                                  color: "#888888",
+                                },
+                                {
+                                  text: invoice.invoiceNumber || "-",
+                                  bold: true,
+                                  fontSize: 8.5,
+                                },
+                              ],
+                              [
+                                { text: "Date", fontSize: 7, color: "#888888" },
+                                { text: invoiceDate, fontSize: 8 },
+                              ],
+                              [
+                                {
+                                  text: "Bill Type",
+                                  fontSize: 7,
+                                  color: "#888888",
+                                },
+                                { text: billLabel, fontSize: 8 },
+                              ],
+                              [
+                                {
+                                  text: "GST Bill",
+                                  fontSize: 7,
+                                  color: "#888888",
+                                },
+                                {
+                                  text: invoice.isGstBill ? "Yes" : "No",
+                                  fontSize: 8,
+                                },
+                              ],
+                            ],
+                          },
+                          layout: noBorder,
+                        },
+                      ],
+                    ],
+                  },
+                  layout: splitLayout,
+                },
+              ],
 
-  <!-- ⑥ DECLARATION -->
-  <div style="padding:10px 18px;font-size:10px;color:#555;border-bottom:1.5px solid #ddd;background:#fafafa;">
-    We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct. &nbsp;<strong>E. &amp; O.E.</strong>
-  </div>
+              // ④ ITEMS TABLE ───────────────────────────────────────────────
+              [
+                {
+                  table: {
+                    widths: [20, 95, "*", 42, 25, 55, 30, 50, 55],
+                    headerRows: 1,
+                    body: [itemHeaderRow, ...itemRows],
+                  },
+                  layout: itemsLayout,
+                },
+              ],
 
-  <!-- SPACER: pushes bank+footer to bottom -->
-  <div class="spacer"></div>
+              // ⑤ TOTALS + WORDS ────────────────────────────────────────────
+              [
+                {
+                  table: {
+                    widths: ["55%", "45%"],
+                    body: [
+                      [
+                        {
+                          stack: [
+                            {
+                              text: "Amount in Words",
+                              fontSize: 7,
+                              color: "#888888",
+                              margin: [0, 0, 0, 3],
+                            },
+                            {
+                              text: convertToWords(grandTotal),
+                              italics: true,
+                              fontSize: 8,
+                              color: "#333333",
+                            },
+                          ],
+                        },
+                        {
+                          table: {
+                            widths: ["*", "auto"],
+                            body: [
+                              [
+                                { text: "Subtotal", style: "totalsLabel" },
+                                { text: fmt(subtotal), style: "totalsValue" },
+                              ],
+                              ...gstRows,
+                              [
+                                {
+                                  text: "Grand Total",
+                                  bold: true,
+                                  fontSize: 9,
+                                  alignment: "right",
+                                  fillColor: "#111111",
+                                  color: "#ffffff",
+                                },
+                                {
+                                  text: `\u20B9 ${fmt(grandTotal)}`,
+                                  bold: true,
+                                  fontSize: 9,
+                                  alignment: "right",
+                                  fillColor: "#111111",
+                                  color: "#ffffff",
+                                },
+                              ],
+                            ],
+                          },
+                          layout: totalsLayout,
+                        },
+                      ],
+                    ],
+                  },
+                  layout: splitLayout,
+                },
+              ],
 
-  <!-- ⑦ BANK DETAILS + SIGNATURE -->
-  <div style="display:flex;border-top:2px solid #555;">
-    <div style="flex:1;padding:14px 18px;border-right:2px solid #555;">
-      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555;border-bottom:1px solid #ddd;padding-bottom:5px;margin-bottom:10px;">Bank Details</div>
-      <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:11px;">
-        <span style="color:#555;font-weight:600;">Account Holder</span><span style="font-weight:700;">${bank.account_holder}</span>
-        <span style="color:#555;font-weight:600;">Bank</span><span style="font-weight:700;">${bank.bank_name}</span>
-        <span style="color:#555;font-weight:600;">Account No.</span><span style="font-weight:700;">${bank.account_number}</span>
-        <span style="color:#555;font-weight:600;">IFSC</span><span style="font-weight:700;">${bank.ifsc_code}</span>
-        <span style="color:#555;font-weight:600;">Branch</span><span style="font-weight:700;">${bank.branch_name}</span>
-      </div>
-    </div>
-    <div style="width:220px;padding:14px 18px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;">
-      <div style="font-size:11px;font-weight:700;">${business.business_name}</div>
-      <div>
-        <div style="width:140px;border-top:1.5px solid #555;margin:40px auto 6px;"></div>
-        <div style="font-size:10px;color:#555;font-weight:600;">Authorised Signatory</div>
-      </div>
-    </div>
-  </div>
+              // ⑥ DECLARATION ───────────────────────────────────────────────
+              [
+                {
+                  fillColor: "#fafafa",
+                  stack: [
+                    {
+                      text: "DECLARATION",
+                      fontSize: 7,
+                      bold: true,
+                      color: "#888888",
+                      margin: [0, 0, 0, 3],
+                    },
+                    {
+                      text: "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.",
+                      fontSize: 7.5,
+                      color: "#444444",
+                    },
+                  ],
+                  margin: [6, 5, 6, 5],
+                },
+              ],
 
-  <!-- ⑧ FOOTER -->
-  <div style="text-align:center;padding:9px;font-size:11px;color:#444;background:#f5f5f5;border-top:2px solid #555;">
-    Thank You for your business! — Visit Again at ${business.business_name}
-  </div>
+              // ⑦ BANK + SIGNATURE ──────────────────────────────────────────
+              [
+                {
+                  table: {
+                    widths: ["55%", "45%"],
+                    body: [
+                      [
+                        {
+                          table: {
+                            widths: [55, "*"],
+                            body: [
+                              [
+                                {
+                                  text: "Bank Name",
+                                  fontSize: 7,
+                                  color: "#888888",
+                                },
+                                { text: bank.bank_name, fontSize: 7.5 },
+                              ],
+                              [
+                                {
+                                  text: "Branch",
+                                  fontSize: 7,
+                                  color: "#888888",
+                                },
+                                { text: bank.branch_name, fontSize: 7.5 },
+                              ],
+                              [
+                                {
+                                  text: "Account No",
+                                  fontSize: 7,
+                                  color: "#888888",
+                                },
+                                { text: bank.account_number, fontSize: 7.5 },
+                              ],
+                              [
+                                {
+                                  text: "IFSC Code",
+                                  fontSize: 7,
+                                  color: "#888888",
+                                },
+                                { text: bank.ifsc_code, fontSize: 7.5 },
+                              ],
+                              [
+                                {
+                                  text: "A/C Holder",
+                                  fontSize: 7,
+                                  color: "#888888",
+                                },
+                                { text: bank.account_holder, fontSize: 7.5 },
+                              ],
+                            ],
+                          },
+                          layout: noBorder,
+                        },
+                        {
+                          stack: [
+                            {
+                              text: `For ${biz.business_name}`,
+                              bold: true,
+                              fontSize: 8,
+                              alignment: "center",
+                              margin: [0, 0, 0, 30],
+                            },
+                            {
+                              canvas: [
+                                {
+                                  type: "line",
+                                  x1: 20,
+                                  y1: 0,
+                                  x2: 155,
+                                  y2: 0,
+                                  lineWidth: 0.5,
+                                  lineColor: "#555555",
+                                },
+                              ],
+                            },
+                            {
+                              text:
+                                decl.signature_label || "Authorised Signatory",
+                              fontSize: 7.5,
+                              alignment: "center",
+                              margin: [0, 3, 0, 0],
+                            },
+                          ],
+                        },
+                      ],
+                    ],
+                  },
+                  layout: splitLayout,
+                },
+              ],
 
-</div>
-</body>
-</html>`;
-  }
-
-  convertToWords(amount) {
-    const ones = [
-      "",
-      "One",
-      "Two",
-      "Three",
-      "Four",
-      "Five",
-      "Six",
-      "Seven",
-      "Eight",
-      "Nine",
-      "Ten",
-      "Eleven",
-      "Twelve",
-      "Thirteen",
-      "Fourteen",
-      "Fifteen",
-      "Sixteen",
-      "Seventeen",
-      "Eighteen",
-      "Nineteen",
-    ];
-    const tens = [
-      "",
-      "",
-      "Twenty",
-      "Thirty",
-      "Forty",
-      "Fifty",
-      "Sixty",
-      "Seventy",
-      "Eighty",
-      "Ninety",
-    ];
-
-    function convertThreeDigit(num) {
-      let result = "";
-      if (num >= 100) {
-        result += ones[Math.floor(num / 100)] + " Hundred ";
-        num %= 100;
-      }
-      if (num >= 20) {
-        result += tens[Math.floor(num / 10)] + " ";
-        num %= 10;
-      }
-      if (num > 0) {
-        result += ones[num] + " ";
-      }
-      return result;
-    }
-
-    function convertToIndianSystem(num) {
-      if (num === 0) return "Zero";
-
-      let result = "";
-      let crore = Math.floor(num / 10000000);
-      let lakh = Math.floor((num % 10000000) / 100000);
-      let thousand = Math.floor((num % 100000) / 1000);
-      let hundred = num % 1000;
-
-      if (crore > 0) {
-        result += convertThreeDigit(crore) + "Crore ";
-      }
-      if (lakh > 0) {
-        result += convertThreeDigit(lakh) + "Lakh ";
-      }
-      if (thousand > 0) {
-        result += convertThreeDigit(thousand) + "Thousand ";
-      }
-      if (hundred > 0) {
-        result += convertThreeDigit(hundred);
-      }
-
-      return result.trim();
-    }
-
-    const rupees = Math.floor(amount);
-    const paise = Math.round((amount - rupees) * 100);
-
-    let result = convertToIndianSystem(rupees) + " Rupees";
-    if (paise > 0) {
-      result += " and " + convertToIndianSystem(paise) + " Paise";
-    }
-    return result;
-  }
-
-  async generateInvoicePDF(invoice) {
-    try {
-      const cacheKey = invoice._id.toString();
-      const updatedAt = invoice.updatedAt
-        ? new Date(invoice.updatedAt).getTime()
-        : 0;
-      const cached = this.pdfCache.get(cacheKey);
-
-      if (cached && cached.updatedAt === updatedAt) {
-        return cached.buffer;
-      }
-
-      const browser = await this.initBrowser();
-      const page = await browser.newPage();
-
-      const html = this.generateInvoiceHTML(invoice);
-      await page.setContent(html, { waitUntil: "domcontentloaded" });
-
-      const pdf = await page.pdf({
-        format: "A4",
-        printBackground: true,
-        margin: { top: "0", bottom: "0", left: "0", right: "0" },
-      });
-
-      await page.close();
-
-      this.pdfCache.set(cacheKey, { buffer: pdf, updatedAt });
-      return pdf;
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-      throw error;
-    }
-  }
-
-  clearCache(invoiceId) {
-    this.pdfCache.delete(invoiceId.toString());
+              // ⑧ FOOTER ────────────────────────────────────────────────────
+              [
+                {
+                  fillColor: "#f5f5f5",
+                  text: decl.thank_you_note || "Thank You For Your Business",
+                  alignment: "center",
+                  fontSize: 7.5,
+                  color: "#555555",
+                  italics: true,
+                  margin: [0, 5, 0, 5],
+                },
+              ],
+            ],
+          },
+          layout: outerLayout,
+        },
+      ],
+    };
   }
 }
 
