@@ -86,7 +86,7 @@ export default function LoginPage() {
               </svg>
             </div>
             <h2 className="mt-6 text-center text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-              ERP Billing System
+              AL M.S. TRADERS
             </h2>
             <p className="mt-2 text-center text-sm text-gray-600">
               Sign in to access your billing system

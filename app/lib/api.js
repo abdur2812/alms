@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://almsonline.in";
+const API_BASE_URL = "http://localhost:3000";
+//process.env.NEXT_PUBLIC_API_URL ||
 
 // Debug: Log the API base URL being used
 console.log("🔧 API Configuration:", {

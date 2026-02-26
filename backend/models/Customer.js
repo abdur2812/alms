@@ -14,10 +14,6 @@ const customerSchema = new mongoose.Schema(
       trim: true,
       minlength: [2, "Name must be at least 2 characters long"],
     },
-    pocName: {
-      type: String,
-      trim: true,
-    },
     phone: {
       type: String,
       required: [true, "Phone number is required"],
@@ -27,13 +23,6 @@ const customerSchema = new mongoose.Schema(
       type: String,
       trim: true,
       uppercase: true,
-    },
-    address: {
-      companyAddress: { type: String, trim: true },
-      city: { type: String, trim: true },
-      state: { type: String, trim: true },
-      postalCode: { type: String, trim: true },
-      country: { type: String, trim: true, default: "India" },
     },
     permanentAddress: {
       companyAddress: { type: String, trim: true },

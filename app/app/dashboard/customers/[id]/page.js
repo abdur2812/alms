@@ -17,10 +17,16 @@ export default function EditCustomerPage({ params }) {
   const [formData, setFormData] = useState({
     customerType: "individual",
     name: "",
-    pocName: "",
     phone: "",
     gstNumber: "",
-    address: {
+    permanentAddress: {
+      companyAddress: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      country: "India",
+    },
+    shippingAddress: {
       companyAddress: "",
       city: "",
       state: "",
@@ -38,19 +44,45 @@ export default function EditCustomerPage({ params }) {
     try {
       const response = await customersAPI.getById(id);
       const customer = response.data.data;
+
+      // For old customers, address data may be in `address` field instead of `permanentAddress`
+      const hasPermanentDetails =
+        customer.permanentAddress?.companyAddress ||
+        customer.permanentAddress?.city ||
+        customer.permanentAddress?.state;
+
+      const permanentAddress = hasPermanentDetails
+        ? customer.permanentAddress
+        : customer.address || {
+            companyAddress: "",
+            city: "",
+            state: "",
+            postalCode: "",
+            country: "India",
+          };
+
+      const hasShippingDetails =
+        customer.shippingAddress?.companyAddress ||
+        customer.shippingAddress?.city ||
+        customer.shippingAddress?.state;
+
+      const shippingAddress = hasShippingDetails
+        ? customer.shippingAddress
+        : customer.address || {
+            companyAddress: "",
+            city: "",
+            state: "",
+            postalCode: "",
+            country: "India",
+          };
+
       setFormData({
         customerType: customer.customerType || "individual",
         name: customer.name,
-        pocName: customer.pocName || "",
         phone: customer.phone,
         gstNumber: customer.gstNumber || "",
-        address: customer.address || {
-          companyAddress: "",
-          city: "",
-          state: "",
-          postalCode: "",
-          country: "India",
-        },
+        permanentAddress,
+        shippingAddress,
       });
       setLoading(false);
     } catch (err) {
@@ -75,7 +107,25 @@ export default function EditCustomerPage({ params }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name.startsWith("address.")) {
+    if (name.startsWith("permanentAddress.")) {
+      const addressField = name.split(".")[1];
+      setFormData({
+        ...formData,
+        permanentAddress: {
+          ...formData.permanentAddress,
+          [addressField]: value,
+        },
+      });
+    } else if (name.startsWith("shippingAddress.")) {
+      const addressField = name.split(".")[1];
+      setFormData({
+        ...formData,
+        shippingAddress: {
+          ...formData.shippingAddress,
+          [addressField]: value,
+        },
+      });
+    } else if (name.startsWith("address.")) {
       const addressField = name.split(".")[1];
       setFormData({
         ...formData,
@@ -187,27 +237,6 @@ export default function EditCustomerPage({ params }) {
 
             <div>
               <label
-                htmlFor="pocName"
-                className="block text-sm font-medium text-gray-700"
-              >
-                POC Name{" "}
-                {formData.customerType === "business" && (
-                  <span className="text-red-500">*</span>
-                )}
-              </label>
-              <input
-                type="text"
-                name="pocName"
-                id="pocName"
-                required={formData.customerType === "business"}
-                value={formData.pocName}
-                onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
-
-            <div>
-              <label
                 htmlFor="phone"
                 className="block text-sm font-medium text-gray-700"
               >
@@ -241,25 +270,25 @@ export default function EditCustomerPage({ params }) {
               />
             </div>
 
-            {/* Address Information */}
+            {/* Permanent Address Information */}
             <div className="sm:col-span-2">
               <h3 className="text-lg font-medium text-gray-900 mb-4 mt-4">
-                Address
+                Permanent Address
               </h3>
             </div>
 
             <div className="sm:col-span-2">
               <label
-                htmlFor="address.companyAddress"
+                htmlFor="permanentAddress.companyAddress"
                 className="block text-sm font-medium text-gray-700"
               >
                 Company Address
               </label>
               <input
                 type="text"
-                name="address.companyAddress"
-                id="address.companyAddress"
-                value={formData.address.companyAddress}
+                name="permanentAddress.companyAddress"
+                id="permanentAddress.companyAddress"
+                value={formData.permanentAddress.companyAddress}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
@@ -267,16 +296,16 @@ export default function EditCustomerPage({ params }) {
 
             <div>
               <label
-                htmlFor="address.city"
+                htmlFor="permanentAddress.city"
                 className="block text-sm font-medium text-gray-700"
               >
                 City
               </label>
               <input
                 type="text"
-                name="address.city"
-                id="address.city"
-                value={formData.address.city}
+                name="permanentAddress.city"
+                id="permanentAddress.city"
+                value={formData.permanentAddress.city}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
@@ -284,16 +313,16 @@ export default function EditCustomerPage({ params }) {
 
             <div>
               <label
-                htmlFor="address.state"
+                htmlFor="permanentAddress.state"
                 className="block text-sm font-medium text-gray-700"
               >
                 State/Province
               </label>
               <input
                 type="text"
-                name="address.state"
-                id="address.state"
-                value={formData.address.state}
+                name="permanentAddress.state"
+                id="permanentAddress.state"
+                value={formData.permanentAddress.state}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
@@ -301,16 +330,16 @@ export default function EditCustomerPage({ params }) {
 
             <div>
               <label
-                htmlFor="address.postalCode"
+                htmlFor="permanentAddress.postalCode"
                 className="block text-sm font-medium text-gray-700"
               >
                 Postal Code
               </label>
               <input
                 type="text"
-                name="address.postalCode"
-                id="address.postalCode"
-                value={formData.address.postalCode}
+                name="permanentAddress.postalCode"
+                id="permanentAddress.postalCode"
+                value={formData.permanentAddress.postalCode}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
@@ -318,16 +347,108 @@ export default function EditCustomerPage({ params }) {
 
             <div>
               <label
-                htmlFor="address.country"
+                htmlFor="permanentAddress.country"
                 className="block text-sm font-medium text-gray-700"
               >
                 Country
               </label>
               <input
                 type="text"
-                name="address.country"
-                id="address.country"
-                value={formData.address.country}
+                name="permanentAddress.country"
+                id="permanentAddress.country"
+                value={formData.permanentAddress.country}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
+            </div>
+
+            {/* Shipping Address Information */}
+            <div className="sm:col-span-2">
+              <h3 className="text-lg font-medium text-gray-900 mb-4 mt-4">
+                Shipping Address
+              </h3>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="shippingAddress.companyAddress"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Company Address
+              </label>
+              <input
+                type="text"
+                name="shippingAddress.companyAddress"
+                id="shippingAddress.companyAddress"
+                value={formData.shippingAddress.companyAddress}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="shippingAddress.city"
+                className="block text-sm font-medium text-gray-700"
+              >
+                City
+              </label>
+              <input
+                type="text"
+                name="shippingAddress.city"
+                id="shippingAddress.city"
+                value={formData.shippingAddress.city}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="shippingAddress.state"
+                className="block text-sm font-medium text-gray-700"
+              >
+                State/Province
+              </label>
+              <input
+                type="text"
+                name="shippingAddress.state"
+                id="shippingAddress.state"
+                value={formData.shippingAddress.state}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="shippingAddress.postalCode"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Postal Code
+              </label>
+              <input
+                type="text"
+                name="shippingAddress.postalCode"
+                id="shippingAddress.postalCode"
+                value={formData.shippingAddress.postalCode}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="shippingAddress.country"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Country
+              </label>
+              <input
+                type="text"
+                name="shippingAddress.country"
+                id="shippingAddress.country"
+                value={formData.shippingAddress.country}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />

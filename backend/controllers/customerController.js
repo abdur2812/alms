@@ -113,7 +113,16 @@ exports.getCustomerById = asyncHandler(async (req, res, next) => {
 // @route   POST /api/customers
 // @access  Public
 exports.createCustomer = asyncHandler(async (req, res, next) => {
-  const { name, email, phone, address } = req.body;
+  const {
+    name,
+    email,
+    phone,
+    address,
+    customerType,
+    gstNumber,
+    permanentAddress,
+    shippingAddress,
+  } = req.body;
 
   // Check if customer with email already exists
   if (email) {
@@ -128,6 +137,10 @@ exports.createCustomer = asyncHandler(async (req, res, next) => {
     email,
     phone,
     address,
+    customerType,
+    gstNumber,
+    permanentAddress,
+    shippingAddress,
   });
 
   res.status(201).json({
@@ -141,7 +154,16 @@ exports.createCustomer = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/customers/:id
 // @access  Public
 exports.updateCustomer = asyncHandler(async (req, res, next) => {
-  const { name, email, phone, address } = req.body;
+  const {
+    name,
+    email,
+    phone,
+    address,
+    customerType,
+    gstNumber,
+    permanentAddress,
+    shippingAddress,
+  } = req.body;
 
   let customer = await Customer.findById(req.params.id);
 
@@ -163,7 +185,16 @@ exports.updateCustomer = asyncHandler(async (req, res, next) => {
 
   customer = await Customer.findByIdAndUpdate(
     req.params.id,
-    { name, email, phone, address },
+    {
+      name,
+      email,
+      phone,
+      address,
+      customerType,
+      gstNumber,
+      permanentAddress,
+      shippingAddress,
+    },
     { new: true, runValidators: true },
   );
 

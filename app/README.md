@@ -1,6 +1,6 @@
-# ERP Billing System - Frontend
+# AL M.S. TRADERS - Billing System
 
-A complete ERP Billing System built with Next.js 16, featuring invoice management, customer tracking, and product inventory.
+A complete Billing System for AL M.S. TRADERS built with Next.js 16, featuring invoice management, customer tracking, and product inventory.
 
 ## Features
 

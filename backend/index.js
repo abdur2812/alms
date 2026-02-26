@@ -72,7 +72,7 @@ mongoose
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "ERP Billing System API",
+    message: "AL M.S. TRADERS Billing System API",
     version: "1.0.0",
     endpoints: {
       customers: "/api/customers",

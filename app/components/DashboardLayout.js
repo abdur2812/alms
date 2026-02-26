@@ -68,7 +68,9 @@ export default function DashboardLayout({ children }) {
                   />
                 </svg>
               </div>
-              <span className="text-lg font-bold text-white">ERP Billing</span>
+              <span className="text-lg font-bold text-white">
+                AL M.S. TRADERS
+              </span>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -140,7 +142,9 @@ export default function DashboardLayout({ children }) {
                 />
               </svg>
             </div>
-            <span className="text-lg font-bold text-white">ERP Billing</span>
+            <span className="text-lg font-bold text-white">
+              AL M.S. TRADERS
+            </span>
           </div>
         </div>
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
@@ -198,7 +202,7 @@ export default function DashboardLayout({ children }) {
           </button>
           <div className="flex items-center flex-1 px-4">
             <span className="text-xl font-bold text-indigo-600">
-              ERP Billing
+              AL M.S. TRADERS
             </span>
           </div>
         </div>

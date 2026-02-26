@@ -22,16 +22,8 @@ export default function NewCustomerPage() {
   const [formData, setFormData] = useState({
     customerType: "individual",
     name: "",
-    pocName: "",
     phone: "",
     gstNumber: "",
-    address: {
-      companyAddress: "",
-      city: "",
-      state: "",
-      postalCode: "",
-      country: "India",
-    },
     permanentAddress: {
       companyAddress: "",
       city: "",
@@ -163,15 +155,6 @@ export default function NewCustomerPage() {
                 onChange={handleChange}
                 required
                 placeholder="Enter name"
-              />
-
-              <Input
-                label="POC Name"
-                name="pocName"
-                value={formData.pocName}
-                onChange={handleChange}
-                required={formData.customerType === "business"}
-                placeholder="Point of Contact Name"
               />
 
               <Input
@@ -307,55 +290,6 @@ export default function NewCustomerPage() {
                 onChange={handleChange}
                 placeholder="Country"
                 disabled={sameAsPermanent}
-              />
-
-              {/* Old Address (kept for compatibility) */}
-              <div className="sm:col-span-2">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-4">
-                  Billing Address
-                </h3>
-              </div>
-
-              <div className="sm:col-span-2">
-                <Input
-                  label="Company Address"
-                  name="address.companyAddress"
-                  value={formData.address.companyAddress}
-                  onChange={handleChange}
-                  placeholder="Full address"
-                />
-              </div>
-
-              <Input
-                label="City"
-                name="address.city"
-                value={formData.address.city}
-                onChange={handleChange}
-                placeholder="City name"
-              />
-
-              <Input
-                label="State/Province"
-                name="address.state"
-                value={formData.address.state}
-                onChange={handleChange}
-                placeholder="State or Province"
-              />
-
-              <Input
-                label="Postal Code"
-                name="address.postalCode"
-                value={formData.address.postalCode}
-                onChange={handleChange}
-                placeholder="Postal/ZIP code"
-              />
-
-              <Input
-                label="Country"
-                name="address.country"
-                value={formData.address.country}
-                onChange={handleChange}
-                placeholder="Country"
               />
             </div>
 

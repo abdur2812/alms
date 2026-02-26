@@ -61,7 +61,7 @@ const invoiceSchema = new mongoose.Schema(
       name: { type: String },
       phone: { type: String },
       gstNumber: { type: String },
-      address: {
+      permanentAddress: {
         companyAddress: { type: String },
         city: { type: String },
         state: { type: String },

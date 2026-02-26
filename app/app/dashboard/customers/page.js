@@ -252,12 +252,81 @@ export default function CustomersPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-600 font-medium">
-                            {customer.address?.city}
-                            <span className="block text-xs text-gray-400 font-normal">
-                              {customer.address?.state}{" "}
-                              {customer.address?.country &&
-                                `, ${customer.address.country}`}
-                            </span>
+                            {(() => {
+                              // Show permanent address first (preferred)
+                              if (
+                                customer.permanentAddress &&
+                                (customer.permanentAddress.companyAddress ||
+                                  customer.permanentAddress.city ||
+                                  customer.permanentAddress.state)
+                              ) {
+                                const parts = [
+                                  customer.permanentAddress.companyAddress,
+                                  customer.permanentAddress.city,
+                                  customer.permanentAddress.state,
+                                ].filter(Boolean);
+
+                                return (
+                                  <>
+                                    {parts.join(", ")}
+                                    {customer.permanentAddress.country && (
+                                      <span className="block text-xs text-gray-400 font-normal">
+                                        {customer.permanentAddress.country}
+                                      </span>
+                                    )}
+                                  </>
+                                );
+                              }
+
+                              // Fallback to address field
+                              if (
+                                customer.address &&
+                                (customer.address.companyAddress ||
+                                  customer.address.city ||
+                                  customer.address.state)
+                              ) {
+                                const parts = [
+                                  customer.address.companyAddress,
+                                  customer.address.city,
+                                  customer.address.state,
+                                ].filter(Boolean);
+
+                                return (
+                                  <>
+                                    {parts.join(", ")}
+                                    {customer.address.country && (
+                                      <span className="block text-xs text-gray-400 font-normal">
+                                        {customer.address.country}
+                                      </span>
+                                    )}
+                                  </>
+                                );
+                              }
+
+                              // Show permanent address country if available
+                              if (customer.permanentAddress?.country) {
+                                return (
+                                  <span className="text-xs text-gray-400">
+                                    {customer.permanentAddress.country}
+                                  </span>
+                                );
+                              }
+
+                              // Show shipping address country if available
+                              if (customer.shippingAddress?.country) {
+                                return (
+                                  <span className="text-xs text-gray-400">
+                                    {customer.shippingAddress.country}
+                                  </span>
+                                );
+                              }
+
+                              return (
+                                <span className="text-gray-400">
+                                  No location
+                                </span>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -307,8 +376,13 @@ export default function CustomersPage() {
                               <FiEdit className="h-4 w-4" />
                             </Link>
                             <button
-                              onClick={() => handleDelete(customer._id)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDelete(customer._id);
+                              }}
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                              title="Delete Customer"
                             >
                               <FiTrash2 className="h-4 w-4" />
                             </button>
