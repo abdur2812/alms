@@ -1,5 +1,5 @@
 {
-  "name": "erp-billing-backend",
+  "name": "alms-billing-backend",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -15,10 +15,12 @@
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
-    "mongoose": "^8.22.0",
-    "pdfmake": "^0.3.5"
+    "mongoose": "^8.22.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

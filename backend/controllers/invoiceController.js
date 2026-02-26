@@ -1,7 +1,6 @@
 const Invoice = require("../models/Invoice");
 const Customer = require("../models/Customer");
 const Product = require("../models/Product");
-const pdfService = require("../services/pdfService");
 const { AppError, asyncHandler } = require("../middleware/errorHandler");
 
 // @desc    Get all invoices
@@ -123,7 +122,6 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
   const validatedItems = [];
 
   for (const item of items) {
-
     let validatedItem;
 
     if (item.productId) {
@@ -480,40 +478,4 @@ exports.getBulkInvoicePDF = asyncHandler(async (req, res, next) => {
     count: bulkData.length,
     data: bulkData,
   });
-});
-
-// @desc    Generate invoice PDF
-// @route   GET /api/invoices/:id/pdf
-// @access  Public
-exports.generateInvoicePDF = asyncHandler(async (req, res, next) => {
-  const { id } = req.params;
-
-  const invoice = await Invoice.findById(id)
-    .populate(
-      "customerId",
-      "name phone gstNumber permanentAddress shippingAddress",
-    )
-    .lean();
-
-  if (!invoice) {
-    return next(new AppError("Invoice not found", 404));
-  }
-
-  try {
-    const pdfBuffer = await pdfService.generateInvoicePDF(invoice);
-    const isPreview = req.query.preview === "1";
-
-    res.set({
-      "Content-Type": "application/pdf",
-      "Content-Disposition": isPreview
-        ? `inline; filename="Invoice-${invoice.invoiceNumber}.pdf"`
-        : `attachment; filename="Invoice-${invoice.invoiceNumber}.pdf"`,
-      "Content-Length": pdfBuffer.length,
-    });
-
-    res.send(pdfBuffer);
-  } catch (error) {
-    console.error("PDF generation error:", error);
-    return next(new AppError("Failed to generate PDF", 500));
-  }
 });

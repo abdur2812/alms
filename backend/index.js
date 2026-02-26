@@ -60,16 +60,17 @@ const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/test";
 
 mongoose
   .connect(MONGODB_URI)
-  .then(async () => {
+  .then(() => {
     console.log("✅ MongoDB connected successfully");
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err.message);
-    process.exit(1);
+    // Do not exit — let the server keep running so health checks pass.
+    // Individual requests will fail gracefully if DB is unavailable.
   });
 
-// Root route
-app.get("/", (req, res) => {
+// Root routes
+const apiInfo = (req, res) => {
   res.json({
     success: true,
     message: "AL M.S. TRADERS Billing System API",
@@ -80,7 +81,9 @@ app.get("/", (req, res) => {
       invoices: "/api/invoices",
     },
   });
-});
+};
+app.get("/", apiInfo);
+app.get("/api", apiInfo);
 
 // API Routes
 app.use("/api/customers", customerRoutes);
