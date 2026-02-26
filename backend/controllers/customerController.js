@@ -6,9 +6,6 @@ const { AppError, asyncHandler } = require("../middleware/errorHandler");
 // @route   GET /api/customers
 // @access  Public
 exports.getAllCustomers = asyncHandler(async (req, res, next) => {
-  console.log("=== GET ALL CUSTOMERS START ===");
-  console.log("Query params:", req.query);
-
   const { page = 1, limit = 10, search, hasCreditInvoices } = req.query;
 
   const query = {};
@@ -30,8 +27,6 @@ exports.getAllCustomers = asyncHandler(async (req, res, next) => {
     ];
   }
 
-  console.log("Query:", JSON.stringify(query));
-
   try {
     const customers = await Customer.find(query)
       .limit(limit * 1)
@@ -43,9 +38,6 @@ exports.getAllCustomers = asyncHandler(async (req, res, next) => {
         options: { sort: { date: -1 } },
       });
 
-    console.log("Customers found:", customers.length);
-
-    // Calculate credit for each customer and separate credit invoices
     const customersWithCredit = customers.map((customer) => {
       const customerObj = customer.toObject();
 
@@ -61,15 +53,10 @@ exports.getAllCustomers = asyncHandler(async (req, res, next) => {
       customerObj.creditInvoices = creditInvoices;
       customerObj.totalInvoices = customer.invoices.length;
 
-      console.log(
-        `Customer ${customer.name}: creditAmount=${customerObj.creditAmount}, creditInvoices=${creditInvoices.length}`,
-      );
-
       return customerObj;
     });
 
     const count = await Customer.countDocuments(query);
-    console.log("Total count:", count);
 
     res.status(200).json({
       success: true,
@@ -79,11 +66,7 @@ exports.getAllCustomers = asyncHandler(async (req, res, next) => {
       currentPage: page,
       data: customersWithCredit,
     });
-
-    console.log("=== GET ALL CUSTOMERS SUCCESS ===");
   } catch (error) {
-    console.error("=== GET ALL CUSTOMERS ERROR ===");
-    console.error("Error:", error);
     throw error;
   }
 });

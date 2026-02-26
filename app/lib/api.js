@@ -1,14 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:3000";
-//process.env.NEXT_PUBLIC_API_URL ||
-
-// Debug: Log the API base URL being used
-console.log("🔧 API Configuration:", {
-  baseURL: API_BASE_URL,
-  debugMode: process.env.NEXT_PUBLIC_DEBUG_API,
-  environment: process.env.NODE_ENV,
-});
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -24,20 +16,9 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
-
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-
-    // Debug logging if enabled
-    if (process.env.NEXT_PUBLIC_DEBUG_API === "true") {
-      console.log("🚀 API Request:", {
-        url: `${config.baseURL}${config.url}`,
-        method: config.method?.toUpperCase(),
-        headers: config.headers,
-      });
-    }
-
     return config;
   },
   (error) => {
@@ -45,37 +26,10 @@ api.interceptors.request.use(
   },
 );
 
-// Response interceptor for debugging and error handling
+// Response interceptor for error handling
 api.interceptors.response.use(
-  (response) => {
-    if (process.env.NEXT_PUBLIC_DEBUG_API === "true") {
-      console.log("✅ API Response:", response.status, response.config.url);
-    }
-    return response;
-  },
+  (response) => response,
   (error) => {
-    if (process.env.NEXT_PUBLIC_DEBUG_API === "true") {
-      console.error("❌ API Error:", {
-        url: error.config?.url || "Unknown URL",
-        method: error.config?.method?.toUpperCase() || "Unknown Method",
-        baseURL: error.config?.baseURL || "Unknown Base URL",
-        status: error.response?.status || "No Response Status",
-        statusText: error.response?.statusText || "No Status Text",
-        message: error.message || "No Error Message",
-        details: error.response?.data || "No Response Data",
-        code: error.code || "No Error Code",
-        fullError: error.name || "Unknown Error Type",
-      });
-    }
-
-    // Handle common network errors
-    if (!error.response) {
-      console.error(
-        "🌐 Network Error: Cannot reach server. Check if the server is running and CORS is configured properly.",
-        `Attempting to reach: ${error.config?.baseURL}${error.config?.url || ""}`,
-      );
-    }
-
     return Promise.reject(error);
   },
 );

@@ -64,14 +64,8 @@ export default function EditProductPage({ params }) {
       stockQuantity: parseInt(formData.stockQuantity),
     };
 
-    console.log("=== UPDATING PRODUCT ===");
-    console.log("Form data:", formData);
-    console.log("Product data to send:", productData);
-    console.log("GST value:", productData.gst, "Type:", typeof productData.gst);
-
     try {
       const response = await productsAPI.update(id, productData);
-      console.log("Product updated successfully:", response.data);
       router.push("/dashboard/products");
     } catch (err) {
       console.error("Error updating product:", err);

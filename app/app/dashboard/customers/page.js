@@ -46,15 +46,6 @@ export default function CustomersPage() {
       setError("");
 
       // Debug logging
-      console.log("Filter Credit:", filterCredit);
-      console.log(
-        "Customers:",
-        response.data.data.map((c) => ({
-          name: c.name,
-          creditAmount: c.creditAmount,
-          creditInvoices: c.creditInvoices?.length || 0,
-        })),
-      );
     } catch (err) {
       setError("Failed to fetch customers");
       console.error(err);

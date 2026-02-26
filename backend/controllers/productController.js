@@ -5,8 +5,6 @@ const { AppError, asyncHandler } = require("../middleware/errorHandler");
 // @route   GET /api/products
 // @access  Public
 exports.getAllProducts = asyncHandler(async (req, res, next) => {
-  console.log("=== GET ALL PRODUCTS START ===");
-  console.log("Query params:", req.query);
 
   const { page = 1, limit = 10, search, inStock, lowStock } = req.query;
 
@@ -32,18 +30,13 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
     query.stockQuantity = { $gt: 0, $lt: 10 };
   }
 
-  console.log("Query:", JSON.stringify(query));
-
   try {
     const products = await Product.find(query)
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .sort({ createdAt: -1 });
 
-    console.log("Products found:", products.length);
-
     const count = await Product.countDocuments(query);
-    console.log("Total count:", count);
 
     res.status(200).json({
       success: true,
@@ -53,8 +46,6 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
       currentPage: page,
       data: products,
     });
-
-    console.log("=== GET ALL PRODUCTS SUCCESS ===");
   } catch (error) {
     console.error("=== GET ALL PRODUCTS ERROR ===");
     console.error("Error:", error);
@@ -87,10 +78,6 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
   const { name, description, price, stockQuantity, gst, hsnCode, partNo } =
     req.body;
 
-  console.log("=== CREATE PRODUCT ===");
-  console.log("Request body:", req.body);
-  console.log("GST value:", gst, "Type:", typeof gst);
-
   // Check if product with this name already exists
   const existingProduct = await Product.findOne({ name });
   if (existingProduct) {
@@ -107,12 +94,7 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
     partNo,
   };
 
-  console.log("Product data to create:", productData);
-
   const product = await Product.create(productData);
-
-  console.log("Created product:", product.toObject());
-  console.log("=== END CREATE PRODUCT ===");
 
   res.status(201).json({
     success: true,
@@ -127,11 +109,6 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
 exports.updateProduct = asyncHandler(async (req, res, next) => {
   const { name, description, price, stockQuantity, gst, hsnCode, partNo } =
     req.body;
-
-  console.log("=== UPDATE PRODUCT ===");
-  console.log("Product ID:", req.params.id);
-  console.log("Request body:", req.body);
-  console.log("GST value:", gst, "Type:", typeof gst);
 
   let product = await Product.findById(req.params.id);
 
@@ -159,15 +136,10 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
     partNo,
   };
 
-  console.log("Update data:", updateData);
-
   product = await Product.findByIdAndUpdate(req.params.id, updateData, {
     new: true,
     runValidators: true,
   });
-
-  console.log("Updated product:", product.toObject());
-  console.log("=== END UPDATE PRODUCT ===");
 
   res.status(200).json({
     success: true,

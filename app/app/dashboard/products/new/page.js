@@ -47,14 +47,8 @@ export default function NewProductPage() {
       stockQuantity: parseInt(formData.stockQuantity),
     };
 
-    console.log("=== CREATING PRODUCT ===");
-    console.log("Form data:", formData);
-    console.log("Product data to send:", productData);
-    console.log("GST value:", productData.gst, "Type:", typeof productData.gst);
-
     try {
       const response = await productsAPI.create(productData);
-      console.log("Product created successfully:", response.data);
       // Wait a moment then redirect to ensure backend has processed
       setTimeout(() => {
         router.push("/dashboard/products");

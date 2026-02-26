@@ -76,7 +76,4 @@ productSchema.methods.increaseStock = async function (quantity) {
 productSchema.set("toJSON", { virtuals: true });
 productSchema.set("toObject", { virtuals: true });
 
-// Explicit index definition (removes any old SKU indexes)
-productSchema.index({ name: 1 }, { unique: true });
-
 module.exports = mongoose.model("Product", productSchema);

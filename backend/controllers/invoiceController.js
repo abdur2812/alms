@@ -78,20 +78,13 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     billType,
   } = req.body;
 
-  console.log("=== CREATE INVOICE START ===");
-  console.log("Request body:", JSON.stringify(req.body, null, 2));
-
   // Validate items array
   if (!items || !Array.isArray(items) || items.length === 0) {
-    console.log("ERROR: Invalid items array");
     return next(new AppError("Invoice must have at least one item", 400));
   }
 
-  console.log("Items validation passed:", items.length, "items");
-
   // Validate customer - either customerId OR customerData must be provided
   if (!customerId && !customerData) {
-    console.log("ERROR: No customer information provided");
     return next(new AppError("Customer information is required", 400));
   }
 
@@ -102,10 +95,8 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     // Existing customer flow
     customer = await Customer.findById(customerId);
     if (!customer) {
-      console.log("ERROR: Customer not found:", customerId);
       return next(new AppError("Customer not found", 404));
     }
-    console.log("Customer found:", customer.name);
 
     // Snapshot customer data - use provided customerData or get from customer record
     if (customerData) {
@@ -125,7 +116,6 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     }
   } else {
     // New customer flow (one-time billing)
-    console.log("One-time customer billing");
     snapshotCustomerData = customerData;
   }
 
@@ -133,9 +123,6 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
   const validatedItems = [];
 
   for (const item of items) {
-    console.log("=== Validating item ===");
-    console.log("Item from request:", JSON.stringify(item, null, 2));
-    console.log("Item GST:", item.gst, "Type:", typeof item.gst);
 
     let validatedItem;
 
@@ -144,24 +131,13 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
       const product = await Product.findById(item.productId);
 
       if (!product) {
-        console.log("ERROR: Product not found:", item.productId);
         return next(
           new AppError(`Product not found with id: ${item.productId}`, 404),
         );
       }
 
-      console.log(
-        "Product found:",
-        product.name,
-        "Stock:",
-        product.stockQuantity,
-        "Product GST:",
-        product.gst,
-      );
-
       // Check if product has sufficient stock
       if (product.stockQuantity < item.quantity) {
-        console.log("ERROR: Insufficient stock");
         return next(
           new AppError(
             `Insufficient stock for ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
@@ -181,7 +157,6 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
       };
     } else {
       // New product flow (one-time billing, no database record)
-      console.log("One-time product billing");
 
       // Validate required fields for new products
       if (!item.name || !item.quantity || item.unitPrice === undefined) {
@@ -203,22 +178,11 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
       };
     }
 
-    console.log("Validated item:", JSON.stringify(validatedItem, null, 2));
-    console.log(
-      "Final GST value:",
-      validatedItem.gst,
-      "Type:",
-      typeof validatedItem.gst,
-    );
-
     validatedItems.push(validatedItem);
   }
 
-  console.log("All products validated:", validatedItems.length);
-
   // Generate invoice number
   const invoiceNumber = await Invoice.generateInvoiceNumber();
-  console.log("Invoice number generated:", invoiceNumber);
 
   // Create invoice with all new fields
   const invoiceData = {
@@ -235,13 +199,7 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     billType: billType || "pay",
   };
 
-  console.log(
-    "Creating invoice with data:",
-    JSON.stringify(invoiceData, null, 2),
-  );
-
   const invoice = await Invoice.create(invoiceData);
-  console.log("Invoice created:", invoice._id);
 
   // Add invoice reference to customer (only for existing customers)
   if (customer && customerId) {
@@ -250,14 +208,11 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     }
     customer.invoices.push(invoice._id);
     await customer.save();
-    console.log("Invoice added to customer");
   } else {
-    console.log("One-time customer - invoice not linked to customer record");
   }
 
   // If invoice is billType pay, decrement stock immediately (only for existing products)
   if (billType === "pay") {
-    console.log("Decrementing stock for paid bill");
     for (const item of validatedItems) {
       if (item.productId) {
         const product = await Product.findById(item.productId);
@@ -265,7 +220,6 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
           await product.decreaseStock(item.quantity);
         }
       } else {
-        console.log("One-time product - no stock decrement");
       }
     }
   }
@@ -274,8 +228,6 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
   const populatedInvoice = await Invoice.findById(invoice._id)
     .populate("customerId", "name phone")
     .populate("items.productId", "name");
-
-  console.log("=== CREATE INVOICE SUCCESS ===");
 
   res.status(201).json({
     success: true,

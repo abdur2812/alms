@@ -155,13 +155,6 @@ invoiceSchema.pre("save", function (next) {
   // Set total amount
   this.totalAmount = subtotal + totalGst;
 
-  console.log("=== INVOICE PRE-SAVE HOOK ===");
-  console.log("Items:", JSON.stringify(this.items, null, 2));
-  console.log("Subtotal:", subtotal);
-  console.log("Total GST:", totalGst);
-  console.log("Total Amount:", this.totalAmount);
-  console.log("=== END INVOICE PRE-SAVE ===");
-
   next();
 });
 
