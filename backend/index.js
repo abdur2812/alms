@@ -56,10 +56,14 @@ app.use(
 );
 
 // Database connection
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/test";
+const MONGODB_URI = process.env.MONGODB_URI;
 
 mongoose
-  .connect(MONGODB_URI)
+  .connect(MONGODB_URI, {
+    readPreference: "primary", // always read from primary — no stale replica reads
+    readConcern: { level: "majority" }, // only return data acknowledged by majority
+    writeConcern: { w: "majority" }, // wait for majority write before confirming
+  })
   .then(() => {
     console.log("✅ MongoDB connected successfully");
   })
@@ -84,6 +88,18 @@ const apiInfo = (req, res) => {
 };
 app.get("/", apiInfo);
 app.get("/api", apiInfo);
+
+// Health check — shows DB connection state so you can verify hosted vs local DB
+app.get("/api/health", (req, res) => {
+  const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/test";
+  const isAtlas = uri.includes("mongodb+srv");
+  res.json({
+    status: "ok",
+    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    dbType: isAtlas ? "Atlas" : "Local",
+    dbHost: uri.replace(/:\/\/.*@/, "://***@"), // mask credentials
+  });
+});
 
 // API Routes
 app.use("/api/customers", customerRoutes);
