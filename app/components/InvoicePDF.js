@@ -1,5 +1,21 @@
-import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
+import {
+  Document,
+  Page,
+  View,
+  Text,
+  StyleSheet,
+  Image,
+} from "@react-pdf/renderer";
 import businessConfig from "@/lib/businessConfig";
+
+// Build an absolute URL so @react-pdf/renderer can fetch images correctly.
+// Relative paths like "/logo.png" don't work inside the PDF renderer.
+function assetUrl(path) {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}${path}`;
+  }
+  return path;
+}
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
@@ -13,18 +29,18 @@ const S = StyleSheet.create({
   // Outer wrapper — indigo border
   outer: {
     borderWidth: 2,
-    borderColor: "#3730a3",
+    borderColor: "#000000",
     flex: 1,
   },
 
   // ── Section divider (top border on section) ──────────────────────────────
   divider: {
     borderTopWidth: 1,
-    borderTopColor: "#c7d2fe",
+    borderTopColor: "#d1d5db",
   },
   dividerStrong: {
     borderTopWidth: 1.5,
-    borderTopColor: "#3730a3",
+    borderTopColor: "#000000",
   },
 
   // ── 2-col split helpers ───────────────────────────────────────────────────
@@ -32,7 +48,7 @@ const S = StyleSheet.create({
   splitLeft: {
     flex: 1,
     borderRightWidth: 1,
-    borderRightColor: "#c7d2fe",
+    borderRightColor: "#d1d5db",
     padding: 9,
   },
   splitRight: {
@@ -42,7 +58,7 @@ const S = StyleSheet.create({
   splitLeft60: {
     flex: 1,
     borderRightWidth: 1,
-    borderRightColor: "#c7d2fe",
+    borderRightColor: "#d1d5db",
     padding: 9,
   },
   splitRight40: {
@@ -52,7 +68,7 @@ const S = StyleSheet.create({
   splitLeft55: {
     flex: 1,
     borderRightWidth: 1,
-    borderRightColor: "#c7d2fe",
+    borderRightColor: "#d1d5db",
     padding: 9,
   },
   splitRight45: {
@@ -61,51 +77,58 @@ const S = StyleSheet.create({
   },
 
   // ── Header ────────────────────────────────────────────────────────────────
-  headerBg: { backgroundColor: "#1e1b4b" },
+  // Top two boxes (business + GST) share the same light blue background
+  headerBg: { backgroundColor: "#e0f2fe" },
   bizName: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 22,
-    color: "#ffffff",
+    fontSize: 24,
+    color: "#0f172a",
     marginBottom: 4,
   },
-  bizTagline: { fontSize: 10, color: "#a5b4fc", marginBottom: 5 },
-  bizAddress: { fontSize: 10, color: "#c7d2fe", marginBottom: 2 },
-  bizPhone: { fontSize: 10, color: "#c7d2fe" },
-  gstinLabel: { fontSize: 9, color: "#a5b4fc", marginBottom: 3 },
-  gstinValue: { fontFamily: "Helvetica-Bold", fontSize: 12, color: "#ffffff" },
-  gstState: { fontSize: 9, color: "#a5b4fc", marginTop: 6 },
+  bizTagline: { fontSize: 10, color: "#1f2937", marginBottom: 5 },
+  bizAddress: { fontSize: 10, color: "#1f2937", marginBottom: 2 },
+  bizPhone: { fontSize: 10, color: "#1f2937" },
+  gstinLabel: { fontSize: 9, color: "#0f172a", marginBottom: 3 },
+  gstinValue: { fontFamily: "Helvetica-Bold", fontSize: 12, color: "#0f172a" },
+  gstState: { fontSize: 9, color: "#111827", marginTop: 6 },
+
+  headerLogo: {
+    width: 70,
+    height: 70,
+  },
 
   // ── Title ─────────────────────────────────────────────────────────────────
   titleSection: {
-    padding: 9,
+    paddingVertical: 6,
+    paddingHorizontal: 9,
     alignItems: "center",
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#ffffff",
   },
   titleText: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 15,
-    letterSpacing: 5,
-    color: "#4c1d95",
+    fontSize: 13,
+    letterSpacing: 3,
+    color: "#000000",
   },
 
   // ── Customer ──────────────────────────────────────────────────────────────
   sectionLabel: {
     fontSize: 8,
-    color: "#6366f1",
+    color: "#000000",
     marginBottom: 3,
     fontFamily: "Helvetica-Bold",
   },
   custName: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 14,
+    fontSize: 16,
     marginBottom: 3,
-    color: "#1e1b4b",
+    color: "#000000",
   },
-  custDetail: { fontSize: 10, marginBottom: 2, color: "#374151" },
+  custDetail: { fontSize: 10, marginBottom: 2, color: "#111827" },
   metaRow: { flexDirection: "row", marginBottom: 3 },
   metaLabel: {
     fontSize: 9,
-    color: "#6366f1",
+    color: "#000000",
     width: 62,
     fontFamily: "Helvetica-Bold",
   },
@@ -114,64 +137,87 @@ const S = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
     fontSize: 11,
     flex: 1,
-    color: "#1e1b4b",
+    color: "#000000",
   },
 
   // ── Items table ───────────────────────────────────────────────────────────
+  // Single clean grid: outer top/left border, cell borders for all lines
+  tableOuter: {
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderColor: "#000000",
+  },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#4338ca",
+    backgroundColor: "#ffffff",
   },
-  tableRow: { flexDirection: "row" },
-  tableRowAlt: { flexDirection: "row", backgroundColor: "#eef2ff" },
+  tableRow: {
+    flexDirection: "row",
+  },
+  tableRowAlt: {
+    flexDirection: "row",
+    backgroundColor: "#f3f4f6",
+  },
 
   thCell: {
     fontFamily: "Helvetica-Bold",
     fontSize: 9,
     paddingVertical: 5,
     paddingHorizontal: 4,
-    borderRightWidth: 0.6,
-    borderRightColor: "#6366f1",
-    color: "#ffffff",
+    borderRightWidth: 1,
+    borderRightColor: "#000000",
+    borderBottomWidth: 1,
+    borderBottomColor: "#000000",
+    color: "#000000",
   },
   tdCell: {
     fontSize: 9.5,
     paddingVertical: 4,
     paddingHorizontal: 4,
-    borderRightWidth: 0.5,
-    borderRightColor: "#e0e7ff",
-    color: "#1f2937",
+    borderRightWidth: 1,
+    borderRightColor: "#000000",
+    borderBottomWidth: 1,
+    borderBottomColor: "#000000",
+    color: "#000000",
   },
   tdLast: {
     fontSize: 9.5,
     paddingVertical: 4,
     paddingHorizontal: 4,
-    color: "#1f2937",
+    borderRightWidth: 1,
+    borderRightColor: "#000000",
+    borderBottomWidth: 1,
+    borderBottomColor: "#000000",
+    color: "#000000",
   },
   thLast: {
     fontFamily: "Helvetica-Bold",
     fontSize: 9,
     paddingVertical: 5,
     paddingHorizontal: 4,
-    color: "#ffffff",
+    borderRightWidth: 1,
+    borderRightColor: "#000000",
+    borderBottomWidth: 1,
+    borderBottomColor: "#000000",
+    color: "#000000",
   },
 
   // ── Totals ─────────────────────────────────────────────────────────────────
   wordsLabel: {
     fontSize: 9,
-    color: "#6366f1",
+    color: "#000000",
     marginBottom: 4,
     fontFamily: "Helvetica-Bold",
   },
   wordsText: {
     fontFamily: "Helvetica-Oblique",
     fontSize: 10,
-    color: "#1f2937",
+    color: "#000000",
   },
   totalsRow: {
     flexDirection: "row",
     borderBottomWidth: 0.5,
-    borderBottomColor: "#e0e7ff",
+    borderBottomColor: "#d1d5db",
     paddingVertical: 3,
   },
   totalsLabel: {
@@ -179,32 +225,32 @@ const S = StyleSheet.create({
     fontSize: 10,
     textAlign: "right",
     paddingRight: 8,
-    color: "#374151",
+    color: "#000000",
   },
   totalsValue: {
     fontSize: 10,
     textAlign: "right",
     paddingRight: 6,
-    color: "#1f2937",
+    color: "#000000",
     fontFamily: "Helvetica-Bold",
   },
   grandTotalRow: {
     flexDirection: "row",
-    backgroundColor: "#4338ca",
+    backgroundColor: "#ffffff",
     paddingVertical: 6,
   },
   grandTotalLabel: {
     flex: 1,
     fontFamily: "Helvetica-Bold",
     fontSize: 12,
-    color: "#ffffff",
+    color: "#000000",
     textAlign: "right",
     paddingRight: 8,
   },
   grandTotalValue: {
     fontFamily: "Helvetica-Bold",
     fontSize: 12,
-    color: "#ffffff",
+    color: "#000000",
     textAlign: "right",
     paddingRight: 6,
   },
@@ -213,49 +259,71 @@ const S = StyleSheet.create({
   spacer: { flexGrow: 1 },
 
   // ── Declaration ───────────────────────────────────────────────────────────
-  declSection: { backgroundColor: "#f5f3ff", padding: 9 },
+  declSection: {
+    backgroundColor: "#ffffff",
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+  },
   declTitle: {
     fontFamily: "Helvetica-Bold",
     fontSize: 9.5,
-    color: "#4338ca",
+    color: "#000000",
     marginBottom: 4,
   },
-  declText: { fontSize: 10, color: "#374151" },
+  declText: { fontSize: 10, color: "#111827" },
+
+  // ── E.&O.E. box ───────────────────────────────────────────────────────────
+  eoeSection: {
+    backgroundColor: "#ffffff",
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+  },
+  eoeTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 9.5,
+    color: "#000000",
+    marginBottom: 2,
+  },
+  eoeText: { fontSize: 9, color: "#111827" },
 
   // ── Bank + Signature ──────────────────────────────────────────────────────
   bankRow: { flexDirection: "row", marginBottom: 3 },
   bankLabel: {
     fontSize: 9,
-    color: "#6366f1",
+    color: "#000000",
     width: 62,
     fontFamily: "Helvetica-Bold",
   },
-  bankValue: { fontSize: 10, flex: 1, color: "#1f2937" },
+  bankValue: { fontSize: 10, flex: 1, color: "#000000" },
+  bankDetailsRow: { flexDirection: "row", alignItems: "flex-start" },
+  bankDetailsCol: { flex: 1 },
+  qrWrapper: { width: 90, alignItems: "center", justifyContent: "center" },
+  qrImage: { width: 80, height: 80 },
   forText: {
     fontFamily: "Helvetica-Bold",
     fontSize: 11,
     textAlign: "center",
     marginBottom: 35,
-    color: "#1e1b4b",
+    color: "#000000",
   },
   sigLine: {
     borderTopWidth: 1,
-    borderTopColor: "#4338ca",
+    borderTopColor: "#000000",
     marginHorizontal: 15,
   },
   sigLabel: {
     fontSize: 9,
     textAlign: "center",
     marginTop: 4,
-    color: "#374151",
+    color: "#111827",
   },
 
   // ── Footer ────────────────────────────────────────────────────────────────
-  footer: { backgroundColor: "#1e1b4b", padding: 7, alignItems: "center" },
+  footer: { backgroundColor: "#ffffff", padding: 7, alignItems: "center" },
   footerText: {
     fontFamily: "Helvetica-Oblique",
     fontSize: 9.5,
-    color: "#a5b4fc",
+    color: "#4b5563",
   },
 });
 
@@ -359,7 +427,8 @@ function BankRow({ label, value }) {
 }
 
 // ─── Column widths (must add up to ~100% or fixed pt) ───────────────────────
-const COL_WIDTHS = ["5%", "22%", "10%", "7%", "5%", "12%", "7%", "15%", "17%"];
+// S.No, Particulars (wider), HSN, GST, Qty, Rate, Total
+const COL_WIDTHS = ["6%", "40%", "10%", "8%", "8%", "14%", "14%"];
 
 function TableCell({ children, width, align, isLast, isHeader, bg }) {
   const base = isHeader
@@ -386,11 +455,9 @@ function ItemRow({ item, idx, isGstBill }) {
     [String(idx + 1), "center"],
     [item.name || "", "left"],
     [item.hsnCode || "-", "center"],
-    [String(item.quantity), "center"],
-    ["Nos", "center"],
-    [fmt(item.unitPrice), "right"],
     [isGstBill ? (item.gst || 0) + "%" : "-", "center"],
-    [isGstBill ? fmt(gstAmt) : "-", "right"],
+    [String(item.quantity), "center"],
+    [fmt(item.unitPrice), "right"],
     [fmt(total), "right"],
   ];
   return (
@@ -486,20 +553,16 @@ export default function InvoiceDocument({ invoice }) {
     "S.No",
     "Particulars",
     "HSN",
+    "GST",
     "Qty",
-    "Unit",
     "Rate",
-    "GST%",
-    "GST Amt",
-    "Amount",
+    "Total",
   ];
   const HEADER_ALIGNS = [
     "center",
     "left",
     "center",
     "center",
-    "center",
-    "right",
     "center",
     "right",
     "right",
@@ -525,14 +588,14 @@ export default function InvoiceDocument({ invoice }) {
                   alignItems: "center",
                   justifyContent: "center",
                   borderLeftWidth: 1,
-                  borderLeftColor: "#4338ca",
-                  backgroundColor: "#312e81",
+                  borderLeftColor: "#93c5fd",
+                  backgroundColor: "#e0f2fe",
                 },
               ]}
             >
+              <Image style={S.headerLogo} src={assetUrl("/alms-logo.png")} />
               <Text style={S.gstinLabel}>GSTIN</Text>
               <Text style={S.gstinValue}>{biz.gst_number}</Text>
-              <Text style={S.gstState}>State: {addr.state}</Text>
             </View>
           </View>
 
@@ -568,7 +631,7 @@ export default function InvoiceDocument({ invoice }) {
                 value={invoice.invoiceNumber || "-"}
                 bold
               />
-              <MetaRow label="Date" value={invoiceDate} />
+              <MetaRow label="Date" value={invoiceDate} bold />
               <MetaRow label="Bill Type" value={billLabel} />
               <MetaRow
                 label="GST Bill"
@@ -583,47 +646,49 @@ export default function InvoiceDocument({ invoice }) {
 
           {/* ④ ITEMS TABLE */}
           <View style={S.divider}>
-            {/* Header row */}
-            <View style={S.tableHeader}>
-              {HEADER_LABELS.map((label, i) => (
-                <TableCell
-                  key={i}
-                  width={COL_WIDTHS[i]}
-                  align={HEADER_ALIGNS[i]}
-                  isLast={i === HEADER_LABELS.length - 1}
-                  isHeader
-                >
-                  {label}
-                </TableCell>
-              ))}
-            </View>
+            <View style={S.tableOuter}>
+              {/* Header row */}
+              <View style={S.tableHeader}>
+                {HEADER_LABELS.map((label, i) => (
+                  <TableCell
+                    key={i}
+                    width={COL_WIDTHS[i]}
+                    align={HEADER_ALIGNS[i]}
+                    isLast={i === HEADER_LABELS.length - 1}
+                    isHeader
+                  >
+                    {label}
+                  </TableCell>
+                ))}
+              </View>
 
-            {/* Data rows */}
-            {paddedItems.map((item, idx) =>
-              item ? (
-                <ItemRow
-                  key={idx}
-                  item={item}
-                  idx={idx}
-                  isGstBill={invoice.isGstBill}
-                />
-              ) : (
-                <View
-                  key={idx}
-                  style={idx % 2 === 1 ? S.tableRowAlt : S.tableRow}
-                >
-                  {COL_WIDTHS.map((w, i) => (
-                    <TableCell
-                      key={i}
-                      width={w}
-                      isLast={i === COL_WIDTHS.length - 1}
-                    >
-                      {" "}
-                    </TableCell>
-                  ))}
-                </View>
-              ),
-            )}
+              {/* Data rows */}
+              {paddedItems.map((item, idx) =>
+                item ? (
+                  <ItemRow
+                    key={idx}
+                    item={item}
+                    idx={idx}
+                    isGstBill={invoice.isGstBill}
+                  />
+                ) : (
+                  <View
+                    key={idx}
+                    style={idx % 2 === 1 ? S.tableRowAlt : S.tableRow}
+                  >
+                    {COL_WIDTHS.map((w, i) => (
+                      <TableCell
+                        key={i}
+                        width={w}
+                        isLast={i === COL_WIDTHS.length - 1}
+                      >
+                        {" "}
+                      </TableCell>
+                    ))}
+                  </View>
+                ),
+              )}
+            </View>
           </View>
 
           {/* ⑤ TOTALS + WORDS */}
@@ -654,9 +719,7 @@ export default function InvoiceDocument({ invoice }) {
               ))}
               <View style={S.grandTotalRow}>
                 <Text style={S.grandTotalLabel}>Grand Total</Text>
-                <Text style={S.grandTotalValue}>
-                  {"\u20B9"} {fmt(grandTotal)}
-                </Text>
+                <Text style={S.grandTotalValue}>{fmt(grandTotal)}</Text>
               </View>
             </View>
           </View>
@@ -673,14 +736,30 @@ export default function InvoiceDocument({ invoice }) {
             </Text>
           </View>
 
-          {/* ⑦ BANK + SIGNATURE */}
+          {/* ⑦ E.&O.E. (Errors and Omissions Excepted) */}
+          <View style={[S.eoeSection, S.divider]}>
+            <Text style={S.eoeTitle}>E.&O.E.</Text>
+            <Text style={S.eoeText}>Errors and Omissions Excepted.</Text>
+          </View>
+
+          {/* ⑧ BANK + SIGNATURE + QR */}
           <View style={[S.splitRow, S.divider]}>
             <View style={S.splitLeft55}>
-              <BankRow label="Bank Name" value={bank.bank_name} />
-              <BankRow label="Branch" value={bank.branch_name} />
-              <BankRow label="Account No" value={bank.account_number} />
-              <BankRow label="IFSC Code" value={bank.ifsc_code} />
-              <BankRow label="A/C Holder" value={bank.account_holder} />
+              <Text style={[S.sectionLabel, { marginBottom: 4 }]}>
+                Account Details
+              </Text>
+              <View style={S.bankDetailsRow}>
+                <View style={S.bankDetailsCol}>
+                  <BankRow label="A/C Holder" value={bank.account_holder} />
+                  <BankRow label="Account No" value={bank.account_number} />
+                  <BankRow label="IFSC" value={bank.ifsc_code} />
+                  <BankRow label="Branch" value={bank.branch_name} />
+                  <BankRow label="Bank Name" value={bank.bank_name} />
+                </View>
+                <View style={S.qrWrapper}>
+                  <Image style={S.qrImage} src={assetUrl("/gpay-qr.png")} />
+                </View>
+              </View>
             </View>
             <View style={S.splitRight45}>
               <Text style={S.forText}>For {biz.business_name}</Text>
@@ -689,9 +768,15 @@ export default function InvoiceDocument({ invoice }) {
             </View>
           </View>
 
-          {/* ⑧ FOOTER */}
+          {/* ⑨ FOOTER */}
           <View style={[S.footer, S.divider]}>
             <Text style={S.footerText}>{decl.thank_you_note}</Text>
+            <Text
+              style={S.footerText}
+              render={({ pageNumber, totalPages }) =>
+                `Page ${pageNumber} of ${totalPages}`
+              }
+            />
           </View>
         </View>
       </Page>

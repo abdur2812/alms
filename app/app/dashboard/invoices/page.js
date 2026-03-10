@@ -313,17 +313,24 @@ export default function InvoicesPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full border ${
-                            invoice.billType === "credit"
-                              ? "bg-red-50 text-red-700 border-red-100"
-                              : "bg-green-50 text-green-700 border-green-100"
-                          }`}
-                        >
-                          {invoice.billType === "credit"
-                            ? "Credit Bill"
-                            : "Paid Bill"}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full border ${
+                              invoice.billType === "credit"
+                                ? "bg-red-50 text-red-700 border-red-100"
+                                : "bg-green-50 text-green-700 border-green-100"
+                            }`}
+                          >
+                            {invoice.billType === "credit"
+                              ? "Credit Bill"
+                              : "Paid Bill"}
+                          </span>
+                          {!invoice.isGstBill && (
+                            <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+                              Estimate
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <div className="flex justify-end space-x-2">

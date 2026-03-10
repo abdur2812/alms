@@ -235,18 +235,19 @@ export default function NewInvoicePage() {
   };
 
   const handleProductKeyDown = (e) => {
-    if (
-      e.key === "Enter" &&
-      productAutofill &&
-      productAutofill !== itemForm.name
-    ) {
+    if (e.key !== "Enter") return;
+
+    const value = e.currentTarget.value.trim();
+    if (!value) return;
+
+    // Always base auto-complete on the actual text in the input
+    const matchingProducts = products.filter((product) =>
+      product.name.toLowerCase().startsWith(value.toLowerCase()),
+    );
+
+    if (matchingProducts.length > 0) {
       e.preventDefault();
-      const matchingProduct = products.find(
-        (p) => p.name.toLowerCase() === productAutofill.toLowerCase(),
-      );
-      if (matchingProduct) {
-        handleProductSelect(matchingProduct._id);
-      }
+      handleProductSelect(matchingProducts[0]._id);
     }
   };
 
@@ -377,21 +378,19 @@ export default function NewInvoicePage() {
   };
 
   const handleCustomerKeyDown = (e) => {
-    if (
-      e.key === "Enter" &&
-      customerAutofill &&
-      customerAutofill !== customerDetails.name
-    ) {
+    if (e.key !== "Enter") return;
+
+    const value = e.currentTarget.value.trim();
+    if (!value) return;
+
+    // Always base auto-complete on the actual text in the input
+    const matchingCustomers = customers.filter((customer) =>
+      customer.name.toLowerCase().startsWith(value.toLowerCase()),
+    );
+
+    if (matchingCustomers.length > 0) {
       e.preventDefault();
-      const matchingCustomer = customers.find(
-        (c) => c.name.toLowerCase() === customerAutofill.toLowerCase(),
-      );
-      if (matchingCustomer) {
-        handleCustomerSelect(matchingCustomer._id);
-      }
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      // Handle arrow navigation if needed
+      handleCustomerSelect(matchingCustomers[0]._id);
     }
   };
 
@@ -629,23 +628,7 @@ export default function NewInvoicePage() {
                       required
                       className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 bg-gray-50/50 text-gray-900 placeholder-gray-400 transition-all duration-200"
                     />
-                    {customerAutofill &&
-                      customerAutofill
-                        .toLowerCase()
-                        .startsWith(customerDetails.name.toLowerCase()) && (
-                        <div className="absolute inset-0 pointer-events-none flex items-end pb-2.5 pl-4">
-                          <span className="text-sm text-gray-900">
-                            <span className="invisible">
-                              {customerDetails.name}
-                            </span>
-                            <span className="text-gray-300">
-                              {customerAutofill.slice(
-                                customerDetails.name.length,
-                              )}
-                            </span>
-                          </span>
-                        </div>
-                      )}
+                    {/* Inline preview removed to avoid visual misalignment */}
                   </div>
                   <div
                     className={`absolute top-full left-0 right-0 z-20 transition-all duration-200 ${showCustomerDropdown && customerDetails.name && customers.filter((c) => c.name.toLowerCase().includes(customerDetails.name.toLowerCase())).length > 0 ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}
@@ -921,21 +904,7 @@ export default function NewInvoicePage() {
                           autoComplete="off"
                           className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 bg-white text-gray-900 placeholder-gray-400 transition-all duration-200"
                         />
-                        {productAutofill &&
-                          productAutofill
-                            .toLowerCase()
-                            .startsWith(itemForm.name.toLowerCase()) && (
-                            <div className="absolute inset-0 pointer-events-none flex items-end pb-2.5 pl-4">
-                              <span className="text-sm">
-                                <span className="invisible">
-                                  {itemForm.name}
-                                </span>
-                                <span className="text-gray-300">
-                                  {productAutofill.slice(itemForm.name.length)}
-                                </span>
-                              </span>
-                            </div>
-                          )}
+                        {/* Inline preview removed to avoid visual misalignment */}
                         <div
                           className={`absolute top-full left-0 right-0 z-30 transition-all duration-200 ${showProductDropdown && itemForm.name && products.filter((p) => p.name.toLowerCase().includes(itemForm.name.toLowerCase())).length > 0 ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}
                         >

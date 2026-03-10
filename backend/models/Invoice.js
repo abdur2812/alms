@@ -188,8 +188,9 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
 
   const fiscalYearEnd = fiscalYearStart + 1;
 
-  // Format fiscal year as 2526 (25-26)
-  const fiscalYearLabel = `${String(fiscalYearStart).slice(-2)}${String(fiscalYearEnd).slice(-2)}`;
+  // Format fiscal year as 26-27 (for ALMS 0001/26-27)
+  const fyStartLabel = String(fiscalYearStart).slice(-2);
+  const fyEndLabel = String(fiscalYearEnd).slice(-2);
 
   // Count invoices created in current fiscal year
   const fiscalYearStartDate = new Date(fiscalYearStart, 3, 1); // April 1
@@ -204,7 +205,7 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
 
   const sequenceNumber = String(count + 1).padStart(4, "0");
 
-  return `ALMS${sequenceNumber}-${fiscalYearLabel}`;
+  return `ALMS ${sequenceNumber}/${fyStartLabel}-${fyEndLabel}`;
 };
 
 // Post-save hook to handle stock management when status changes to 'Paid'
