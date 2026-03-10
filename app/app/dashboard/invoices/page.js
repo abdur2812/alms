@@ -26,6 +26,7 @@ export default function InvoicesPage() {
   const [billTypeFilter, setBillTypeFilter] = useState("");
   const [customerFilter, setCustomerFilter] = useState("");
   const [error, setError] = useState("");
+  const [converting, setConverting] = useState(null);
 
   useEffect(() => {
     // Read URL parameters
@@ -68,6 +69,22 @@ export default function InvoicesPage() {
     } catch (err) {
       alert("Failed to delete invoice");
       console.error(err);
+    }
+  };
+
+  const handleConvertToTaxInvoice = async (id) => {
+    if (
+      !confirm("Convert this Estimate to a Tax Invoice? This cannot be undone.")
+    )
+      return;
+    setConverting(id);
+    try {
+      await invoicesAPI.update(id, { isGstBill: true });
+      fetchInvoices();
+    } catch (err) {
+      alert("Failed to convert. Please try again.");
+    } finally {
+      setConverting(null);
     }
   };
 
@@ -299,7 +316,9 @@ export default function InvoicesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-gray-900">
-                          {invoice.customerId?.name || "Deleted Customer"}
+                          {invoice.customerId?.name ||
+                            invoice.customerData?.name ||
+                            "Deleted Customer"}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -334,6 +353,18 @@ export default function InvoicesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <div className="flex justify-end space-x-2">
+                          {!invoice.isGstBill && (
+                            <button
+                              onClick={() =>
+                                handleConvertToTaxInvoice(invoice._id)
+                              }
+                              disabled={converting === invoice._id}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors duration-200 disabled:opacity-50"
+                              title="Convert to Tax Invoice"
+                            >
+                              <FiFileText className="h-4 w-4" />
+                            </button>
+                          )}
                           <Link
                             href={`/dashboard/invoices/${invoice._id}/view`}
                             className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200"

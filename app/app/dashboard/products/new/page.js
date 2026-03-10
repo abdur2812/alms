@@ -62,7 +62,7 @@ export default function NewProductPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
       <PageHeader
         title="Add New Product"
         subtitle="Create a new product with all details"

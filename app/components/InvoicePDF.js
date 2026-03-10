@@ -297,7 +297,12 @@ const S = StyleSheet.create({
   bankValue: { fontSize: 10, flex: 1, color: "#000000" },
   bankDetailsRow: { flexDirection: "row", alignItems: "flex-start" },
   bankDetailsCol: { flex: 1 },
-  qrWrapper: { width: 90, alignItems: "center", justifyContent: "center" },
+  qrWrapper: {
+    width: 90,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    alignSelf: "flex-start",
+  },
   qrImage: { width: 80, height: 80 },
   forText: {
     fontFamily: "Helvetica-Bold",
@@ -745,11 +750,11 @@ export default function InvoiceDocument({ invoice }) {
           {/* ⑧ BANK + SIGNATURE + QR */}
           <View style={[S.splitRow, S.divider]}>
             <View style={S.splitLeft55}>
-              <Text style={[S.sectionLabel, { marginBottom: 4 }]}>
-                Account Details
-              </Text>
-              <View style={S.bankDetailsRow}>
-                <View style={S.bankDetailsCol}>
+              <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[S.sectionLabel, { marginBottom: 4 }]}>
+                    Account Details
+                  </Text>
                   <BankRow label="A/C Holder" value={bank.account_holder} />
                   <BankRow label="Account No" value={bank.account_number} />
                   <BankRow label="IFSC" value={bank.ifsc_code} />

@@ -16,7 +16,7 @@ import {
   FiSave,
 } from "react-icons/fi";
 import Link from "next/link";
-import { Dropdown } from "@/components/UI";
+import { Dropdown, NumberInput } from "@/components/UI";
 
 export default function NewInvoicePage() {
   const router = useRouter();
@@ -954,51 +954,39 @@ export default function NewInvoicePage() {
                   </div>
 
                   <div className="grid grid-cols-4 gap-3 items-end">
-                    <div>
-                      <label className="block text-xs font-bold text-purple-600/80 uppercase tracking-widest mb-1.5">
-                        Qty
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={itemForm.quantity}
-                        onChange={(e) =>
-                          handleItemFormChange("quantity", e.target.value)
-                        }
-                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 bg-white text-gray-900 transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-purple-600/80 uppercase tracking-widest mb-1.5">
-                        Price (₹ incl. GST)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={itemForm.unitPrice}
-                        onChange={(e) =>
-                          handleItemFormChange("unitPrice", e.target.value)
-                        }
-                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 bg-white text-gray-900 transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-purple-600/80 uppercase tracking-widest mb-1.5">
-                        GST %
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        value={itemForm.gst}
-                        onChange={(e) =>
-                          handleItemFormChange("gst", e.target.value)
-                        }
-                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 bg-white text-gray-900 transition-all duration-200"
-                      />
-                    </div>
+                    <NumberInput
+                      label="Qty"
+                      name="quantity"
+                      min={1}
+                      step={1}
+                      value={itemForm.quantity}
+                      onChange={(e) =>
+                        handleItemFormChange("quantity", e.target.value)
+                      }
+                    />
+                    <NumberInput
+                      label="Price (₹)"
+                      name="unitPrice"
+                      min={0}
+                      step={0.01}
+                      prefix="₹"
+                      placeholder="0.00"
+                      value={itemForm.unitPrice}
+                      onChange={(e) =>
+                        handleItemFormChange("unitPrice", e.target.value)
+                      }
+                    />
+                    <NumberInput
+                      label="GST %"
+                      name="gst"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      value={itemForm.gst}
+                      onChange={(e) =>
+                        handleItemFormChange("gst", e.target.value)
+                      }
+                    />
                     <div className="flex gap-2">
                       <button
                         type="button"

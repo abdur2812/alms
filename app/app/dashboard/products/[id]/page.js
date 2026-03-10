@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import { productsAPI } from "@/lib/api";
 import { FiArrowLeft } from "react-icons/fi";
 import Link from "next/link";
-import { NumberInput } from "@/components/UI";
+import {
+  PageHeader,
+  Card,
+  CardBody,
+  Button,
+  NumberInput,
+  Input,
+} from "@/components/UI";
 
 export default function EditProductPage({ params }) {
   const { id } = use(params);
@@ -77,7 +84,7 @@ export default function EditProductPage({ params }) {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading product...</p>
@@ -87,145 +94,115 @@ export default function EditProductPage({ params }) {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <Link
-          href="/dashboard/products"
-          className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
-        >
-          <FiArrowLeft className="mr-2" />
-          Back to Products
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">Edit Product</h1>
-      </div>
+    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+      <PageHeader
+        title="Edit Product"
+        subtitle="Update product details and stock"
+        action={
+          <Link href="/dashboard/products">
+            <Button variant="secondary" size="md">
+              <FiArrowLeft className="mr-2" />
+              Back to Products
+            </Button>
+          </Link>
+        }
+      />
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl animate-shake">
           {error}
         </div>
       )}
 
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label
-                htmlFor="name"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Product Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
+      <Card className="animate-fadeIn">
+        <CardBody>
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <Input
+                label="Product Name"
                 name="name"
-                id="name"
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="Enter product name"
+                containerClassName="sm:col-span-2"
               />
-            </div>
 
-            <div className="sm:col-span-2">
-              <label
-                htmlFor="description"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Description
-              </label>
-              <textarea
-                name="description"
-                id="description"
-                rows={3}
-                value={formData.description}
+              <NumberInput
+                label="GST (%)"
+                name="gst"
+                min="0"
+                max="100"
+                step="0.01"
+                value={formData.gst}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                required
               />
-            </div>
 
-            <NumberInput
-              label="GST (%)"
-              name="gst"
-              min="0"
-              max="100"
-              step="0.01"
-              value={formData.gst}
-              onChange={handleChange}
-              required
-            />
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  rows={3}
+                  value={formData.description}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900"
+                  placeholder="Enter product description"
+                />
+              </div>
 
-            <div>
-              <label
-                htmlFor="hsnCode"
-                className="block text-sm font-medium text-gray-700"
-              >
-                HSN Code
-              </label>
-              <input
-                type="text"
+              <Input
+                label="HSN Code"
                 name="hsnCode"
-                id="hsnCode"
                 value={formData.hsnCode}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="e.g., 2710"
               />
-            </div>
 
-            <div>
-              <label
-                htmlFor="partNo"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Part Number
-              </label>
-              <input
-                type="text"
+              <Input
+                label="Part Number"
                 name="partNo"
-                id="partNo"
                 value={formData.partNo}
                 onChange={handleChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-900 bg-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="e.g., ABC123"
+              />
+
+              <NumberInput
+                label="Price (₹)"
+                name="price"
+                min="0"
+                step="0.01"
+                value={formData.price}
+                onChange={handleChange}
+                prefix="₹"
+                required
+              />
+
+              <NumberInput
+                label="Stock Quantity"
+                name="stockQuantity"
+                min="0"
+                value={formData.stockQuantity}
+                onChange={handleChange}
+                required
               />
             </div>
 
-            <NumberInput
-              label="Price (₹)"
-              name="price"
-              min="0"
-              step="0.01"
-              value={formData.price}
-              onChange={handleChange}
-              prefix="₹"
-              required
-            />
-
-            <NumberInput
-              label="Stock Quantity"
-              name="stockQuantity"
-              min="0"
-              value={formData.stockQuantity}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="mt-6 flex justify-end space-x-3">
-            <Link
-              href="/dashboard/products"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              Cancel
-            </Link>
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
-        </form>
-      </div>
+            <div className="mt-8 flex justify-end space-x-3">
+              <Link href="/dashboard/products">
+                <Button variant="secondary" type="button">
+                  Cancel
+                </Button>
+              </Link>
+              <Button type="submit" disabled={saving} variant="primary">
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
     </div>
   );
 }
