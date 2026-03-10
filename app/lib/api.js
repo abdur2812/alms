@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "https://localhost:3000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -66,6 +67,7 @@ export const invoicesAPI = {
   getStats: () => api.get("/api/invoices/stats/summary"),
   getByDateRange: (params) =>
     api.get("/api/invoices/reports/date-range", { params }),
+  previewNumber: () => api.get("/api/invoices/preview-number"),
 };
 
 export default api;

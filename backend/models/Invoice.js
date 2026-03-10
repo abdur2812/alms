@@ -95,10 +95,19 @@ const invoiceSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isIgst: {
+      type: Boolean,
+      default: false,
+    },
     billType: {
       type: String,
       enum: ["credit", "pay"],
       default: "pay",
+    },
+    vehicleNumber: {
+      type: String,
+      trim: true,
+      default: "",
     },
     invoiceNumber: {
       type: String,

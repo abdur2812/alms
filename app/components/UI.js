@@ -329,9 +329,15 @@ export function NumberInput({
 
   const handleInputChange = (e) => {
     const inputValue = e.target.value;
+    const numericValue = parseFloat(inputValue);
+    const numericMin = parseFloat(min);
+    const numericMax = parseFloat(max);
     if (
       inputValue === "" ||
-      (!isNaN(inputValue) && inputValue >= min && inputValue <= max)
+      inputValue === "-" ||
+      (!isNaN(numericValue) &&
+        numericValue >= numericMin &&
+        numericValue <= numericMax)
     ) {
       onChange(e);
     }

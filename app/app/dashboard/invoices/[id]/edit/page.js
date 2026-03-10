@@ -4,17 +4,16 @@ import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { invoicesAPI, customersAPI, productsAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
-import { FiPlus, FiTrash2, FiFileText } from "react-icons/fi";
-import Link from "next/link";
 import {
-  PageHeader,
-  Card,
-  CardBody,
-  Input,
-  Button,
-  NumberInput,
-  Dropdown,
-} from "@/components/UI";
+  FiPlus,
+  FiTrash2,
+  FiUser,
+  FiShoppingCart,
+  FiCreditCard,
+  FiSave,
+} from "react-icons/fi";
+import Link from "next/link";
+import { Dropdown, NumberInput } from "@/components/UI";
 
 export default function FullEditInvoicePage({ params }) {
   const { id } = use(params);
@@ -39,6 +38,7 @@ export default function FullEditInvoicePage({ params }) {
     },
     items: [],
     isGstBill: true,
+    isIgst: false,
     billType: "pay",
   });
 
@@ -112,6 +112,7 @@ export default function FullEditInvoicePage({ params }) {
           hsnCode: item.hsnCode || "",
         })),
         isGstBill: invoice.isGstBill !== undefined ? invoice.isGstBill : true,
+        isIgst: invoice.isIgst || false,
         billType: invoice.billType || "pay",
       });
       setLoading(false);
@@ -269,6 +270,8 @@ export default function FullEditInvoicePage({ params }) {
           gst: parseFloat(item.gst),
           hsnCode: item.hsnCode,
         })),
+        isGstBill: formData.isGstBill,
+        isIgst: formData.isIgst,
         billType: formData.billType,
       };
 
@@ -283,128 +286,198 @@ export default function FullEditInvoicePage({ params }) {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading invoice...</p>
+      <div className="max-w-7xl mx-auto px-4 py-5">
+        <div className="text-center py-16">
+          <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto" />
+          <p className="mt-4 text-sm text-gray-500 font-medium">
+            Loading invoice...
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
-      <PageHeader
-        title="Edit Invoice"
-        subtitle="Update customer details, products, and invoice settings"
-        backLink="/dashboard/invoices"
-      />
+    <div className="max-w-7xl mx-auto px-4 py-5 space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <Link
+          href="/dashboard/invoices"
+          className="flex items-center gap-1 text-sm text-indigo-400 hover:text-indigo-600 transition-all duration-200 group font-medium"
+        >
+          <span className="group-hover:-translate-x-0.5 transition-transform duration-200 inline-block">
+            ←
+          </span>{" "}
+          Invoices
+        </Link>
+        <span className="text-gray-300">/</span>
+        <h1 className="text-base font-black bg-linear-to-r from-indigo-700 to-violet-600 bg-clip-text text-transparent tracking-tight">
+          Edit Invoice
+        </h1>
+      </div>
 
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg animate-shake">
+        <div className="p-3 bg-red-50 border border-red-200/80 text-red-600 rounded-xl text-sm flex items-start gap-2">
+          <span className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 shrink-0" />
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            {/* Customer Details */}
-            <Card>
-              <CardBody>
-                <h3 className="text-lg font-semibold text-gray-900 mb-6">
-                  Customer Details
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* ── LEFT COLUMN ── */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* ── Customer Card ── */}
+            <div className="rounded-2xl overflow-hidden shadow-xl shadow-blue-100/60 border border-blue-100/80 bg-white/80 backdrop-blur-sm">
+              <div className="bg-linear-to-r from-blue-500 to-indigo-600 px-5 py-3 flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                  <FiUser className="h-4 w-4 text-white" />
+                </div>
+                <h3 className="text-sm font-semibold text-white tracking-wide">
+                  Customer Information
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Customer Name"
-                    name="name"
-                    value={formData.customerData.name}
-                    onChange={handleCustomerDataChange}
-                    placeholder="Enter customer name"
-                    required
-                  />
-                  <Input
-                    label="Phone"
-                    name="phone"
-                    value={formData.customerData.phone}
-                    onChange={handleCustomerDataChange}
-                    placeholder="Phone number"
-                  />
-                  <Input
-                    label="GST Number"
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-indigo-500/80 uppercase tracking-widest mb-1.5">
+                      Customer Name *
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.customerData.name}
+                      onChange={handleCustomerDataChange}
+                      placeholder="Enter customer name"
+                      required
+                      className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 bg-gray-50/50 text-gray-900 placeholder-gray-400 transition-all duration-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-indigo-500/80 uppercase tracking-widest mb-1.5">
+                      Phone
+                    </label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.customerData.phone}
+                      onChange={handleCustomerDataChange}
+                      placeholder="Phone number"
+                      className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 bg-gray-50/50 text-gray-900 placeholder-gray-400 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-indigo-500/80 uppercase tracking-widest mb-1.5">
+                    GST Number
+                  </label>
+                  <input
+                    type="text"
                     name="gstNumber"
                     value={formData.customerData.gstNumber}
                     onChange={handleCustomerDataChange}
-                    placeholder="GST Number"
+                    placeholder="29ABCDE1234F1Z5"
+                    className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 bg-gray-50/50 text-gray-900 placeholder-gray-400 transition-all duration-200 uppercase"
                   />
-                  <Input
-                    label="Company Address"
+                </div>
+                <div className="rounded-xl border border-blue-100 bg-blue-50/30 p-3.5 space-y-2.5">
+                  <div className="text-xs font-bold text-blue-600 uppercase tracking-widest">
+                    Billing Address
+                  </div>
+                  <input
+                    type="text"
                     name="address.companyAddress"
                     value={formData.customerData.address.companyAddress}
                     onChange={handleCustomerDataChange}
-                    placeholder="Company address"
+                    placeholder="Street / Company"
+                    className="w-full px-3 py-2 text-sm border border-blue-100 rounded-lg focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white text-gray-900 placeholder-gray-400 transition-all duration-200"
                   />
-                  <Input
-                    label="City"
-                    name="address.city"
-                    value={formData.customerData.address.city}
-                    onChange={handleCustomerDataChange}
-                    placeholder="City"
-                  />
-                  <Input
-                    label="State"
-                    name="address.state"
-                    value={formData.customerData.address.state}
-                    onChange={handleCustomerDataChange}
-                    placeholder="State"
-                  />
-                  <Input
-                    label="Postal Code"
-                    name="address.postalCode"
-                    value={formData.customerData.address.postalCode}
-                    onChange={handleCustomerDataChange}
-                    placeholder="Postal code"
-                  />
-                  <Input
-                    label="Country"
-                    name="address.country"
-                    value={formData.customerData.address.country}
-                    onChange={handleCustomerDataChange}
-                    placeholder="Country"
-                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      name="address.city"
+                      value={formData.customerData.address.city}
+                      onChange={handleCustomerDataChange}
+                      placeholder="City"
+                      className="w-full px-3 py-2 text-sm border border-blue-100 rounded-lg focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white text-gray-900 placeholder-gray-400 transition-all duration-200"
+                    />
+                    <input
+                      type="text"
+                      name="address.state"
+                      value={formData.customerData.address.state}
+                      onChange={handleCustomerDataChange}
+                      placeholder="State"
+                      className="w-full px-3 py-2 text-sm border border-blue-100 rounded-lg focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white text-gray-900 placeholder-gray-400 transition-all duration-200"
+                    />
+                    <input
+                      type="text"
+                      name="address.postalCode"
+                      value={formData.customerData.address.postalCode}
+                      onChange={handleCustomerDataChange}
+                      placeholder="PIN"
+                      className="w-full px-3 py-2 text-sm border border-blue-100 rounded-lg focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-white text-gray-900 placeholder-gray-400 transition-all duration-200"
+                    />
+                  </div>
                 </div>
-              </CardBody>
-            </Card>
+              </div>
+            </div>
 
-            {/* Invoice Items */}
-            <Card>
-              <CardBody>
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">
+            {/* ── Items Card ── */}
+            <div className="rounded-2xl overflow-hidden shadow-xl shadow-purple-100/60 border border-purple-100/80 bg-white/80 backdrop-blur-sm">
+              <div className="bg-linear-to-r from-violet-500 to-purple-600 px-5 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                    <FiShoppingCart className="h-4 w-4 text-white" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white tracking-wide">
                     Invoice Items
                   </h3>
-                  <Button
-                    type="button"
-                    onClick={addItem}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    <FiPlus className="mr-2" />
-                    Add Item
-                  </Button>
                 </div>
-
-                <div className="space-y-4">
-                  {formData.items.map((item, index) => (
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="flex items-center gap-1.5 py-1.5 px-3 text-xs font-bold rounded-lg text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all duration-200"
+                >
+                  <FiPlus className="h-3.5 w-3.5" /> Add Item
+                </button>
+              </div>
+              <div className="p-5 space-y-3">
+                {formData.items.length === 0 ? (
+                  <div className="text-center py-10">
+                    <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-linear-to-br from-violet-100 to-purple-100 flex items-center justify-center shadow-inner">
+                      <FiShoppingCart className="h-7 w-7 text-purple-300" />
+                    </div>
+                    <p className="text-sm font-semibold text-gray-400">
+                      No items
+                    </p>
+                  </div>
+                ) : (
+                  formData.items.map((item, index) => (
                     <div
                       key={index}
-                      className="p-4 bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl border border-gray-200 space-y-4"
+                      className="rounded-2xl p-4 border-2 border-gray-100 bg-linear-to-br from-slate-50/80 to-gray-50 space-y-3 hover:border-purple-200 transition-all duration-200"
                     >
-                      <div className="flex items-end gap-4">
-                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between">
+                        <span className="w-6 h-6 rounded-full bg-linear-to-br from-violet-400 to-purple-500 text-white flex items-center justify-center font-bold text-xs">
+                          {index + 1}
+                        </span>
+                        {formData.items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-150"
+                            title="Remove item"
+                          >
+                            <FiTrash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="col-span-2">
+                          <label className="block text-xs font-bold text-purple-600/80 uppercase tracking-widest mb-1.5">
+                            Product / Service
+                          </label>
                           <Dropdown
-                            label="Product (optional)"
                             value={item.productId || ""}
                             onChange={(e) =>
                               handleItemChange(
@@ -414,160 +487,297 @@ export default function FullEditInvoicePage({ params }) {
                               )
                             }
                             placeholder="Select product"
-                            options={products.map((product) => ({
-                              value: product._id,
-                              label: `${product.name} (${formatINR(product.price)})`,
+                            options={products.map((p) => ({
+                              value: p._id,
+                              label: `${p.name} (${formatINR(p.price)})`,
                             }))}
                             onSearch={searchProducts}
                           />
-                          <Input
-                            label="Product Name"
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-purple-600/80 uppercase tracking-widest mb-1.5">
+                            HSN Code
+                          </label>
+                          <input
                             type="text"
-                            value={item.name}
+                            value={item.hsnCode}
                             onChange={(e) =>
-                              handleItemChange(index, "name", e.target.value)
+                              handleItemChange(index, "hsnCode", e.target.value)
                             }
-                            placeholder="Enter product name"
+                            placeholder="Optional"
+                            className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 bg-white text-gray-900 placeholder-gray-400 transition-all duration-200"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-purple-600/80 uppercase tracking-widest mb-1.5">
+                          Product Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={item.name}
+                          onChange={(e) =>
+                            handleItemChange(index, "name", e.target.value)
+                          }
+                          placeholder="Enter product name"
+                          required
+                          className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 bg-white text-gray-900 placeholder-gray-400 transition-all duration-200"
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-purple-600/80 uppercase tracking-widest mb-1.5">
+                            Qty
+                          </label>
+                          <NumberInput
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "quantity",
+                                e.target.value,
+                              )
+                            }
                             required
                           />
                         </div>
-                        {formData.items.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeItem(index)}
-                            className="h-10 px-3 flex items-center justify-center text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
-                            title="Remove item"
-                          >
-                            <FiTrash2 />
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <NumberInput
-                          label="Quantity"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) =>
-                            handleItemChange(index, "quantity", e.target.value)
-                          }
-                          required
-                        />
-                        <NumberInput
-                          label="Unit Price (₹)"
-                          min="0"
-                          step="0.01"
-                          value={item.unitPrice}
-                          onChange={(e) =>
-                            handleItemChange(index, "unitPrice", e.target.value)
-                          }
-                          prefix="₹"
-                          required
-                        />
-                        <NumberInput
-                          label="GST (%)"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={item.gst}
-                          onChange={(e) =>
-                            handleItemChange(index, "gst", e.target.value)
-                          }
-                          required
-                        />
-                        <Input
-                          label="HSN Code"
-                          type="text"
-                          value={item.hsnCode}
-                          onChange={(e) =>
-                            handleItemChange(index, "hsnCode", e.target.value)
-                          }
-                          placeholder="HSN"
-                        />
+                        <div>
+                          <label className="block text-xs font-bold text-purple-600/80 uppercase tracking-widest mb-1.5">
+                            Price (₹ incl. GST)
+                          </label>
+                          <NumberInput
+                            min="0"
+                            step="0.01"
+                            value={item.unitPrice}
+                            onChange={(e) =>
+                              handleItemChange(
+                                index,
+                                "unitPrice",
+                                e.target.value,
+                              )
+                            }
+                            prefix="₹"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-purple-600/80 uppercase tracking-widest mb-1.5">
+                            GST %
+                          </label>
+                          <NumberInput
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value={item.gst}
+                            onChange={(e) =>
+                              handleItemChange(index, "gst", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardBody>
-            </Card>
-
-            {/* Invoice Settings */}
-            <Card>
-              <CardBody>
-                <h3 className="text-lg font-semibold text-gray-900 mb-6">
-                  Invoice Settings
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Dropdown
-                    label="Bill Type"
-                    name="billType"
-                    value={formData.billType}
-                    onChange={(e) => {
-                      setFormData({
-                        ...formData,
-                        billType: e.target.value,
-                      });
-                    }}
-                    placeholder="Select bill type"
-                    options={[
-                      { value: "pay", label: "Paid Bill" },
-                      { value: "credit", label: "Credit Bill" },
-                    ]}
-                    required
-                  />
-                </div>
-              </CardBody>
-            </Card>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Summary Sidebar */}
+          {/* ── RIGHT COLUMN: Summary Sidebar ── */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-6">
-              <CardBody>
-                <h3 className="text-lg font-semibold text-gray-900 mb-6">
-                  Summary
+            <div className="rounded-2xl overflow-hidden shadow-2xl shadow-indigo-200/50 border border-indigo-100/80 bg-white/90 backdrop-blur-sm sticky top-4">
+              {/* Sidebar gradient header */}
+              <div className="bg-linear-to-r from-indigo-600 via-violet-600 to-purple-600 px-5 py-3 flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                  <FiCreditCard className="h-4 w-4 text-white" />
+                </div>
+                <h3 className="text-sm font-semibold text-white">
+                  Invoice Summary
                 </h3>
+              </div>
 
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal:</span>
-                    <span className="font-semibold text-gray-900">
+              {/* Totals */}
+              <div className="p-4 bg-linear-to-br from-indigo-50/70 via-violet-50/40 to-purple-50/30">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-500 font-medium">
+                      {formData.isGstBill ? "Base Amount" : "Subtotal"}
+                    </span>
+                    <span className="font-semibold text-gray-800">
                       {formatINR(calculateSubtotal())}
                     </span>
                   </div>
-
-                  {formData.isGstBill && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Total Tax:</span>
-                      <span className="font-semibold text-gray-900">
-                        {formatINR(calculateTax())}
+                  <div className="flex justify-between items-center text-sm">
+                    <span
+                      className={`text-gray-500 font-medium ${!formData.isGstBill ? "opacity-60" : ""}`}
+                    >
+                      GST Total
+                    </span>
+                    <span
+                      className={`font-semibold text-gray-800 ${!formData.isGstBill ? "opacity-60" : ""}`}
+                    >
+                      {formatINR(formData.isGstBill ? calculateTax() : 0)}
+                    </span>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-indigo-100/60">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-bold text-gray-700">
+                        Grand Total
+                      </span>
+                      <span className="text-2xl font-black bg-linear-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+                        {formatINR(calculateTotal())}
                       </span>
                     </div>
-                  )}
+                  </div>
+                </div>
+              </div>
 
-                  <div className="border-t border-gray-200 pt-3 mt-3 flex justify-between">
-                    <span className="text-base font-semibold text-gray-900">
-                      Total:
-                    </span>
-                    <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                      {formatINR(calculateTotal())}
-                    </span>
+              {/* Settings */}
+              <div className="p-4 space-y-4 border-t border-indigo-50">
+                {/* Invoice type */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+                    Invoice Type
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100/80 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData({ ...formData, isGstBill: true })
+                      }
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${
+                        formData.isGstBill
+                          ? "bg-linear-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200 -translate-y-0.5"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      Tax Invoice
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData({ ...formData, isGstBill: false })
+                      }
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${
+                        !formData.isGstBill
+                          ? "bg-linear-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-200 -translate-y-0.5"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      Estimate
+                    </button>
+                  </div>
+                  <div className="h-5 mt-2">
+                    {!formData.isGstBill && (
+                      <p className="text-xs text-amber-600 flex items-center gap-1.5 font-medium">
+                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block shrink-0" />
+                        PDF will say &ldquo;ESTIMATE&rdquo;
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div className="mt-6 space-y-3">
-                  <Button type="submit" disabled={saving} className="w-full">
-                    {saving ? "Saving..." : "Save Changes"}
-                  </Button>
-
-                  <Link href="/dashboard/invoices" className="block">
-                    <Button variant="secondary" className="w-full">
-                      Cancel
-                    </Button>
-                  </Link>
+                {/* IGST toggle */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+                    Tax Mode
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100/80 rounded-xl">
+                    <button
+                      type="button"
+                      disabled={!formData.isGstBill}
+                      onClick={() => {
+                        if (!formData.isGstBill) return;
+                        setFormData({ ...formData, isIgst: false });
+                      }}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        !formData.isIgst
+                          ? "bg-linear-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200 -translate-y-0.5"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      CGST + SGST
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!formData.isGstBill}
+                      onClick={() => {
+                        if (!formData.isGstBill) return;
+                        setFormData({ ...formData, isIgst: true });
+                      }}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        formData.isIgst
+                          ? "bg-linear-to-r from-teal-500 to-emerald-600 text-white shadow-lg shadow-teal-200 -translate-y-0.5"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      IGST
+                    </button>
+                  </div>
+                  <div className="h-5 mt-2">
+                    {formData.isGstBill && formData.isIgst && (
+                      <p className="text-xs text-teal-600 flex items-center gap-1.5 font-medium">
+                        <span className="w-1.5 h-1.5 bg-teal-500 rounded-full inline-block shrink-0" />
+                        Inter-state supply (IGST)
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </CardBody>
-            </Card>
+
+                {/* Payment method */}
+                <Dropdown
+                  label="Payment Method"
+                  name="billType"
+                  value={formData.billType}
+                  onChange={(e) =>
+                    setFormData({ ...formData, billType: e.target.value })
+                  }
+                  placeholder="Select payment method"
+                  options={[
+                    { value: "pay", label: "💵 Cash Bill" },
+                    { value: "credit", label: "🏦 Credit Bill" },
+                  ]}
+                />
+              </div>
+
+              {/* Submit CTA */}
+              <div className="p-4 pt-0 space-y-2.5">
+                <div className="relative group">
+                  <div
+                    className={`absolute -inset-0.5 bg-linear-to-r from-indigo-500 to-violet-600 rounded-2xl blur-sm transition-all duration-300 ${
+                      saving
+                        ? "opacity-20"
+                        : "opacity-60 group-hover:opacity-90"
+                    }`}
+                  />
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="relative w-full flex items-center justify-center gap-2 py-3 px-4 bg-linear-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-sm font-bold rounded-xl shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0"
+                  >
+                    {saving ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{" "}
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <FiSave className="h-4 w-4" /> Save Changes
+                      </>
+                    )}
+                  </button>
+                </div>
+                <Link href="/dashboard/invoices">
+                  <button
+                    type="button"
+                    className="w-full py-2.5 px-4 text-sm font-semibold text-gray-400 border-2 border-gray-100 rounded-xl hover:bg-gray-50 hover:border-gray-200 hover:text-gray-600 transition-all duration-200"
+                  >
+                    Cancel
+                  </button>
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </form>

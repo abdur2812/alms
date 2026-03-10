@@ -91,7 +91,7 @@ app.get("/api", apiInfo);
 
 // Health check — shows DB connection state so you can verify hosted vs local DB
 app.get("/api/health", (req, res) => {
-  const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/test";
+  const uri = process.env.MONGODB_URI;
   const isAtlas = uri.includes("mongodb+srv");
   res.json({
     status: "ok",

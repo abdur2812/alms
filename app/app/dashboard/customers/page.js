@@ -35,12 +35,10 @@ export default function CustomersPage() {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const response = await customersAPI.getAll({
-        page,
-        limit: 10,
-        search,
-        hasCreditInvoices: filterCredit,
-      });
+      const params = { page, limit: 10 };
+      if (search) params.search = search;
+      if (filterCredit) params.hasCreditInvoices = true;
+      const response = await customersAPI.getAll(params);
       setCustomers(response.data.data);
       setTotalPages(response.data.totalPages);
       setError("");
@@ -216,7 +214,7 @@ export default function CustomersPage() {
                           <div className="flex items-center">
                             <div className="h-10 w-10 flex-shrink-0">
                               <div className="h-10 w-10 rounded-full bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                                {customer.name.charAt(0).toUpperCase()}
+                                {customer.name?.charAt(0).toUpperCase() ?? "?"}
                               </div>
                             </div>
                             <div className="ml-4">

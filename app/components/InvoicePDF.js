@@ -5,189 +5,257 @@ import businessConfig from "@/lib/businessConfig";
 const S = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
-    fontSize: 8,
-    padding: 20,
+    fontSize: 10,
+    padding: 18,
     backgroundColor: "#ffffff",
   },
 
-  // Outer wrapper: 1.5pt #555 border on all sides
+  // Outer wrapper — indigo border
   outer: {
-    borderWidth: 1.5,
-    borderColor: "#555555",
+    borderWidth: 2,
+    borderColor: "#3730a3",
     flex: 1,
   },
 
   // ── Section divider (top border on section) ──────────────────────────────
   divider: {
-    borderTopWidth: 0.5,
-    borderTopColor: "#555555",
+    borderTopWidth: 1,
+    borderTopColor: "#c7d2fe",
+  },
+  dividerStrong: {
+    borderTopWidth: 1.5,
+    borderTopColor: "#3730a3",
   },
 
   // ── 2-col split helpers ───────────────────────────────────────────────────
   splitRow: { flexDirection: "row" },
   splitLeft: {
     flex: 1,
-    borderRightWidth: 0.75,
-    borderRightColor: "#555555",
-    padding: 6,
+    borderRightWidth: 1,
+    borderRightColor: "#c7d2fe",
+    padding: 9,
   },
   splitRight: {
     width: "35%",
-    padding: 6,
+    padding: 9,
   },
   splitLeft60: {
     flex: 1,
-    borderRightWidth: 0.75,
-    borderRightColor: "#555555",
-    padding: 6,
+    borderRightWidth: 1,
+    borderRightColor: "#c7d2fe",
+    padding: 9,
   },
   splitRight40: {
     width: "40%",
-    padding: 6,
+    padding: 9,
   },
   splitLeft55: {
     flex: 1,
-    borderRightWidth: 0.75,
-    borderRightColor: "#555555",
-    padding: 6,
+    borderRightWidth: 1,
+    borderRightColor: "#c7d2fe",
+    padding: 9,
   },
   splitRight45: {
     width: "45%",
-    padding: 6,
+    padding: 9,
   },
 
   // ── Header ────────────────────────────────────────────────────────────────
-  headerBg: { backgroundColor: "#f5f5f5" },
+  headerBg: { backgroundColor: "#1e1b4b" },
   bizName: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 18,
-    color: "#111111",
-    marginBottom: 3,
+    fontSize: 22,
+    color: "#ffffff",
+    marginBottom: 4,
   },
-  bizTagline: { fontSize: 7.5, color: "#555555", marginBottom: 4 },
-  bizAddress: { fontSize: 7.5, color: "#333333", marginBottom: 3 },
-  bizPhone: { fontSize: 7.5, color: "#333333" },
-  gstinLabel: { fontSize: 7, color: "#888888", marginBottom: 2 },
-  gstinValue: { fontFamily: "Helvetica-Bold", fontSize: 9 },
-  gstState: { fontSize: 7.5, color: "#555555", marginTop: 6 },
+  bizTagline: { fontSize: 10, color: "#a5b4fc", marginBottom: 5 },
+  bizAddress: { fontSize: 10, color: "#c7d2fe", marginBottom: 2 },
+  bizPhone: { fontSize: 10, color: "#c7d2fe" },
+  gstinLabel: { fontSize: 9, color: "#a5b4fc", marginBottom: 3 },
+  gstinValue: { fontFamily: "Helvetica-Bold", fontSize: 12, color: "#ffffff" },
+  gstState: { fontSize: 9, color: "#a5b4fc", marginTop: 6 },
 
   // ── Title ─────────────────────────────────────────────────────────────────
-  titleSection: { padding: 6, alignItems: "center" },
-  titleText: { fontFamily: "Helvetica-Bold", fontSize: 11, letterSpacing: 4 },
+  titleSection: {
+    padding: 9,
+    alignItems: "center",
+    backgroundColor: "#ede9fe",
+  },
+  titleText: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 15,
+    letterSpacing: 5,
+    color: "#4c1d95",
+  },
 
   // ── Customer ──────────────────────────────────────────────────────────────
-  sectionLabel: { fontSize: 7, color: "#888888", marginBottom: 2 },
-  custName: { fontFamily: "Helvetica-Bold", fontSize: 12, marginBottom: 2 },
-  custDetail: { fontSize: 7.5, marginBottom: 1 },
-  metaRow: { flexDirection: "row", marginBottom: 2 },
-  metaLabel: { fontSize: 7, color: "#888888", width: 55 },
-  metaValue: { fontSize: 8, flex: 1 },
-  metaValueBold: { fontFamily: "Helvetica-Bold", fontSize: 8.5, flex: 1 },
+  sectionLabel: {
+    fontSize: 8,
+    color: "#6366f1",
+    marginBottom: 3,
+    fontFamily: "Helvetica-Bold",
+  },
+  custName: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 14,
+    marginBottom: 3,
+    color: "#1e1b4b",
+  },
+  custDetail: { fontSize: 10, marginBottom: 2, color: "#374151" },
+  metaRow: { flexDirection: "row", marginBottom: 3 },
+  metaLabel: {
+    fontSize: 9,
+    color: "#6366f1",
+    width: 62,
+    fontFamily: "Helvetica-Bold",
+  },
+  metaValue: { fontSize: 10, flex: 1, color: "#111827" },
+  metaValueBold: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 11,
+    flex: 1,
+    color: "#1e1b4b",
+  },
 
   // ── Items table ───────────────────────────────────────────────────────────
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#eeeeee",
-    borderTopWidth: 0.5,
-    borderTopColor: "#cccccc",
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#cccccc",
+    backgroundColor: "#4338ca",
   },
   tableRow: { flexDirection: "row" },
-  tableRowAlt: { flexDirection: "row", backgroundColor: "#fafafa" },
+  tableRowAlt: { flexDirection: "row", backgroundColor: "#eef2ff" },
 
   thCell: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 7.5,
-    paddingVertical: 3,
-    paddingHorizontal: 3,
-    borderRightWidth: 0.4,
-    borderRightColor: "#cccccc",
+    fontSize: 9,
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+    borderRightWidth: 0.6,
+    borderRightColor: "#6366f1",
+    color: "#ffffff",
   },
   tdCell: {
-    fontSize: 7.5,
-    paddingVertical: 3,
-    paddingHorizontal: 3,
-    borderRightWidth: 0.4,
-    borderRightColor: "#cccccc",
+    fontSize: 9.5,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderRightWidth: 0.5,
+    borderRightColor: "#e0e7ff",
+    color: "#1f2937",
   },
   tdLast: {
-    fontSize: 7.5,
-    paddingVertical: 3,
-    paddingHorizontal: 3,
+    fontSize: 9.5,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    color: "#1f2937",
   },
   thLast: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 7.5,
-    paddingVertical: 3,
-    paddingHorizontal: 3,
+    fontSize: 9,
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+    color: "#ffffff",
   },
 
   // ── Totals ─────────────────────────────────────────────────────────────────
-  wordsLabel: { fontSize: 7, color: "#888888", marginBottom: 3 },
-  wordsText: { fontFamily: "Helvetica-Oblique", fontSize: 8, color: "#333333" },
+  wordsLabel: {
+    fontSize: 9,
+    color: "#6366f1",
+    marginBottom: 4,
+    fontFamily: "Helvetica-Bold",
+  },
+  wordsText: {
+    fontFamily: "Helvetica-Oblique",
+    fontSize: 10,
+    color: "#1f2937",
+  },
   totalsRow: {
     flexDirection: "row",
-    borderBottomWidth: 0.3,
-    borderBottomColor: "#dddddd",
-    paddingVertical: 2,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#e0e7ff",
+    paddingVertical: 3,
   },
-  totalsLabel: { flex: 1, fontSize: 8, textAlign: "right", paddingRight: 6 },
-  totalsValue: { fontSize: 8, textAlign: "right", paddingRight: 4 },
+  totalsLabel: {
+    flex: 1,
+    fontSize: 10,
+    textAlign: "right",
+    paddingRight: 8,
+    color: "#374151",
+  },
+  totalsValue: {
+    fontSize: 10,
+    textAlign: "right",
+    paddingRight: 6,
+    color: "#1f2937",
+    fontFamily: "Helvetica-Bold",
+  },
   grandTotalRow: {
     flexDirection: "row",
-    backgroundColor: "#111111",
-    paddingVertical: 3,
+    backgroundColor: "#4338ca",
+    paddingVertical: 6,
   },
   grandTotalLabel: {
     flex: 1,
     fontFamily: "Helvetica-Bold",
-    fontSize: 9,
+    fontSize: 12,
+    color: "#ffffff",
+    textAlign: "right",
+    paddingRight: 8,
+  },
+  grandTotalValue: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 12,
     color: "#ffffff",
     textAlign: "right",
     paddingRight: 6,
   },
-  grandTotalValue: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 9,
-    color: "#ffffff",
-    textAlign: "right",
-    paddingRight: 4,
-  },
+
+  // ── Spacer to push declaration + bank to bottom ───────────────────────────
+  spacer: { flexGrow: 1 },
 
   // ── Declaration ───────────────────────────────────────────────────────────
-  declSection: { backgroundColor: "#fafafa", padding: 6 },
+  declSection: { backgroundColor: "#f5f3ff", padding: 9 },
   declTitle: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 7,
-    color: "#888888",
-    marginBottom: 3,
+    fontSize: 9.5,
+    color: "#4338ca",
+    marginBottom: 4,
   },
-  declText: { fontSize: 7.5, color: "#444444" },
+  declText: { fontSize: 10, color: "#374151" },
 
   // ── Bank + Signature ──────────────────────────────────────────────────────
-  bankRow: { flexDirection: "row", marginBottom: 2 },
-  bankLabel: { fontSize: 7, color: "#888888", width: 55 },
-  bankValue: { fontSize: 7.5, flex: 1 },
+  bankRow: { flexDirection: "row", marginBottom: 3 },
+  bankLabel: {
+    fontSize: 9,
+    color: "#6366f1",
+    width: 62,
+    fontFamily: "Helvetica-Bold",
+  },
+  bankValue: { fontSize: 10, flex: 1, color: "#1f2937" },
   forText: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 8,
+    fontSize: 11,
     textAlign: "center",
-    marginBottom: 30,
+    marginBottom: 35,
+    color: "#1e1b4b",
   },
   sigLine: {
-    borderTopWidth: 0.5,
-    borderTopColor: "#555555",
+    borderTopWidth: 1,
+    borderTopColor: "#4338ca",
     marginHorizontal: 15,
   },
-  sigLabel: { fontSize: 7.5, textAlign: "center", marginTop: 3 },
+  sigLabel: {
+    fontSize: 9,
+    textAlign: "center",
+    marginTop: 4,
+    color: "#374151",
+  },
 
   // ── Footer ────────────────────────────────────────────────────────────────
-  footer: { backgroundColor: "#f5f5f5", padding: 5, alignItems: "center" },
+  footer: { backgroundColor: "#1e1b4b", padding: 7, alignItems: "center" },
   footerText: {
     fontFamily: "Helvetica-Oblique",
-    fontSize: 7.5,
-    color: "#555555",
+    fontSize: 9.5,
+    color: "#a5b4fc",
   },
 });
 
@@ -404,9 +472,13 @@ export default function InvoiceDocument({ invoice }) {
     Object.keys(gstGroups)
       .sort((a, b) => a - b)
       .forEach((rate) => {
-        const half = gstGroups[rate] / 2;
-        gstBreakdownRows.push([`CGST @ ${rate / 2}%`, fmt(half)]);
-        gstBreakdownRows.push([`SGST @ ${rate / 2}%`, fmt(half)]);
+        if (invoice.isIgst) {
+          gstBreakdownRows.push([`IGST @ ${rate}%`, fmt(gstGroups[rate])]);
+        } else {
+          const half = gstGroups[rate] / 2;
+          gstBreakdownRows.push([`CGST @ ${rate / 2}%`, fmt(half)]);
+          gstBreakdownRows.push([`SGST @ ${rate / 2}%`, fmt(half)]);
+        }
       });
   }
 
@@ -449,7 +521,13 @@ export default function InvoiceDocument({ invoice }) {
             <View
               style={[
                 S.splitRight,
-                { alignItems: "center", justifyContent: "center" },
+                {
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderLeftWidth: 1,
+                  borderLeftColor: "#4338ca",
+                  backgroundColor: "#312e81",
+                },
               ]}
             >
               <Text style={S.gstinLabel}>GSTIN</Text>
@@ -458,9 +536,11 @@ export default function InvoiceDocument({ invoice }) {
             </View>
           </View>
 
-          {/* ② TAX INVOICE TITLE */}
+          {/* ② TAX INVOICE / ESTIMATE TITLE */}
           <View style={[S.titleSection, S.divider]}>
-            <Text style={S.titleText}>TAX INVOICE</Text>
+            <Text style={S.titleText}>
+              {invoice.isGstBill ? "TAX INVOICE" : "ESTIMATE"}
+            </Text>
           </View>
 
           {/* ③ CUSTOMER + META */}
@@ -493,6 +573,10 @@ export default function InvoiceDocument({ invoice }) {
               <MetaRow
                 label="GST Bill"
                 value={invoice.isGstBill ? "Yes" : "No"}
+              />
+              <MetaRow
+                label="Vehicle No"
+                value={invoice.vehicleNumber || "-"}
               />
             </View>
           </View>
@@ -543,7 +627,13 @@ export default function InvoiceDocument({ invoice }) {
           </View>
 
           {/* ⑤ TOTALS + WORDS */}
-          <View style={[S.splitRow, S.divider]}>
+          <View
+            style={[
+              S.splitRow,
+              S.divider,
+              { borderBottomWidth: 1.5, borderBottomColor: "#3730a3" },
+            ]}
+          >
             {/* Left: amount in words */}
             <View style={S.splitLeft55}>
               <Text style={S.wordsLabel}>Amount in Words</Text>
@@ -570,6 +660,9 @@ export default function InvoiceDocument({ invoice }) {
               </View>
             </View>
           </View>
+
+          {/* Spacer */}
+          <View style={S.spacer} />
 
           {/* ⑥ DECLARATION */}
           <View style={[S.declSection, S.divider]}>

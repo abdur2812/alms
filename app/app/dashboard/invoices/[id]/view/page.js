@@ -2,7 +2,7 @@
 
 import { use, useState, useEffect } from "react";
 import { invoicesAPI } from "@/lib/api";
-import { FiArrowLeft, FiDownload, FiEdit2 } from "react-icons/fi";
+import { FiArrowLeft, FiDownload, FiEdit2, FiFileText } from "react-icons/fi";
 import Link from "next/link";
 
 export default function ViewInvoicePage({ params }) {
@@ -11,10 +11,10 @@ export default function ViewInvoicePage({ params }) {
   const [pdfComponents, setPdfComponents] = useState(null); // { PDFViewer, InvoiceDoc }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [converting, setConverting] = useState(false);
 
-  useEffect(() => {
-    // Load invoice data + PDF library in parallel
-    Promise.all([
+  const loadInvoice = () => {
+    return Promise.all([
       invoicesAPI.getById(id),
       import("@react-pdf/renderer"),
       import("@/components/InvoicePDF"),
@@ -31,6 +31,10 @@ export default function ViewInvoicePage({ params }) {
         setError(true);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadInvoice();
   }, [id]);
 
   const handleDownload = async () => {
@@ -44,13 +48,34 @@ export default function ViewInvoicePage({ params }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Invoice-${invoice.invoiceNumber || id}.pdf`;
+      a.download = `${invoice.isGstBill ? "Invoice" : "Estimate"}-${invoice.invoiceNumber || id}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
       alert("Download failed. Please try again.");
+    }
+  };
+
+  const handleConvertToTaxInvoice = async () => {
+    if (!invoice || converting) return;
+    if (
+      !confirm("Convert this Estimate to a Tax Invoice? This cannot be undone.")
+    )
+      return;
+    setConverting(true);
+    try {
+      await invoicesAPI.update(id, { isGstBill: true });
+      // Reload the invoice
+      setLoading(true);
+      setPdfComponents(null);
+      setInvoice(null);
+      await loadInvoice();
+    } catch (err) {
+      alert("Failed to convert. Please try again.");
+    } finally {
+      setConverting(false);
     }
   };
 
@@ -68,11 +93,31 @@ export default function ViewInvoicePage({ params }) {
             <FiArrowLeft className="w-4 h-4" /> Back
           </Link>
           <span className="text-gray-300">|</span>
-          <span className="text-sm font-semibold text-gray-700">
-            {invoice ? `Invoice #${invoice.invoiceNumber}` : "Invoice"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-gray-700">
+              {invoice
+                ? `${invoice.isGstBill ? "Invoice" : "Estimate"} #${invoice.invoiceNumber}`
+                : "Invoice"}
+            </span>
+            {invoice && !invoice.isGstBill && (
+              <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200 rounded-full font-medium">
+                Estimate
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Convert to Tax Invoice – only shown for estimates */}
+          {invoice && !invoice.isGstBill && (
+            <button
+              onClick={handleConvertToTaxInvoice}
+              disabled={converting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors"
+            >
+              <FiFileText className="w-3.5 h-3.5" />
+              {converting ? "Converting…" : "Convert to Tax Invoice"}
+            </button>
+          )}
           <Link
             href={`/dashboard/invoices/${id}/edit`}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors"

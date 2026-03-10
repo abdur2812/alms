@@ -3,6 +3,14 @@ const Customer = require("../models/Customer");
 const Product = require("../models/Product");
 const { AppError, asyncHandler } = require("../middleware/errorHandler");
 
+// @desc    Preview next invoice number (without creating)
+// @route   GET /api/invoices/preview-number
+// @access  Public
+exports.previewInvoiceNumber = asyncHandler(async (req, res, next) => {
+  const nextNumber = await Invoice.generateInvoiceNumber();
+  res.status(200).json({ success: true, data: { invoiceNumber: nextNumber } });
+});
+
 // @desc    Get all invoices
 // @route   GET /api/invoices
 // @access  Public
@@ -75,6 +83,7 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     sgstRate,
     igstRate,
     billType,
+    vehicleNumber,
   } = req.body;
 
   // Validate items array
@@ -195,6 +204,7 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     sgstRate: sgstRate || 0,
     igstRate: igstRate || 0,
     billType: billType || "pay",
+    vehicleNumber: vehicleNumber || "",
   };
 
   const invoice = await Invoice.create(invoiceData);
@@ -238,7 +248,8 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/invoices/:id
 // @access  Public
 exports.updateInvoice = asyncHandler(async (req, res, next) => {
-  const { items, taxRate, customerData, billType } = req.body;
+  const { items, taxRate, customerData, billType, isGstBill, vehicleNumber } =
+    req.body;
 
   let invoice = await Invoice.findById(req.params.id);
 
@@ -305,6 +316,8 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
   // Update other fields
   if (taxRate !== undefined) invoice.taxRate = taxRate;
   if (billType) invoice.billType = billType;
+  if (isGstBill !== undefined) invoice.isGstBill = isGstBill;
+  if (vehicleNumber !== undefined) invoice.vehicleNumber = vehicleNumber;
 
   await invoice.save();
 

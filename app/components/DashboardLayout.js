@@ -14,6 +14,8 @@ import {
   FiX,
   FiSettings,
   FiUpload,
+  FiExternalLink,
+  FiTruck,
 } from "react-icons/fi";
 import { useState } from "react";
 
@@ -30,6 +32,14 @@ const getNavigation = () => {
     },
   ];
 };
+
+const EXTERNAL_LINKS = [
+  {
+    name: "E-Way Bill Portal",
+    href: "https://ewaybillgst.gov.in/login.aspx",
+    icon: FiTruck,
+  },
+];
 
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
@@ -99,6 +109,28 @@ export default function DashboardLayout({ children }) {
                 </Link>
               );
             })}
+            {/* External Links */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Quick Links
+              </p>
+              {EXTERNAL_LINKS.map((link) => (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex items-center justify-between px-4 py-3 text-sm font-medium rounded-xl text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-all duration-200"
+                >
+                  <span className="flex items-center">
+                    <link.icon className="mr-3 h-5 w-5" />
+                    {link.name}
+                  </span>
+                  <FiExternalLink className="h-3.5 w-3.5 opacity-50" />
+                </a>
+              ))}
+            </div>
           </nav>
           <div className="border-t border-gray-100 p-4">
             <div className="flex items-center mb-3 p-3 bg-gray-50 rounded-xl">
@@ -166,6 +198,27 @@ export default function DashboardLayout({ children }) {
               </Link>
             );
           })}
+          {/* External Links */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              Quick Links
+            </p>
+            {EXTERNAL_LINKS.map((link) => (
+              <a
+                key={link.name}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between px-4 py-3 text-sm font-medium rounded-xl text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-all duration-200"
+              >
+                <span className="flex items-center">
+                  <link.icon className="mr-3 h-5 w-5" />
+                  {link.name}
+                </span>
+                <FiExternalLink className="h-3.5 w-3.5 opacity-50" />
+              </a>
+            ))}
+          </div>
         </nav>
         <div className="border-t border-gray-100 p-4">
           <div className="flex items-center mb-3 p-3 bg-gray-50 rounded-xl">
