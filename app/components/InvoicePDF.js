@@ -22,7 +22,10 @@ const S = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
     fontSize: 10,
-    padding: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
+    paddingLeft: 24,
+    paddingRight: 24,
     backgroundColor: "#ffffff",
   },
 
@@ -78,6 +81,19 @@ const S = StyleSheet.create({
 
   // ── Header — single unified bar ───────────────────────────────────────────
   headerBg: { backgroundColor: "#e0f2fe" },
+  headerLeft: {
+    width: "20%",
+    paddingVertical: 8,
+    paddingLeft: 8,
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexDirection: "column",
+  },
+  dealershipImg: {
+    width: 80,
+    height: 50,
+    objectFit: "contain",
+  },
   headerCenter: {
     flex: 1,
     paddingVertical: 8,
@@ -94,7 +110,7 @@ const S = StyleSheet.create({
   },
   bizName: {
     fontFamily: "Helvetica",
-    fontSize: 38,
+    fontSize: 34,
     color: "#0f172a",
     marginBottom: 2,
     textAlign: "center",
@@ -560,7 +576,6 @@ export default function InvoiceDocument({ invoice }) {
 
   // ── Item rows (pad to min 15) ─────────────────────────────────────────────
   const paddedItems = [...items];
-  while (paddedItems.length < 15) paddedItems.push(null);
 
   // ── GST breakdown rows ────────────────────────────────────────────────────
   const gstBreakdownRows = [];
@@ -603,6 +618,16 @@ export default function InvoiceDocument({ invoice }) {
         <View style={S.outer}>
           {/* ① HEADER — single unified bar */}
           <View style={[{ flexDirection: "row" }, S.headerBg]}>
+            <View style={S.headerLeft}>
+              <Image
+                style={S.dealershipImg}
+                src={assetUrl("/dealership1.png")}
+              />
+              <Image
+                style={S.dealershipImg}
+                src={assetUrl("/dealership2.png")}
+              />
+            </View>
             <View style={S.headerCenter}>
               <Text style={S.bizName}>{biz.business_name}</Text>
               <Text style={S.bizTagline}>{biz.tagline}</Text>
@@ -700,31 +725,14 @@ export default function InvoiceDocument({ invoice }) {
               </View>
 
               {/* Data rows */}
-              {paddedItems.map((item, idx) =>
-                item ? (
-                  <ItemRow
-                    key={idx}
-                    item={item}
-                    idx={idx}
-                    isGstBill={invoice.isGstBill}
-                  />
-                ) : (
-                  <View
-                    key={idx}
-                    style={idx % 2 === 1 ? S.tableRowAlt : S.tableRow}
-                  >
-                    {COL_WIDTHS.map((w, i) => (
-                      <TableCell
-                        key={i}
-                        width={w}
-                        isLast={i === COL_WIDTHS.length - 1}
-                      >
-                        {" "}
-                      </TableCell>
-                    ))}
-                  </View>
-                ),
-              )}
+              {paddedItems.map((item, idx) => (
+                <ItemRow
+                  key={idx}
+                  item={item}
+                  idx={idx}
+                  isGstBill={invoice.isGstBill}
+                />
+              ))}
             </View>
           </View>
 

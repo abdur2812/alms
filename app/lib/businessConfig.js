@@ -4,7 +4,7 @@ const businessConfig = {
     tagline: "Dealers in: Motor Parts, Iron, Spring Leaf and All Vehicles",
     address: {
       door_no_old: "293/1",
-      door_no_new: "193",
+      door_no_new: "130",
       street: "G.S.T. Road",
       area: "Urapakkam",
       landmark: "Opp. State Bank of India",
