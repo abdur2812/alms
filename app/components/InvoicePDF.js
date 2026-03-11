@@ -22,7 +22,7 @@ const S = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
     fontSize: 10,
-    padding: 12,
+    padding: 24,
     backgroundColor: "#ffffff",
   },
 
@@ -86,15 +86,15 @@ const S = StyleSheet.create({
     justifyContent: "center",
   },
   headerRight: {
-    width: "22%",
+    width: "20%",
     paddingVertical: 8,
-    paddingHorizontal: 6,
     alignItems: "center",
     justifyContent: "center",
+    flexDirection: "column",
   },
   bizName: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 26,
+    fontFamily: "Helvetica",
+    fontSize: 38,
     color: "#0f172a",
     marginBottom: 2,
     textAlign: "center",
@@ -117,11 +117,13 @@ const S = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
     fontSize: 9,
     color: "#0f172a",
+    paddingRight: 20,
   },
   headerLogo: {
-    width: 100,
+    width: 110,
     height: 70,
-    marginBottom: 4,
+    marginBottom: 6,
+    paddingRight: 20,
   },
 
   // ── Title ─────────────────────────────────────────────────────────────────
@@ -335,7 +337,7 @@ const S = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 9,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   footerText: {
     fontFamily: "Helvetica-Oblique",
@@ -625,9 +627,7 @@ export default function InvoiceDocument({ invoice }) {
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  marginTop: 4,
-                  gap: 3,
-                  paddingRight: 8,
+                  gap: 6,
                 }}
               >
                 <Text style={S.gstinLabel}>GSTIN:</Text>
@@ -803,24 +803,22 @@ export default function InvoiceDocument({ invoice }) {
           {/* ⑨ FOOTER */}
           <View style={[S.footer, S.divider]}>
             {/* Customer Signature */}
-            <View style={{ width: "30%", paddingRight: 8 }}>
+            <View
+              style={{
+                width: "30%",
+                paddingRight: 8,
+                justifyContent: "flex-start",
+              }}
+            >
               <Text
                 style={{
                   fontSize: 7,
                   fontFamily: "Helvetica-Bold",
                   color: "#000000",
-                  marginBottom: 14,
                 }}
               >
                 Customer's Signature
               </Text>
-              <View
-                style={{
-                  borderTopWidth: 1,
-                  borderTopColor: "#000000",
-                  width: 80,
-                }}
-              />
             </View>
             {/* Center text */}
             <View style={{ flex: 1, alignItems: "center" }}>

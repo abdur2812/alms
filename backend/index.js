@@ -18,30 +18,10 @@ const { errorHandler } = require("./middleware/errorHandler");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// CORS middleware - configured for production
+// CORS middleware - allow all origins
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps, curl, postman)
-      if (!origin) return callback(null, true);
-
-      if (process.env.CORS_ORIGIN === "*") {
-        return callback(null, true);
-      }
-
-      const allowedOrigins = [
-        "http://localhost:3001",
-        "http://localhost:3000",
-        "https://almsonline.in",
-        process.env.CORS_ORIGIN,
-      ].filter(Boolean);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(null, true); // Allow all for now - debug mode
-    },
+    origin: "*",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
@@ -50,8 +30,7 @@ app.use(
       "Accept",
     ],
     credentials: false,
-    preflightContinue: false,
-    optionsSuccessStatus: 200, // For legacy browser support
+    optionsSuccessStatus: 200,
   }),
 );
 
