@@ -11,10 +11,14 @@ const {
   getOutOfStockProducts,
   bulkCreateProducts,
   getStockPDF,
+  getPopularProducts,
 } = require("../controllers/productController");
 
 // Report routes (must be before other routes)
 router.get("/reports/stock-pdf", getStockPDF);
+
+// Popular products (most billed first)
+router.get("/popular", getPopularProducts);
 
 // Alert routes (must be before :id routes)
 router.get("/alerts/low-stock", getLowStockProducts);

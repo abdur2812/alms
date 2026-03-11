@@ -1,11 +1,60 @@
 const Product = require("../models/Product");
+const Invoice = require("../models/Invoice");
 const { AppError, asyncHandler } = require("../middleware/errorHandler");
+
+// @desc    Get products sorted by most billed (invoice frequency)
+// @route   GET /api/products/popular
+// @access  Public
+exports.getPopularProducts = asyncHandler(async (req, res, next) => {
+  const { limit = 1000, search } = req.query;
+
+  // Aggregate invoice items to count how many times each product was billed
+  const billed = await Invoice.aggregate([
+    { $unwind: "$items" },
+    { $match: { "items.productId": { $ne: null } } },
+    {
+      $group: {
+        _id: "$items.productId",
+        billedCount: { $sum: "$items.quantity" },
+      },
+    },
+    { $sort: { billedCount: -1 } },
+  ]);
+
+  // Map productId -> billedCount for quick lookup
+  const countMap = {};
+  billed.forEach((b) => {
+    countMap[b._id.toString()] = b.billedCount;
+  });
+
+  const query = {};
+  if (search) {
+    query.$or = [
+      { name: { $regex: search, $options: "i" } },
+      { description: { $regex: search, $options: "i" } },
+    ];
+  }
+
+  const products = await Product.find(query).limit(Number(limit));
+
+  // Sort: products that appear in invoices first (desc), rest after
+  products.sort((a, b) => {
+    const ca = countMap[a._id.toString()] || 0;
+    const cb = countMap[b._id.toString()] || 0;
+    return cb - ca;
+  });
+
+  res.status(200).json({
+    success: true,
+    count: products.length,
+    data: products,
+  });
+});
 
 // @desc    Get all products
 // @route   GET /api/products
 // @access  Public
 exports.getAllProducts = asyncHandler(async (req, res, next) => {
-
   const { page = 1, limit = 10, search, inStock, lowStock } = req.query;
 
   const query = {};

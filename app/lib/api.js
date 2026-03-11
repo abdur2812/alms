@@ -48,6 +48,7 @@ export const customersAPI = {
 // Products API
 export const productsAPI = {
   getAll: (params) => api.get("/api/products", { params }),
+  getPopular: (params) => api.get("/api/products/popular", { params }),
   getById: (id) => api.get(`/api/products/${id}`),
   create: (data) => api.post("/api/products", data),
   update: (id, data) => api.put(`/api/products/${id}`, data),

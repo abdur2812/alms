@@ -151,18 +151,13 @@ invoiceSchema.pre("save", function (next) {
     return next(new Error("Invoice must have at least one item"));
   }
 
-  // Calculate subtotal
-  const subtotal = this.items.reduce((sum, item) => {
+  // Prices are GST-inclusive; totalAmount = sum of (qty * price), GST is reverse-extracted
+  const total = this.items.reduce((sum, item) => {
     return sum + item.quantity * item.unitPrice;
   }, 0);
 
-  // Calculate total GST based on each item's GST rate
-  const totalGst = this.items.reduce((sum, item) => {
-    return sum + (item.quantity * item.unitPrice * item.gst) / 100;
-  }, 0);
-
-  // Set total amount
-  this.totalAmount = subtotal + totalGst;
+  // Set total amount (rounded)
+  this.totalAmount = Math.round(total);
 
   next();
 });

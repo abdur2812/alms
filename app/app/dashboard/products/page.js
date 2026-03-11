@@ -30,9 +30,17 @@ export default function ProductsPage() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const response = await productsAPI.getAll({ page, limit: 10, search });
+      let response;
+      if (search) {
+        // When searching, use normal pagination
+        response = await productsAPI.getAll({ page, limit: 10, search });
+        setTotalPages(response.data.totalPages);
+      } else {
+        // Default: show most billed products first
+        response = await productsAPI.getPopular({ limit: 10000 });
+        setTotalPages(1);
+      }
       setProducts(response.data.data);
-      setTotalPages(response.data.totalPages);
       setError("");
     } catch (err) {
       setError("Failed to fetch products");

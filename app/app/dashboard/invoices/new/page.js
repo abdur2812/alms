@@ -100,7 +100,7 @@ export default function NewInvoicePage() {
 
   const fetchProducts = async () => {
     try {
-      const response = await productsAPI.getAll({ limit: 1000 });
+      const response = await productsAPI.getPopular({ limit: 1000 });
       setProducts(response.data.data);
     } catch (err) {
       console.error("Failed to fetch products", err);
@@ -238,12 +238,11 @@ export default function NewInvoicePage() {
     if (e.key !== "Enter") return;
 
     const value = e.currentTarget.value.trim();
-    if (!value) return;
-
-    // Always base auto-complete on the actual text in the input
-    const matchingProducts = products.filter((product) =>
-      product.name.toLowerCase().startsWith(value.toLowerCase()),
-    );
+    const matchingProducts = value
+      ? products.filter((product) =>
+          product.name.toLowerCase().includes(value.toLowerCase()),
+        )
+      : products;
 
     if (matchingProducts.length > 0) {
       e.preventDefault();
@@ -381,12 +380,11 @@ export default function NewInvoicePage() {
     if (e.key !== "Enter") return;
 
     const value = e.currentTarget.value.trim();
-    if (!value) return;
-
-    // Always base auto-complete on the actual text in the input
-    const matchingCustomers = customers.filter((customer) =>
-      customer.name.toLowerCase().startsWith(value.toLowerCase()),
-    );
+    const matchingCustomers = value
+      ? customers.filter((customer) =>
+          customer.name.toLowerCase().includes(value.toLowerCase()),
+        )
+      : customers;
 
     if (matchingCustomers.length > 0) {
       e.preventDefault();
@@ -610,15 +608,7 @@ export default function NewInvoicePage() {
                       }
                       onKeyDown={handleCustomerKeyDown}
                       onFocus={() => {
-                        if (
-                          customerDetails.name &&
-                          customers.filter((c) =>
-                            c.name
-                              .toLowerCase()
-                              .includes(customerDetails.name.toLowerCase()),
-                          ).length > 0
-                        )
-                          setShowCustomerDropdown(true);
+                        setShowCustomerDropdown(true);
                       }}
                       onBlur={() =>
                         setTimeout(() => setShowCustomerDropdown(false), 150)
@@ -631,7 +621,7 @@ export default function NewInvoicePage() {
                     {/* Inline preview removed to avoid visual misalignment */}
                   </div>
                   <div
-                    className={`absolute top-full left-0 right-0 z-20 transition-all duration-200 ${showCustomerDropdown && customerDetails.name && customers.filter((c) => c.name.toLowerCase().includes(customerDetails.name.toLowerCase())).length > 0 ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}
+                    className={`absolute top-full left-0 right-0 z-20 transition-all duration-200 ${showCustomerDropdown && customers.filter((c) => c.name.toLowerCase().includes(customerDetails.name.toLowerCase())).length > 0 ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}
                   >
                     <div className="bg-white/95 backdrop-blur-xl border border-indigo-100 rounded-2xl shadow-2xl shadow-indigo-200/40 mt-1.5 max-h-56 overflow-auto">
                       {customers
@@ -887,15 +877,7 @@ export default function NewInvoicePage() {
                           }
                           onKeyDown={handleProductKeyDown}
                           onFocus={() => {
-                            if (
-                              itemForm.name &&
-                              products.filter((p) =>
-                                p.name
-                                  .toLowerCase()
-                                  .includes(itemForm.name.toLowerCase()),
-                              ).length > 0
-                            )
-                              setShowProductDropdown(true);
+                            setShowProductDropdown(true);
                           }}
                           onBlur={() =>
                             setTimeout(() => setShowProductDropdown(false), 150)
@@ -906,7 +888,7 @@ export default function NewInvoicePage() {
                         />
                         {/* Inline preview removed to avoid visual misalignment */}
                         <div
-                          className={`absolute top-full left-0 right-0 z-30 transition-all duration-200 ${showProductDropdown && itemForm.name && products.filter((p) => p.name.toLowerCase().includes(itemForm.name.toLowerCase())).length > 0 ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}
+                          className={`absolute top-full left-0 right-0 z-30 transition-all duration-200 ${showProductDropdown && products.filter((p) => p.name.toLowerCase().includes(itemForm.name.toLowerCase())).length > 0 ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}
                         >
                           <div className="bg-white/95 backdrop-blur-xl border border-purple-100 rounded-2xl shadow-2xl shadow-purple-200/40 mt-1.5 max-h-48 overflow-auto">
                             {products
