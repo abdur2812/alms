@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { customersAPI } from "@/lib/api";
+import { customersAPI, invoicesAPI } from "@/lib/api";
 import {
   FiPlus,
   FiEdit,
@@ -15,6 +15,9 @@ import {
   FiUsers,
   FiChevronDown,
   FiChevronUp,
+  FiCheck,
+  FiEye,
+  FiEdit2,
 } from "react-icons/fi";
 import { PageHeader, Card, CardBody, Button, Select } from "@/components/UI";
 
@@ -66,6 +69,16 @@ export default function CustomersPage() {
 
   const toggleExpandCustomer = (customerId) => {
     setExpandedCustomer(expandedCustomer === customerId ? null : customerId);
+  };
+
+  const markAsPaid = async (invoiceId) => {
+    if (!confirm("Mark this invoice as paid?")) return;
+    try {
+      await invoicesAPI.update(invoiceId, { status: "Paid" });
+      fetchCustomers();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to mark as paid");
+    }
   };
 
   return (
@@ -457,12 +470,34 @@ export default function CustomersPage() {
                                               ₹{invoice.totalAmount.toFixed(2)}
                                             </td>
                                             <td className="px-4 py-2 text-sm text-right">
-                                              <Link
-                                                href={`/dashboard/invoices/${invoice._id}`}
-                                                className="inline-flex items-center px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-                                              >
-                                                View & Pay
-                                              </Link>
+                                              <div className="inline-flex items-center gap-1.5 justify-end">
+                                                <button
+                                                  onClick={() =>
+                                                    markAsPaid(invoice._id)
+                                                  }
+                                                  className="inline-flex items-center px-2.5 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors"
+                                                  title="Mark as Paid"
+                                                >
+                                                  <FiCheck className="h-3.5 w-3.5 mr-1" />
+                                                  Paid
+                                                </button>
+                                                <Link
+                                                  href={`/dashboard/invoices/${invoice._id}/view`}
+                                                  className="inline-flex items-center px-2.5 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                                                  title="View PDF"
+                                                >
+                                                  <FiEye className="h-3.5 w-3.5 mr-1" />
+                                                  PDF
+                                                </Link>
+                                                <Link
+                                                  href={`/dashboard/invoices/${invoice._id}/edit`}
+                                                  className="inline-flex items-center px-2.5 py-1.5 bg-gray-600 text-white text-xs font-medium rounded-lg hover:bg-gray-700 transition-colors"
+                                                  title="Edit Invoice"
+                                                >
+                                                  <FiEdit2 className="h-3.5 w-3.5 mr-1" />
+                                                  Edit
+                                                </Link>
+                                              </div>
                                             </td>
                                           </tr>
                                         ),
