@@ -200,7 +200,7 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
 
   const sequenceNumber = String(count + 1).padStart(4, "0");
 
-  return `ALMS ${sequenceNumber}/${fyStartLabel}-${fyEndLabel}`;
+  return `ALMS ${sequenceNumber}-${fyStartLabel}${fyEndLabel}`;
 };
 
 // Post-save hook to handle stock management when status changes to 'Paid'

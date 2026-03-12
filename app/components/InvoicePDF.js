@@ -109,7 +109,7 @@ const S = StyleSheet.create({
     flexDirection: "column",
   },
   bizName: {
-    fontFamily: "Helvetica",
+    fontFamily: "Times-Bold",
     fontSize: 34,
     color: "#0f172a",
     marginBottom: 2,
@@ -188,7 +188,6 @@ const S = StyleSheet.create({
   // ── Items table ───────────────────────────────────────────────────────────
   tableOuter: {
     borderTopWidth: 1,
-    borderLeftWidth: 1,
     borderColor: "#000000",
   },
   tableHeader: {
@@ -227,8 +226,6 @@ const S = StyleSheet.create({
     fontSize: 8.5,
     paddingVertical: 5,
     paddingHorizontal: 3,
-    borderRightWidth: 1,
-    borderRightColor: "#000000",
     borderBottomWidth: 1,
     borderBottomColor: "#000000",
     color: "#000000",
@@ -238,8 +235,6 @@ const S = StyleSheet.create({
     fontSize: 8,
     paddingVertical: 3,
     paddingHorizontal: 3,
-    borderRightWidth: 1,
-    borderRightColor: "#000000",
     borderBottomWidth: 1,
     borderBottomColor: "#000000",
     color: "#000000",
@@ -325,7 +320,8 @@ const S = StyleSheet.create({
   qrWrapper: {
     width: 70,
     alignItems: "center",
-    alignSelf: "flex-start",
+    alignSelf: "center",
+    justifyContent: "center",
   },
   qrImage: { width: 62, height: 62 },
   forText: {
@@ -785,7 +781,7 @@ export default function InvoiceDocument({ invoice }) {
           {/* ⑧ BANK + SIGNATURE + QR */}
           <View style={[S.splitRow, S.divider]}>
             <View style={S.splitLeft55}>
-              <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
                 <View style={{ flex: 1 }}>
                   <Text style={[S.sectionLabel, { marginBottom: 3 }]}>
                     Account Details
