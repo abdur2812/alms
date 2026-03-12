@@ -187,20 +187,33 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
   const fyStartLabel = String(fiscalYearStart).slice(-2);
   const fyEndLabel = String(fiscalYearEnd).slice(-2);
 
-  // Count invoices created in current fiscal year
-  const fiscalYearStartDate = new Date(fiscalYearStart, 3, 1); // April 1
-  const fiscalYearEndDate = new Date(fiscalYearEnd, 2, 31, 23, 59, 59); // March 31
-
+  // Count only tax invoices that already belong to the current fiscal series.
+  const fiscalSeries = `${fyStartLabel}${fyEndLabel}`;
   const count = await this.countDocuments({
-    createdAt: {
-      $gte: fiscalYearStartDate,
-      $lte: fiscalYearEndDate,
-    },
+    isGstBill: true,
+    invoiceNumber: { $regex: new RegExp(`^ALMS \\d{4}-${fiscalSeries}$`) },
   });
 
   const sequenceNumber = String(count + 1).padStart(4, "0");
 
   return `ALMS ${sequenceNumber}-${fyStartLabel}${fyEndLabel}`;
+};
+
+invoiceSchema.statics.generateEstimateNumber = async function () {
+  const now = new Date();
+  const timestamp = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+    String(now.getHours()).padStart(2, "0"),
+    String(now.getMinutes()).padStart(2, "0"),
+    String(now.getSeconds()).padStart(2, "0"),
+  ].join("");
+  const randomSuffix = Math.floor(Math.random() * 1000)
+    .toString()
+    .padStart(3, "0");
+
+  return `EST-${timestamp}-${randomSuffix}`;
 };
 
 // Post-save hook to handle stock management when status changes to 'Paid'

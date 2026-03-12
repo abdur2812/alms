@@ -276,7 +276,9 @@ export default function DashboardPage() {
                         {invoice.invoiceNumber}
                       </p>
                       <p className="text-sm text-gray-500 truncate">
-                        {invoice.customerId?.name || "N/A"}
+                        {invoice.customerData?.name ||
+                          invoice.customerId?.name ||
+                          "N/A"}
                       </p>
                     </div>
                     <div className="ml-4 flex-shrink-0 text-right">

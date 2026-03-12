@@ -82,7 +82,9 @@ export default function InvoicesPage() {
       await invoicesAPI.update(id, { isGstBill: true });
       fetchInvoices();
     } catch (err) {
-      alert("Failed to convert. Please try again.");
+      alert(
+        err.response?.data?.message || "Failed to convert. Please try again.",
+      );
     } finally {
       setConverting(null);
     }
@@ -314,8 +316,8 @@ export default function InvoicesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-gray-900">
-                          {invoice.customerId?.name ||
-                            invoice.customerData?.name ||
+                          {invoice.customerData?.name ||
+                            invoice.customerId?.name ||
                             "Deleted Customer"}
                         </div>
                       </td>

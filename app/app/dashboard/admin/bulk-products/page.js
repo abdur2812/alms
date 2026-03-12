@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { productsAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
 
 export default function BulkProductsPage() {
@@ -48,13 +49,8 @@ export default function BulkProductsPage() {
     setResults(null);
 
     try {
-      const response = await fetch("http://localhost:3000/api/products/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ products }),
-      });
-
-      const data = await response.json();
+      const response = await productsAPI.bulkCreate({ products });
+      const data = response.data;
       setResults(data.data);
 
       // Clear successful products from form
@@ -80,7 +76,7 @@ export default function BulkProductsPage() {
       }
     } catch (error) {
       console.error("Error bulk creating products:", error);
-      alert("Error creating products");
+      alert(error.response?.data?.message || "Error creating products");
     } finally {
       setLoading(false);
     }

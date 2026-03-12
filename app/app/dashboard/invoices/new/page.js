@@ -64,6 +64,7 @@ export default function NewInvoicePage() {
     unitPrice: 0,
     gst: 18,
     hsnCode: "",
+    availableStock: null,
   });
   const [editingIndex, setEditingIndex] = useState(-1);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -77,8 +78,16 @@ export default function NewInvoicePage() {
   useEffect(() => {
     fetchCustomers();
     fetchProducts();
-    fetchNextInvoiceNumber();
   }, []);
+
+  useEffect(() => {
+    if (formData.isGstBill) {
+      fetchNextInvoiceNumber();
+      return;
+    }
+
+    setNextInvoiceNumber(null);
+  }, [formData.isGstBill]);
 
   const fetchNextInvoiceNumber = async () => {
     try {
@@ -190,7 +199,9 @@ export default function NewInvoicePage() {
         unitPrice: product.price || 0,
         gst: product.gst || 0,
         hsnCode: product.hsnCode || "",
+        availableStock: product.stockQuantity,
       }));
+      setError("");
       setShowProductDropdown(false); // Close dropdown after selection
       setProductAutofill("");
     } catch (err) {
@@ -203,6 +214,7 @@ export default function NewInvoicePage() {
       ...prev,
       name: value,
       productId: "", // Clear product ID when typing custom name
+      availableStock: null,
     }));
     if (!value) {
       setShowProductDropdown(false);
@@ -256,6 +268,19 @@ export default function NewInvoicePage() {
       return;
     }
 
+    if (
+      itemForm.productId &&
+      itemForm.availableStock !== null &&
+      Number(itemForm.quantity) > Number(itemForm.availableStock)
+    ) {
+      setError(
+        `Insufficient stock for ${itemForm.name}. Available: ${itemForm.availableStock}, Requested: ${itemForm.quantity}`,
+      );
+      return;
+    }
+
+    setError("");
+
     const newItems = [...formData.items];
 
     if (editingIndex >= 0) {
@@ -277,6 +302,7 @@ export default function NewInvoicePage() {
       unitPrice: 0,
       gst: 0,
       hsnCode: "",
+      availableStock: null,
     });
     setShowProductDropdown(false);
     setProductAutofill("");
@@ -299,6 +325,7 @@ export default function NewInvoicePage() {
         unitPrice: 0,
         gst: 0,
         hsnCode: "",
+        availableStock: null,
       });
       setShowProductDropdown(false);
       setProductAutofill("");
@@ -314,6 +341,7 @@ export default function NewInvoicePage() {
       unitPrice: 0,
       gst: 0,
       hsnCode: "",
+      availableStock: null,
     });
     setShowProductDropdown(false);
     setProductAutofill("");
@@ -534,7 +562,11 @@ export default function NewInvoicePage() {
       const response = await invoicesAPI.create(invoiceData);
       router.push(`/dashboard/invoices/${response.data.data._id}/view`);
     } catch (err) {
-      setError(err.message || "Failed to create invoice");
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to create invoice",
+      );
     } finally {
       setLoading(false);
     }
@@ -560,20 +592,26 @@ export default function NewInvoicePage() {
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          {nextInvoiceNumber ? (
+          {formData.isGstBill && nextInvoiceNumber ? (
             <div className="relative">
               <div className="absolute inset-0 bg-indigo-400 rounded-xl blur opacity-40 animate-pulse" />
               <span className="relative text-xs font-mono font-bold text-white bg-linear-to-r from-indigo-600 to-violet-600 px-3 py-1.5 rounded-xl shadow-lg shadow-indigo-200">
                 #{nextInvoiceNumber}
               </span>
             </div>
+          ) : !formData.isGstBill ? (
+            <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl">
+              Estimate number assigned on save
+            </span>
           ) : (
             <span className="text-xs text-gray-400 animate-pulse">
               Loading #...
             </span>
           )}
           <span className="text-xs text-gray-400 italic">
-            auto-assigned on save
+            {formData.isGstBill
+              ? "auto-assigned on save"
+              : "invoice number assigned on conversion"}
           </span>
         </div>
       </div>
@@ -918,6 +956,14 @@ export default function NewInvoicePage() {
                           </div>
                         </div>
                       </div>
+                      {itemForm.productId &&
+                        itemForm.availableStock !== null && (
+                          <p
+                            className={`mt-1.5 text-xs font-medium ${Number(itemForm.availableStock) > 0 ? "text-emerald-600" : "text-red-600"}`}
+                          >
+                            Available stock: {itemForm.availableStock}
+                          </p>
+                        )}
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-purple-600/80 uppercase tracking-widest mb-1.5">
@@ -1319,6 +1365,7 @@ export default function NewInvoicePage() {
                 {error && (
                   <div className="p-3 bg-red-50 border border-red-200/80 text-red-600 rounded-xl text-xs flex items-start gap-2">
                     <span className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1 shrink-0" />
+                    <span>{error}</span>
                   </div>
                 )}
               </div>

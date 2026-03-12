@@ -79,6 +79,7 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     taxRate,
     isGstBill,
     isIGST,
+    isIgst,
     cgstRate,
     sgstRate,
     igstRate,
@@ -188,8 +189,14 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     validatedItems.push(validatedItem);
   }
 
-  // Generate invoice number
-  const invoiceNumber = await Invoice.generateInvoiceNumber();
+  const resolvedIsGstBill = isGstBill !== undefined ? isGstBill : true;
+  const resolvedIsIgst = resolvedIsGstBill
+    ? (isIgst ?? isIGST ?? false)
+    : false;
+
+  const invoiceNumber = resolvedIsGstBill
+    ? await Invoice.generateInvoiceNumber()
+    : await Invoice.generateEstimateNumber();
 
   // Create invoice with all new fields
   const invoiceData = {
@@ -198,8 +205,8 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     customerData: snapshotCustomerData,
     items: validatedItems,
     taxRate: taxRate || 0,
-    isGstBill: isGstBill !== undefined ? isGstBill : true,
-    isIGST: isIGST || false,
+    isGstBill: resolvedIsGstBill,
+    isIgst: resolvedIsIgst,
     cgstRate: cgstRate || 0,
     sgstRate: sgstRate || 0,
     igstRate: igstRate || 0,
@@ -248,8 +255,16 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/invoices/:id
 // @access  Public
 exports.updateInvoice = asyncHandler(async (req, res, next) => {
-  const { items, taxRate, customerData, billType, isGstBill, vehicleNumber } =
-    req.body;
+  const {
+    items,
+    taxRate,
+    customerData,
+    billType,
+    isGstBill,
+    isIGST,
+    isIgst,
+    vehicleNumber,
+  } = req.body;
 
   let invoice = await Invoice.findById(req.params.id);
 
@@ -258,6 +273,8 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
       new AppError(`Invoice not found with id: ${req.params.id}`, 404),
     );
   }
+
+  const wasGstBill = invoice.isGstBill;
 
   // Update customer data if provided
   if (customerData) {
@@ -317,12 +334,18 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
   if (taxRate !== undefined) invoice.taxRate = taxRate;
   if (billType) invoice.billType = billType;
   if (isGstBill !== undefined) invoice.isGstBill = isGstBill;
+  if (isIgst !== undefined || isIGST !== undefined) {
+    invoice.isIgst = invoice.isGstBill ? (isIgst ?? isIGST ?? false) : false;
+  } else if (!invoice.isGstBill) {
+    invoice.isIgst = false;
+  }
   if (vehicleNumber !== undefined) invoice.vehicleNumber = vehicleNumber;
 
-  await invoice.save();
+  if (!wasGstBill && invoice.isGstBill) {
+    invoice.invoiceNumber = await Invoice.generateInvoiceNumber();
+  }
 
-  // Invalidate PDF cache so next preview regenerates
-  pdfService.clearCache(invoice._id);
+  await invoice.save();
 
   // Populate and return updated invoice
   const updatedInvoice = await Invoice.findById(invoice._id)

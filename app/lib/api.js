@@ -1,7 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://alms-bills.duckdns.org";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -51,6 +50,7 @@ export const productsAPI = {
   getPopular: (params) => api.get("/api/products/popular", { params }),
   getById: (id) => api.get(`/api/products/${id}`),
   create: (data) => api.post("/api/products", data),
+  bulkCreate: (data) => api.post("/api/products/bulk", data),
   update: (id, data) => api.put(`/api/products/${id}`, data),
   delete: (id) => api.delete(`/api/products/${id}`),
   adjustStock: (id, data) => api.patch(`/api/products/${id}/stock`, data),

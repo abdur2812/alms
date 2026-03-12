@@ -34,6 +34,8 @@ const S = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#000000",
     flex: 1,
+    width: "100%",
+    height: "100%",
   },
 
   // ── Section divider ──────────────────────────────────────────────────────

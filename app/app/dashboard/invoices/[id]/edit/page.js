@@ -55,7 +55,7 @@ export default function FullEditInvoicePage({ params }) {
 
       // Populate form with invoice data
       const customerData = invoice.customerData || {
-        name: invoice.customerId?.name || "",
+        name: invoice.customerData?.name || invoice.customerId?.name || "",
         phone: invoice.customerId?.phone || "",
         gstNumber: invoice.customerId?.gstNumber || "",
         address: {
@@ -221,24 +221,45 @@ export default function FullEditInvoicePage({ params }) {
 
   const calculateSubtotal = () => {
     return formData.items.reduce((sum, item) => {
-      return (
-        sum +
-        (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)
-      );
+      const quantity = parseFloat(item.quantity) || 0;
+      const unitPrice = parseFloat(item.unitPrice) || 0;
+      const gstRate = parseFloat(item.gst) || 0;
+      const inclusiveAmount = quantity * unitPrice;
+
+      if (!formData.isGstBill || gstRate <= 0) {
+        return sum + inclusiveAmount;
+      }
+
+      // Prices are GST-inclusive in this app. Subtotal is the base amount.
+      const baseAmount = inclusiveAmount / (1 + gstRate / 100);
+      return sum + baseAmount;
     }, 0);
   };
 
   const calculateTax = () => {
     return formData.items.reduce((sum, item) => {
-      const itemSubtotal =
-        (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
-      const itemGst = (itemSubtotal * (parseFloat(item.gst) || 0)) / 100;
-      return sum + itemGst;
+      const quantity = parseFloat(item.quantity) || 0;
+      const unitPrice = parseFloat(item.unitPrice) || 0;
+      const gstRate = parseFloat(item.gst) || 0;
+      const inclusiveAmount = quantity * unitPrice;
+
+      if (!formData.isGstBill || gstRate <= 0) {
+        return sum;
+      }
+
+      // GST component extracted from GST-inclusive amount.
+      const baseAmount = inclusiveAmount / (1 + gstRate / 100);
+      const gstAmount = inclusiveAmount - baseAmount;
+      return sum + gstAmount;
     }, 0);
   };
 
   const calculateTotal = () => {
-    return calculateSubtotal() + calculateTax();
+    return formData.items.reduce((sum, item) => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const unitPrice = parseFloat(item.unitPrice) || 0;
+      return sum + quantity * unitPrice;
+    }, 0);
   };
 
   const handleSubmit = async (e) => {

@@ -73,7 +73,9 @@ export default function ViewInvoicePage({ params }) {
       setInvoice(null);
       await loadInvoice();
     } catch (err) {
-      alert("Failed to convert. Please try again.");
+      alert(
+        err.response?.data?.message || "Failed to convert. Please try again.",
+      );
     } finally {
       setConverting(false);
     }
