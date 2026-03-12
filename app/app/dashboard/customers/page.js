@@ -225,7 +225,7 @@ export default function CustomersPage() {
                       <tr className="hover:bg-indigo-50/30 transition-colors duration-150">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="h-10 w-10 flex-shrink-0">
+                            <div className="h-10 w-10 shrink-0">
                               <div className="h-10 w-10 rounded-full bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
                                 {customer.name?.charAt(0).toUpperCase() ?? "?"}
                               </div>
@@ -393,108 +393,118 @@ export default function CustomersPage() {
                       </tr>
                       {expandedCustomer === customer._id && (
                         <tr key={`${customer._id}-expanded`}>
-                          <td colSpan="6" className="px-6 py-4 bg-orange-50/30">
-                            <div className="rounded-lg bg-white border border-orange-200 p-4">
-                              <h4 className="text-sm font-semibold text-gray-900 mb-3">
-                                Credit Invoices{" "}
-                                {customer.creditInvoices &&
-                                  customer.creditInvoices.length > 0 &&
-                                  `(${customer.creditInvoices.length})`}
-                              </h4>
+                          <td
+                            colSpan="6"
+                            className="px-6 py-4 bg-linear-to-br from-indigo-50/60 via-purple-50/40 to-pink-50/40"
+                          >
+                            <div className="rounded-2xl bg-white border border-indigo-100 shadow-lg overflow-hidden">
+                              {/* Header */}
+                              <div className="px-5 py-3 bg-linear-to-r from-indigo-600 to-purple-600 flex items-center justify-between">
+                                <h4 className="text-sm font-bold text-white tracking-wide">
+                                  Credit Invoices
+                                  {customer.creditInvoices &&
+                                    customer.creditInvoices.length > 0 &&
+                                    ` (${customer.creditInvoices.length})`}
+                                </h4>
+                                <span className="text-xs text-indigo-200 font-semibold">
+                                  ₹{customer.creditAmount?.toFixed(2)}{" "}
+                                  outstanding
+                                </span>
+                              </div>
                               {customer.creditInvoices &&
                               customer.creditInvoices.length > 0 ? (
                                 <div className="overflow-x-auto">
-                                  <table className="min-w-full divide-y divide-gray-200">
+                                  <table className="min-w-full divide-y divide-gray-100">
                                     <thead className="bg-gray-50">
                                       <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                                           Invoice #
                                         </th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                                           Date
                                         </th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                                           Due Date
                                         </th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                        <th className="px-4 py-2.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                                           Status
                                         </th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                        <th className="px-4 py-2.5 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">
                                           Amount
                                         </th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                                          Action
+                                        <th className="px-4 py-2.5 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                          Actions
                                         </th>
                                       </tr>
                                     </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
+                                    <tbody className="bg-white divide-y divide-gray-50">
                                       {customer.creditInvoices.map(
                                         (invoice) => (
                                           <tr
                                             key={invoice._id}
-                                            className="hover:bg-gray-50"
+                                            className="hover:bg-indigo-50/40 transition-colors duration-150"
                                           >
-                                            <td className="px-4 py-2 text-sm font-medium text-indigo-600">
+                                            <td className="px-4 py-3 text-sm font-semibold text-indigo-600">
                                               <Link
                                                 href={`/dashboard/invoices/${invoice._id}`}
-                                                className="hover:text-indigo-900"
+                                                className="hover:text-indigo-900 transition-colors"
                                               >
                                                 {invoice.invoiceNumber}
                                               </Link>
                                             </td>
-                                            <td className="px-4 py-2 text-sm text-gray-600">
+                                            <td className="px-4 py-3 text-sm text-gray-600">
                                               {new Date(
                                                 invoice.date,
                                               ).toLocaleDateString()}
                                             </td>
-                                            <td className="px-4 py-2 text-sm text-gray-600">
+                                            <td className="px-4 py-3 text-sm text-gray-600">
                                               {new Date(
                                                 invoice.dueDate,
                                               ).toLocaleDateString()}
                                             </td>
-                                            <td className="px-4 py-2 text-sm">
+                                            <td className="px-4 py-3 text-sm">
                                               <span
-                                                className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
+                                                className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${
                                                   invoice.status === "Overdue"
-                                                    ? "bg-red-100 text-red-800"
+                                                    ? "bg-red-100 text-red-700"
                                                     : invoice.status ===
                                                         "Partially Paid"
-                                                      ? "bg-yellow-100 text-yellow-800"
-                                                      : "bg-orange-100 text-orange-800"
+                                                      ? "bg-yellow-100 text-yellow-700"
+                                                      : "bg-orange-100 text-orange-700"
                                                 }`}
                                               >
                                                 {invoice.status}
                                               </span>
                                             </td>
-                                            <td className="px-4 py-2 text-sm text-right font-medium text-gray-900">
+                                            <td className="px-4 py-3 text-sm text-right font-bold text-gray-900">
                                               ₹{invoice.totalAmount.toFixed(2)}
                                             </td>
-                                            <td className="px-4 py-2 text-sm text-right">
+                                            <td className="px-4 py-3 text-sm text-right">
                                               <div className="inline-flex items-center gap-1.5 justify-end">
                                                 <button
                                                   onClick={() =>
                                                     markAsPaid(invoice._id)
                                                   }
-                                                  className="inline-flex items-center px-2.5 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors"
+                                                  className="inline-flex items-center px-2.5 py-1.5 bg-linear-to-r from-green-500 to-emerald-600 text-white text-xs font-semibold rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
                                                   title="Mark as Paid"
                                                 >
-                                                  <FiCheck className="h-3.5 w-3.5 mr-1" />
+                                                  <FiCheck className="h-3 w-3 mr-1" />
                                                   Paid
                                                 </button>
                                                 <Link
                                                   href={`/dashboard/invoices/${invoice._id}/view`}
-                                                  className="inline-flex items-center px-2.5 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                                                  className="inline-flex items-center px-2.5 py-1.5 bg-linear-to-r from-indigo-500 to-purple-600 text-white text-xs font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
                                                   title="View PDF"
                                                 >
-                                                  <FiEye className="h-3.5 w-3.5 mr-1" />
+                                                  <FiEye className="h-3 w-3 mr-1" />
                                                   PDF
                                                 </Link>
                                                 <Link
                                                   href={`/dashboard/invoices/${invoice._id}/edit`}
-                                                  className="inline-flex items-center px-2.5 py-1.5 bg-gray-600 text-white text-xs font-medium rounded-lg hover:bg-gray-700 transition-colors"
+                                                  className="inline-flex items-center px-2.5 py-1.5 bg-linear-to-r from-gray-500 to-gray-600 text-white text-xs font-semibold rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
                                                   title="Edit Invoice"
                                                 >
-                                                  <FiEdit2 className="h-3.5 w-3.5 mr-1" />
+                                                  <FiEdit2 className="h-3 w-3 mr-1" />
                                                   Edit
                                                 </Link>
                                               </div>
@@ -506,7 +516,7 @@ export default function CustomersPage() {
                                   </table>
                                 </div>
                               ) : (
-                                <p className="text-sm text-gray-500 text-center py-4">
+                                <p className="text-sm text-gray-500 text-center py-6">
                                   No unpaid invoices found for this customer.
                                 </p>
                               )}
