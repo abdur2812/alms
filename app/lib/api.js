@@ -69,6 +69,7 @@ export const invoicesAPI = {
   getByDateRange: (params) =>
     api.get("/api/invoices/reports/date-range", { params }),
   previewNumber: () => api.get("/api/invoices/preview-number"),
+  bulkExport: () => api.get("/api/invoices/reports/bulk-pdf"),
 };
 
 export default api;

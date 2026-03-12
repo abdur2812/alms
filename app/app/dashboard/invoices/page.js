@@ -90,10 +90,8 @@ export default function InvoicesPage() {
 
   const downloadBulkInvoiceCSV = async () => {
     try {
-      const response = await fetch(
-        "http://localhost:3000/api/invoices/reports/bulk-pdf",
-      );
-      const result = await response.json();
+      const response = await invoicesAPI.bulkExport();
+      const result = response.data;
 
       if (!result.success) {
         alert("Failed to fetch invoice data");
