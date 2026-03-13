@@ -144,16 +144,6 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
         );
       }
 
-      // Check if product has sufficient stock
-      if (product.stockQuantity < item.quantity) {
-        return next(
-          new AppError(
-            `Insufficient stock for ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
-            400,
-          ),
-        );
-      }
-
       // Snapshot the current price and name at time of invoice creation
       validatedItem = {
         productId: product._id,

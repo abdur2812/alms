@@ -39,6 +39,11 @@ const EXTERNAL_LINKS = [
     href: "https://ewaybillgst.gov.in/login.aspx",
     icon: FiTruck,
   },
+  {
+    name: "MSME Tools",
+    href: "https://irismsme.com/msme-tools/",
+    icon: FiSettings,
+  },
 ];
 
 export default function DashboardLayout({ children }) {

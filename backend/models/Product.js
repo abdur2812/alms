@@ -57,12 +57,7 @@ productSchema.virtual("lowStock").get(function () {
 
 // Method to decrease stock
 productSchema.methods.decreaseStock = async function (quantity) {
-  if (this.stockQuantity < quantity) {
-    throw new Error(
-      `Insufficient stock for ${this.name}. Available: ${this.stockQuantity}, Required: ${quantity}`,
-    );
-  }
-  this.stockQuantity -= quantity;
+  this.stockQuantity = Math.max(0, this.stockQuantity - quantity);
   return await this.save();
 };
 

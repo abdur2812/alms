@@ -268,17 +268,6 @@ export default function NewInvoicePage() {
       return;
     }
 
-    if (
-      itemForm.productId &&
-      itemForm.availableStock !== null &&
-      Number(itemForm.quantity) > Number(itemForm.availableStock)
-    ) {
-      setError(
-        `Insufficient stock for ${itemForm.name}. Available: ${itemForm.availableStock}, Requested: ${itemForm.quantity}`,
-      );
-      return;
-    }
-
     setError("");
 
     const newItems = [...formData.items];
