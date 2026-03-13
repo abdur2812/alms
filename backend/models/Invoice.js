@@ -162,8 +162,8 @@ invoiceSchema.pre("save", function (next) {
   next();
 });
 
-// Static method to generate invoice number with format ALMS0001-2526
-// Fiscal year April 1 to March 31, resets to 0001 each fiscal year
+// Static method to generate invoice number with format ALMS 0001-2526
+// Fiscal year April 1 to March 31, sequence increments from latest number in that year.
 invoiceSchema.statics.generateInvoiceNumber = async function () {
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -187,14 +187,26 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
   const fyStartLabel = String(fiscalYearStart).slice(-2);
   const fyEndLabel = String(fiscalYearEnd).slice(-2);
 
-  // Count only tax invoices that already belong to the current fiscal series.
+  // Find latest tax invoice that already belongs to the current fiscal series.
   const fiscalSeries = `${fyStartLabel}${fyEndLabel}`;
-  const count = await this.countDocuments({
+  const latestInvoice = await this.findOne({
     isGstBill: true,
     invoiceNumber: { $regex: new RegExp(`^ALMS \\d{4}-${fiscalSeries}$`) },
-  });
+  })
+    .sort({ invoiceNumber: -1 })
+    .select("invoiceNumber")
+    .lean();
 
-  const sequenceNumber = String(count + 1).padStart(4, "0");
+  let nextSequence = 1;
+  if (latestInvoice && latestInvoice.invoiceNumber) {
+    const sequenceMatch =
+      latestInvoice.invoiceNumber.match(/^ALMS (\d{4})-\d{4}$/);
+    if (sequenceMatch) {
+      nextSequence = Number(sequenceMatch[1]) + 1;
+    }
+  }
+
+  const sequenceNumber = String(nextSequence).padStart(4, "0");
 
   return `ALMS ${sequenceNumber}-${fyStartLabel}${fyEndLabel}`;
 };

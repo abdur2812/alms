@@ -214,7 +214,40 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     vehicleNumber: vehicleNumber || "",
   };
 
-  const invoice = await Invoice.create(invoiceData);
+  // Retry create if invoiceNumber collides due to concurrent requests.
+  const maxCreateAttempts = 5;
+  let invoice;
+
+  for (let attempt = 1; attempt <= maxCreateAttempts; attempt++) {
+    try {
+      invoice = await Invoice.create(invoiceData);
+      break;
+    } catch (error) {
+      const isDuplicateInvoiceNumber =
+        error &&
+        error.code === 11000 &&
+        (error.keyPattern?.invoiceNumber ||
+          error.keyValue?.invoiceNumber ||
+          String(error.message || "").includes("invoiceNumber"));
+
+      if (!isDuplicateInvoiceNumber) {
+        throw error;
+      }
+
+      if (attempt === maxCreateAttempts) {
+        return next(
+          new AppError(
+            "Unable to generate a unique invoice number. Please try again.",
+            409,
+          ),
+        );
+      }
+
+      invoiceData.invoiceNumber = resolvedIsGstBill
+        ? await Invoice.generateInvoiceNumber()
+        : await Invoice.generateEstimateNumber();
+    }
+  }
 
   // Add invoice reference to customer (only for existing customers)
   if (customer && customerId) {
