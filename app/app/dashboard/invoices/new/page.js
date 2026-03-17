@@ -33,6 +33,7 @@ export default function NewInvoicePage() {
     isIgst: false,
     billType: "pay",
     vehicleNumber: "",
+    copyType: "original",
   });
 
   // Customer details state
@@ -289,7 +290,7 @@ export default function NewInvoicePage() {
       name: "",
       quantity: 1,
       unitPrice: 0,
-      gst: 0,
+      gst: 18,
       hsnCode: "",
       availableStock: null,
     });
@@ -328,7 +329,7 @@ export default function NewInvoicePage() {
       name: "",
       quantity: 1,
       unitPrice: 0,
-      gst: 0,
+      gst: 18,
       hsnCode: "",
       availableStock: null,
     });
@@ -519,6 +520,7 @@ export default function NewInvoicePage() {
         isGstBill: formData.isGstBill,
         isIgst: formData.isIgst,
         vehicleNumber: formData.vehicleNumber || "",
+        copyType: formData.copyType || "original",
         items: validItems.map((item) => ({
           productId: item.productId || null,
           name: item.name,
@@ -1314,6 +1316,43 @@ export default function NewInvoicePage() {
                     className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 bg-gray-50/50 text-gray-900 placeholder-gray-400 transition-all duration-200 uppercase tracking-widest font-medium"
                   />
                 </div>
+
+                {/* Original / Duplicate toggle */}
+                {formData.isGstBill && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+                      Copy Type
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100/80 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, copyType: "original" })
+                        }
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${
+                          formData.copyType === "original"
+                            ? "bg-linear-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200 -translate-y-0.5"
+                            : "text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        Original
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, copyType: "duplicate" })
+                        }
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${
+                          formData.copyType === "duplicate"
+                            ? "bg-linear-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-200 -translate-y-0.5"
+                            : "text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        Duplicate
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Submit CTA */}

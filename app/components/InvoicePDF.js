@@ -465,6 +465,16 @@ function BankRow({ label, value }) {
   );
 }
 
+function chunkItems(items, chunkSize) {
+  if (!items.length) return [[]];
+
+  const chunks = [];
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+  return chunks;
+}
+
 // ─── Column widths (must add up to ~100% or fixed pt) ───────────────────────
 // S.No, Particulars (wider), HSN, GST, Qty, Rate, Total
 const COL_WIDTHS = ["6%", "40%", "10%", "8%", "8%", "14%", "14%"];
@@ -571,9 +581,7 @@ export default function InvoiceDocument({ invoice }) {
     : "-";
 
   const billLabel = invoice.billType === "credit" ? "Credit Bill" : "Cash Bill";
-
-  // ── Item rows (pad to min 15) ─────────────────────────────────────────────
-  const paddedItems = [...items];
+  const itemChunks = chunkItems(items, 20);
 
   // ── GST breakdown rows ────────────────────────────────────────────────────
   const gstBreakdownRows = [];
@@ -612,236 +620,298 @@ export default function InvoiceDocument({ invoice }) {
 
   return (
     <Document>
-      <Page size="A4" style={S.page}>
-        <View style={S.outer}>
-          {/* ① HEADER — single unified bar */}
-          <View style={[{ flexDirection: "row" }, S.headerBg]}>
-            <View style={S.headerLeft}>
-              <Image
-                style={S.dealershipImg}
-                src={assetUrl("/dealership1.png")}
-              />
-              <Image
-                style={S.dealershipImg}
-                src={assetUrl("/dealership2.png")}
-              />
-            </View>
-            <View style={S.headerCenter}>
-              <Text style={S.bizName}>{biz.business_name}</Text>
-              <Text style={S.bizTagline}>{biz.tagline}</Text>
-              <Text style={S.bizAddress}>{bizLine1}</Text>
-              <Text style={S.bizAddress}>{bizLine2}</Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "center",
-                  marginTop: 2,
-                }}
-              >
-                <Text style={[S.bizPhone, { marginRight: 14 }]}>
-                  Ph: {biz.phone_numbers[0]}
-                </Text>
-                <Text style={S.bizPhone}>GPay: {biz.phone_numbers[1]}</Text>
-              </View>
-            </View>
-            <View style={S.headerRight}>
-              <Image style={S.headerLogo} src={assetUrl("/alms-logo.png")} />
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <Text style={S.gstinLabel}>GSTIN:</Text>
-                <Text style={S.gstinValue}>{biz.gst_number}</Text>
-              </View>
-            </View>
-          </View>
+      {itemChunks.map((pageItems, pageIndex) => {
+        const isLastPage = pageIndex === itemChunks.length - 1;
 
-          {/* ② TAX INVOICE / ESTIMATE TITLE */}
-          <View style={[S.titleSection, S.divider]}>
-            <Text style={S.titleText}>
-              {invoice.isGstBill ? "TAX INVOICE" : "ESTIMATE"}
-            </Text>
-          </View>
-
-          {/* ③ CUSTOMER + META */}
-          <View style={[S.splitRow, S.divider]}>
-            <View style={S.splitLeft60}>
-              <Text style={S.sectionLabel}>Bill To</Text>
-              <Text style={S.custName}>{customer.name || "-"}</Text>
-              {customer.phone && (
-                <Text style={S.custDetail}>Ph: {customer.phone}</Text>
-              )}
-              {customer.gstNumber && (
-                <Text style={S.custDetail}>GST: {customer.gstNumber}</Text>
-              )}
-              {custAddrStr ? (
-                <Text
-                  style={[S.custDetail, { color: "#555555", marginTop: 2 }]}
-                >
-                  {custAddrStr}
-                </Text>
-              ) : null}
-            </View>
-            <View style={S.splitRight40}>
-              <MetaRow
-                label="Invoice No"
-                value={invoice.invoiceNumber || "-"}
-                bold
-              />
-              <MetaRow label="Date" value={invoiceDate} bold />
-              <MetaRow label="Bill Type" value={billLabel} />
-              <MetaRow
-                label="GST Bill"
-                value={invoice.isGstBill ? "Yes" : "No"}
-              />
-              <MetaRow
-                label="Vehicle No"
-                value={invoice.vehicleNumber || "-"}
-              />
-            </View>
-          </View>
-
-          {/* ④ ITEMS TABLE */}
-          <View style={S.divider}>
-            <View style={S.tableOuter}>
-              {/* Header row */}
-              <View style={S.tableHeader}>
-                {HEADER_LABELS.map((label, i) => (
-                  <TableCell
-                    key={i}
-                    width={COL_WIDTHS[i]}
-                    align={HEADER_ALIGNS[i]}
-                    isLast={i === HEADER_LABELS.length - 1}
-                    isHeader
+        return (
+          <Page key={pageIndex} size="A4" style={S.page}>
+            <View style={S.outer}>
+              {/* ① HEADER — single unified bar */}
+              <View style={[{ flexDirection: "row" }, S.headerBg]}>
+                <View style={S.headerLeft}>
+                  <Image
+                    style={S.dealershipImg}
+                    src={assetUrl("/dealership1.png")}
+                  />
+                  <Image
+                    style={S.dealershipImg}
+                    src={assetUrl("/dealership2.png")}
+                  />
+                </View>
+                <View style={S.headerCenter}>
+                  <Text style={S.bizName}>{biz.business_name}</Text>
+                  <Text style={S.bizTagline}>{biz.tagline}</Text>
+                  <Text style={S.bizAddress}>{bizLine1}</Text>
+                  <Text style={S.bizAddress}>{bizLine2}</Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "center",
+                      marginTop: 2,
+                    }}
                   >
-                    {label}
-                  </TableCell>
-                ))}
-              </View>
-
-              {/* Data rows */}
-              {paddedItems.map((item, idx) => (
-                <ItemRow
-                  key={idx}
-                  item={item}
-                  idx={idx}
-                  isGstBill={invoice.isGstBill}
-                />
-              ))}
-            </View>
-          </View>
-
-          {/* ⑤ TOTALS + WORDS */}
-          <View
-            style={[
-              S.splitRow,
-              S.divider,
-              {
-                borderBottomWidth: 1.5,
-                borderBottomColor: "#3730a3",
-              },
-            ]}
-          >
-            {/* Left: amount in words */}
-            <View style={S.splitLeft55}>
-              <Text style={S.wordsLabel}>Amount in Words</Text>
-              <Text style={S.wordsText}>{convertToWords(grandTotal)}</Text>
-            </View>
-
-            {/* Right: totals breakdown */}
-            <View style={S.splitRight45}>
-              <View style={S.totalsRow}>
-                <Text style={S.totalsLabel}>Subtotal</Text>
-                <Text style={S.totalsValue}>{fmt(subtotal)}</Text>
-              </View>
-              {gstBreakdownRows.map(([label, value], i) => (
-                <View key={i} style={S.totalsRow}>
-                  <Text style={S.totalsLabel}>{label}</Text>
-                  <Text style={S.totalsValue}>{value}</Text>
+                    <Text style={S.bizPhone}>Ph: {biz.phone_numbers[0]}</Text>
+                  </View>
                 </View>
-              ))}
-              <View style={S.grandTotalRow}>
-                <Text style={S.grandTotalLabel}>Grand Total</Text>
-                <Text style={S.grandTotalValue}>
-                  {fmt(Math.round(grandTotal))}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Spacer */}
-          <View style={S.spacer} />
-
-          {/* E.&O.E. */}
-          <View style={[S.eoeSection, S.divider]}>
-            <Text style={S.eoeTitle}>E.&O.E.</Text>
-          </View>
-
-          {/* ⑧ BANK + SIGNATURE + QR */}
-          <View style={[S.splitRow, S.divider]}>
-            <View style={S.splitLeft55}>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[S.sectionLabel, { marginBottom: 3 }]}>
-                    Account Details
-                  </Text>
-                  <BankRow label="A/C Holder" value={bank.account_holder} />
-                  <BankRow label="Account No" value={bank.account_number} />
-                  <BankRow label="IFSC" value={bank.ifsc_code} />
-                  <BankRow label="Branch" value={bank.branch_name} />
-                  <BankRow label="Bank Name" value={bank.bank_name} />
-                </View>
-                <View style={S.qrWrapper}>
-                  <Image style={S.qrImage} src={assetUrl("/gpay-qr.png")} />
+                <View style={S.headerRight}>
+                  <Image
+                    style={S.headerLogo}
+                    src={assetUrl("/alms-logo.png")}
+                  />
+                  {invoice.isGstBill && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <Text style={S.gstinLabel}>GSTIN:</Text>
+                      <Text style={S.gstinValue}>{biz.gst_number}</Text>
+                    </View>
+                  )}
                 </View>
               </View>
-            </View>
-            <View style={S.splitRight45}>
-              <Text style={S.forText}>For {biz.business_name}</Text>
-              <View style={S.sigLine} />
-              <Text style={S.sigLabel}>{decl.signature_label}</Text>
-            </View>
-          </View>
 
-          {/* ⑨ FOOTER */}
-          <View style={[S.footer, S.divider]}>
-            {/* Customer Signature */}
-            <View
-              style={{
-                width: "30%",
-                paddingRight: 8,
-                justifyContent: "flex-start",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 7,
-                  fontFamily: "Helvetica-Bold",
-                  color: "#000000",
-                }}
+              {/* ② TAX INVOICE / ESTIMATE TITLE */}
+              <View
+                style={[
+                  S.titleSection,
+                  S.divider,
+                  { flexDirection: "row", alignItems: "center" },
+                ]}
               >
-                Customer's Signature
-              </Text>
+                <View style={{ flex: 1 }} />
+                <Text style={S.titleText}>
+                  {invoice.isGstBill ? "TAX INVOICE" : "ESTIMATE"}
+                </Text>
+                <View style={{ flex: 1 }}>
+                  {invoice.isGstBill && (
+                    <Text
+                      style={{
+                        fontFamily: "Helvetica-Bold",
+                        fontSize: 7,
+                        textAlign: "right",
+                        paddingRight: 9,
+                        color: "#000000",
+                        letterSpacing: 1,
+                      }}
+                    >
+                      {(invoice.copyType || "original").toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* ③ CUSTOMER + META */}
+              <View style={[S.splitRow, S.divider]}>
+                <View style={S.splitLeft60}>
+                  <Text style={S.sectionLabel}>Bill To</Text>
+                  <Text style={S.custName}>{customer.name || "-"}</Text>
+                  {customer.phone && (
+                    <Text style={S.custDetail}>Ph: {customer.phone}</Text>
+                  )}
+                  {customer.gstNumber && (
+                    <Text style={S.custDetail}>GST: {customer.gstNumber}</Text>
+                  )}
+                  {custAddrStr ? (
+                    <Text
+                      style={[S.custDetail, { color: "#555555", marginTop: 2 }]}
+                    >
+                      {custAddrStr}
+                    </Text>
+                  ) : null}
+                </View>
+                <View style={S.splitRight40}>
+                  <MetaRow
+                    label="Invoice No"
+                    value={invoice.invoiceNumber || "-"}
+                    bold
+                  />
+                  <MetaRow label="Date" value={invoiceDate} bold />
+                  <MetaRow label="Bill Type" value={billLabel} />
+                  <MetaRow
+                    label="GST Bill"
+                    value={invoice.isGstBill ? "Yes" : "No"}
+                  />
+                  <MetaRow
+                    label="Vehicle No"
+                    value={invoice.vehicleNumber || "-"}
+                  />
+                </View>
+              </View>
+
+              {/* ④ ITEMS TABLE */}
+              <View style={S.divider}>
+                <View style={S.tableOuter}>
+                  {/* Header row */}
+                  <View style={S.tableHeader}>
+                    {HEADER_LABELS.map((label, i) => (
+                      <TableCell
+                        key={i}
+                        width={COL_WIDTHS[i]}
+                        align={HEADER_ALIGNS[i]}
+                        isLast={i === HEADER_LABELS.length - 1}
+                        isHeader
+                      >
+                        {label}
+                      </TableCell>
+                    ))}
+                  </View>
+
+                  {/* Data rows */}
+                  {pageItems.map((item, idx) => (
+                    <ItemRow
+                      key={idx}
+                      item={item}
+                      idx={pageIndex * 20 + idx}
+                      isGstBill={invoice.isGstBill}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              {isLastPage ? (
+                <>
+                  {/* ⑤ TOTALS + WORDS */}
+                  <View
+                    style={[
+                      S.splitRow,
+                      S.divider,
+                      {
+                        borderBottomWidth: 1.5,
+                        borderBottomColor: "#3730a3",
+                      },
+                    ]}
+                  >
+                    <View style={S.splitLeft55}>
+                      <Text style={S.wordsLabel}>Amount in Words</Text>
+                      <Text style={S.wordsText}>
+                        {convertToWords(grandTotal)}
+                      </Text>
+                    </View>
+
+                    <View style={S.splitRight45}>
+                      <View style={S.totalsRow}>
+                        <Text style={S.totalsLabel}>Subtotal</Text>
+                        <Text style={S.totalsValue}>{fmt(subtotal)}</Text>
+                      </View>
+                      {gstBreakdownRows.map(([label, value], i) => (
+                        <View key={i} style={S.totalsRow}>
+                          <Text style={S.totalsLabel}>{label}</Text>
+                          <Text style={S.totalsValue}>{value}</Text>
+                        </View>
+                      ))}
+                      <View style={S.grandTotalRow}>
+                        <Text style={S.grandTotalLabel}>Grand Total</Text>
+                        <Text style={S.grandTotalValue}>
+                          {fmt(Math.round(grandTotal))}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={S.spacer} />
+
+                  <View style={[S.eoeSection, S.divider]}>
+                    <Text style={S.eoeTitle}>E.&O.E.</Text>
+                  </View>
+
+                  {invoice.isGstBill && (
+                    <View style={[S.splitRow, S.divider]}>
+                      <View style={S.splitLeft55}>
+                        <View
+                          style={{ flexDirection: "row", alignItems: "center" }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[S.sectionLabel, { marginBottom: 3 }]}>
+                              Account Details
+                            </Text>
+                            <BankRow
+                              label="A/C Holder"
+                              value={bank.account_holder}
+                            />
+                            <BankRow
+                              label="Account No"
+                              value={bank.account_number}
+                            />
+                            <BankRow label="IFSC" value={bank.ifsc_code} />
+                            <BankRow label="Branch" value={bank.branch_name} />
+                            <BankRow label="Bank Name" value={bank.bank_name} />
+                          </View>
+                          <View style={S.qrWrapper}>
+                            <Image
+                              style={S.qrImage}
+                              src={assetUrl("/gpay-qr.png")}
+                            />
+                            <Text
+                              style={{
+                                fontSize: 7,
+                                marginTop: 3,
+                                color: "#000000",
+                                textAlign: "center",
+                              }}
+                            >
+                              GPay: {biz.phone_numbers[1]}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={S.splitRight45}>
+                        <Text style={S.forText}>For {biz.business_name}</Text>
+                        <View style={S.sigLine} />
+                        <Text style={S.sigLabel}>{decl.signature_label}</Text>
+                      </View>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <View style={S.spacer} />
+              )}
+
+              {/* ⑨ FOOTER */}
+              <View style={[S.footer, S.divider]}>
+                {/* Customer Signature - only for credit bills */}
+                <View
+                  style={{
+                    width: "30%",
+                    paddingRight: 8,
+                    justifyContent: "flex-start",
+                  }}
+                >
+                  {invoice.billType === "credit" && (
+                    <Text
+                      style={{
+                        fontSize: 7,
+                        fontFamily: "Helvetica-Bold",
+                        color: "#000000",
+                      }}
+                    >
+                      Customer's Signature
+                    </Text>
+                  )}
+                </View>
+                {/* Center text */}
+                <View style={{ flex: 1, alignItems: "center" }}>
+                  <Text style={S.footerText}>Thank You for Your Business!</Text>
+                  <Text style={S.footerText}>
+                    This is a Computer Generated Bill
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    S.footerPageText,
+                    { width: "30%", textAlign: "right" },
+                  ]}
+                  render={({ pageNumber, totalPages }) =>
+                    `Page ${pageNumber} of ${totalPages}`
+                  }
+                />
+              </View>
             </View>
-            {/* Center text */}
-            <View style={{ flex: 1, alignItems: "center" }}>
-              <Text style={S.footerText}>Thank You for Your Business!</Text>
-              <Text style={S.footerText}>
-                This is a Computer Generated Bill
-              </Text>
-            </View>
-            <Text
-              style={[S.footerPageText, { width: "30%", textAlign: "right" }]}
-              render={({ pageNumber, totalPages }) =>
-                `Page ${pageNumber} of ${totalPages}`
-              }
-            />
-          </View>
-        </View>
-      </Page>
+          </Page>
+        );
+      })}
     </Document>
   );
 }

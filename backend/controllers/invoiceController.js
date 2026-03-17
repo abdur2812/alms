@@ -15,7 +15,7 @@ exports.previewInvoiceNumber = asyncHandler(async (req, res, next) => {
 // @route   GET /api/invoices
 // @access  Public
 exports.getAllInvoices = asyncHandler(async (req, res, next) => {
-  const { page = 1, limit = 10, customerId, billType } = req.query;
+  const { page = 1, limit = 10, customerId, billType, search } = req.query;
 
   const query = {};
 
@@ -29,12 +29,28 @@ exports.getAllInvoices = asyncHandler(async (req, res, next) => {
     query.customerId = customerId;
   }
 
+  if (search) {
+    const regex = new RegExp(search.trim(), "i");
+    const matchingCustomers = await Customer.find({ name: regex }).select(
+      "_id",
+    );
+    const matchingCustomerIds = matchingCustomers.map(
+      (customer) => customer._id,
+    );
+
+    query.$or = [
+      { invoiceNumber: regex },
+      { "customerData.name": regex },
+      { customerId: { $in: matchingCustomerIds } },
+    ];
+  }
+
   const invoices = await Invoice.find(query)
     .populate("customerId", "name phone")
     .populate("items.productId", "name")
     .limit(limit * 1)
     .skip((page - 1) * limit)
-    .sort({ createdAt: -1 });
+    .sort({ invoiceNumber: -1, createdAt: -1 });
 
   const count = await Invoice.countDocuments(query);
 
@@ -85,6 +101,7 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     igstRate,
     billType,
     vehicleNumber,
+    copyType,
   } = req.body;
 
   // Validate items array
@@ -188,9 +205,18 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     ? await Invoice.generateInvoiceNumber()
     : await Invoice.generateEstimateNumber();
 
+  // For estimates: pre-reserve the next GST invoice number so that if/when
+  // this estimate is converted it gets a number consistent with its creation
+  // order, not the conversion time order.
+  let pendingInvoiceNumber = null;
+  if (!resolvedIsGstBill) {
+    pendingInvoiceNumber = await Invoice.generateInvoiceNumber();
+  }
+
   // Create invoice with all new fields
   const invoiceData = {
     invoiceNumber,
+    pendingInvoiceNumber,
     customerId,
     customerData: snapshotCustomerData,
     items: validatedItems,
@@ -202,6 +228,7 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     igstRate: igstRate || 0,
     billType: billType || "pay",
     vehicleNumber: vehicleNumber || "",
+    copyType: copyType || "original",
   };
 
   // Retry create if invoiceNumber collides due to concurrent requests.
@@ -365,7 +392,15 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
   if (vehicleNumber !== undefined) invoice.vehicleNumber = vehicleNumber;
 
   if (!wasGstBill && invoice.isGstBill) {
-    invoice.invoiceNumber = await Invoice.generateInvoiceNumber();
+    // Use the pre-reserved number assigned at estimate creation time so the
+    // converted invoice keeps its original sequential position. Fall back to
+    // generating a new number for old estimates that predate this feature.
+    if (invoice.pendingInvoiceNumber) {
+      invoice.invoiceNumber = invoice.pendingInvoiceNumber;
+      invoice.pendingInvoiceNumber = undefined;
+    } else {
+      invoice.invoiceNumber = await Invoice.generateInvoiceNumber();
+    }
   }
 
   await invoice.save();

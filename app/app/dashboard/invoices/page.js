@@ -15,6 +15,8 @@ import {
   FiSearch,
   FiFileText,
   FiDownload,
+  FiArchive,
+  FiX,
 } from "react-icons/fi";
 
 export default function InvoicesPage() {
@@ -27,6 +29,14 @@ export default function InvoicesPage() {
   const [customerFilter, setCustomerFilter] = useState("");
   const [error, setError] = useState("");
   const [converting, setConverting] = useState(null);
+  const [search, setSearch] = useState("");
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [bulkPdfMonth, setBulkPdfMonth] = useState("");
+  const [bulkPdfLoading, setBulkPdfLoading] = useState(false);
+  const [bulkPdfProgress, setBulkPdfProgress] = useState({
+    current: 0,
+    total: 0,
+  });
 
   useEffect(() => {
     // Read URL parameters
@@ -39,7 +49,7 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     fetchInvoices();
-  }, [page, billTypeFilter, customerFilter]);
+  }, [page, billTypeFilter, customerFilter, search]);
 
   const fetchInvoices = async () => {
     try {
@@ -47,6 +57,7 @@ export default function InvoicesPage() {
       const params = { page, limit: 10 };
       if (billTypeFilter) params.billType = billTypeFilter;
       if (customerFilter) params.customerId = customerFilter;
+      if (search.trim()) params.search = search.trim();
 
       const response = await invoicesAPI.getAll(params);
       setInvoices(response.data.data);
@@ -87,6 +98,91 @@ export default function InvoicesPage() {
       );
     } finally {
       setConverting(null);
+    }
+  };
+
+  const handleBulkPdfRequest = () => {
+    // Default to current month
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    setBulkPdfMonth(`${y}-${m}`);
+    setShowMonthPicker(true);
+  };
+
+  const downloadBulkPDFZip = async () => {
+    if (!bulkPdfMonth) return;
+    const currentInvoicePattern = /^ALMS \d{4}-\d{4}$/;
+    const [yearStr, monthStr] = bulkPdfMonth.split("-");
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const startDate = new Date(year, month - 1, 1).toISOString();
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
+
+    setShowMonthPicker(false);
+    setBulkPdfLoading(true);
+    setBulkPdfProgress({ current: 0, total: 0 });
+
+    try {
+      const response = await invoicesAPI.getByDateRange({ startDate, endDate });
+      const invoices = response.data.data;
+
+      if (!invoices || invoices.length === 0) {
+        alert("No invoices found for the selected month.");
+        return;
+      }
+
+      // Skip invoices that do not exactly match the current invoice format.
+      const validInvoices = invoices.filter((inv) =>
+        currentInvoicePattern.test(inv.invoiceNumber || ""),
+      );
+
+      if (validInvoices.length === 0) {
+        alert(
+          "No invoices with the current format (ALMS XXXX-XXXX) found for this month.",
+        );
+        setBulkPdfLoading(false);
+        return;
+      }
+
+      setBulkPdfProgress({ current: 0, total: validInvoices.length });
+
+      const [{ pdf }, { default: InvoiceDoc }, { default: JSZip }] =
+        await Promise.all([
+          import("@react-pdf/renderer"),
+          import("@/components/InvoicePDF"),
+          import("jszip"),
+        ]);
+
+      const zip = new JSZip();
+      const monthLabel = new Date(year, month - 1, 1).toLocaleString("en-IN", {
+        month: "long",
+        year: "numeric",
+      });
+
+      for (let i = 0; i < validInvoices.length; i++) {
+        const invoice = validInvoices[i];
+        const blob = await pdf(<InvoiceDoc invoice={invoice} />).toBlob();
+        const filename = `${invoice.invoiceNumber}.pdf`;
+        zip.file(filename, blob);
+        setBulkPdfProgress({ current: i + 1, total: validInvoices.length });
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Invoices-${monthLabel}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Failed to generate PDF ZIP. Please try again.");
+      console.error(err);
+    } finally {
+      setBulkPdfLoading(false);
+      setBulkPdfProgress({ current: 0, total: 0 });
     }
   };
 
@@ -158,6 +254,16 @@ export default function InvoicesPage() {
         subtitle="Manage and track your customer bills"
         action={
           <div className="flex gap-3">
+            <Button
+              onClick={handleBulkPdfRequest}
+              variant="secondary"
+              disabled={bulkPdfLoading}
+            >
+              <FiArchive className="mr-2" />
+              {bulkPdfLoading
+                ? `Generating... ${bulkPdfProgress.current}/${bulkPdfProgress.total}`
+                : "Bulk PDF ZIP"}
+            </Button>
             <Button onClick={downloadBulkInvoiceCSV} variant="secondary">
               <FiDownload className="mr-2" />
               Download CSV
@@ -255,6 +361,27 @@ export default function InvoicesPage() {
           {error}
         </div>
       )}
+
+      {/* Search */}
+      <Card className="mb-8 animate-fadeIn">
+        <CardBody>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <FiSearch className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 text-sm"
+              placeholder="Search by invoice number or customer name..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+        </CardBody>
+      </Card>
 
       {/* Invoices table */}
       <Card className="animate-fadeIn">
@@ -446,6 +573,60 @@ export default function InvoicesPage() {
           )}
         </div>
       </Card>
+
+      {/* Month Picker Modal */}
+      {showMonthPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4 animate-fadeIn">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Bulk PDF Export
+                </h2>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Select the month to export as ZIP
+                </p>
+              </div>
+              <button
+                onClick={() => setShowMonthPicker(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Month
+              </label>
+              <input
+                type="month"
+                value={bulkPdfMonth}
+                max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`}
+                onChange={(e) => setBulkPdfMonth(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowMonthPicker(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={downloadBulkPDFZip}
+                disabled={!bulkPdfMonth}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                <FiArchive className="h-4 w-4" />
+                Generate ZIP
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

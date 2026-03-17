@@ -10,6 +10,8 @@ const PORT = process.env.PORT || 3000;
 const customerRoutes = require("./routes/customerRoutes");
 const productRoutes = require("./routes/productRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
+// Register Counter model before any invoice operations use it
+require("./models/Counter");
 
 // Import error handler
 const { errorHandler } = require("./middleware/errorHandler");
