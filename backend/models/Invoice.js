@@ -114,8 +114,13 @@ const invoiceSchema = new mongoose.Schema(
       enum: ["original", "duplicate"],
       default: "original",
     },
-    // Reserved GST invoice number assigned when estimate is created,
-    // so converting later gives the correct sequential number.
+    // Controls list ordering: estimates use creation time; converted invoices
+    // get updated to conversion time so they appear as latest.
+    numberAssignedAt: {
+      type: Date,
+      default: null,
+    },
+    // Legacy field retained for backward compatibility.
     pendingInvoiceNumber: {
       type: String,
       default: null,
@@ -198,27 +203,18 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
 
   if (!result) {
     // Counter does not exist yet for this fiscal year.
-    // Scan the DB to find the current maximum sequence so we start correctly.
+    // Scan GST invoice numbers to find the current maximum sequence.
     const pattern = new RegExp(`^ALMS \\d{4}-${fiscalSeries}$`);
-    const [gstInvoices, estPending] = await Promise.all([
-      this.find({ isGstBill: true, invoiceNumber: { $regex: pattern } })
-        .select("invoiceNumber")
-        .lean(),
-      this.find({
-        isGstBill: false,
-        pendingInvoiceNumber: { $regex: pattern },
-      })
-        .select("pendingInvoiceNumber")
-        .lean(),
-    ]);
+    const gstInvoices = await this.find({
+      isGstBill: true,
+      invoiceNumber: { $regex: pattern },
+    })
+      .select("invoiceNumber")
+      .lean();
 
     let dbMax = 0;
     for (const inv of gstInvoices) {
       const m = inv.invoiceNumber.match(/^ALMS (\d{4})-\d{4}$/);
-      if (m) dbMax = Math.max(dbMax, Number(m[1]));
-    }
-    for (const est of estPending) {
-      const m = est.pendingInvoiceNumber?.match(/^ALMS (\d{4})-\d{4}$/);
       if (m) dbMax = Math.max(dbMax, Number(m[1]));
     }
 
@@ -239,6 +235,42 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
   }
 
   return `ALMS ${String(result.sequence).padStart(4, "0")}-${fiscalSeries}`;
+};
+
+// Read-only preview of next GST invoice number.
+invoiceSchema.statics.peekNextInvoiceNumber = async function () {
+  const Counter = mongoose.model("Counter");
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const fiscalYearStart = currentMonth < 3 ? currentYear - 1 : currentYear;
+  const fiscalYearEnd = fiscalYearStart + 1;
+  const fyStartLabel = String(fiscalYearStart).slice(-2);
+  const fyEndLabel = String(fiscalYearEnd).slice(-2);
+  const fiscalSeries = `${fyStartLabel}${fyEndLabel}`;
+  const counterId = `inv-${fiscalSeries}`;
+
+  const counter = await Counter.findById(counterId).lean();
+  if (counter && Number.isFinite(counter.sequence)) {
+    return `ALMS ${String(counter.sequence + 1).padStart(4, "0")}-${fiscalSeries}`;
+  }
+
+  const pattern = new RegExp(`^ALMS \\d{4}-${fiscalSeries}$`);
+  const gstInvoices = await this.find({
+    isGstBill: true,
+    invoiceNumber: { $regex: pattern },
+  })
+    .select("invoiceNumber")
+    .lean();
+
+  let dbMax = 0;
+  for (const inv of gstInvoices) {
+    const m = inv.invoiceNumber.match(/^ALMS (\d{4})-\d{4}$/);
+    if (m) dbMax = Math.max(dbMax, Number(m[1]));
+  }
+
+  return `ALMS ${String(dbMax + 1).padStart(4, "0")}-${fiscalSeries}`;
 };
 
 invoiceSchema.statics.generateEstimateNumber = async function () {
@@ -280,6 +312,32 @@ invoiceSchema.statics.generateEstimateNumber = async function () {
   }
 
   return `EST-${String(result.sequence).padStart(4, "0")}`;
+};
+
+// Read-only preview of next estimate number.
+invoiceSchema.statics.peekNextEstimateNumber = async function () {
+  const Counter = mongoose.model("Counter");
+  const counterId = "est";
+
+  const counter = await Counter.findById(counterId).lean();
+  if (counter && Number.isFinite(counter.sequence)) {
+    return `EST-${String(counter.sequence + 1).padStart(4, "0")}`;
+  }
+
+  const estimates = await this.find({
+    isGstBill: false,
+    invoiceNumber: { $regex: /^EST-\d{4}$/ },
+  })
+    .select("invoiceNumber")
+    .lean();
+
+  let dbMax = 0;
+  for (const est of estimates) {
+    const m = est.invoiceNumber.match(/^EST-(\d{4})$/);
+    if (m) dbMax = Math.max(dbMax, Number(m[1]));
+  }
+
+  return `EST-${String(dbMax + 1).padStart(4, "0")}`;
 };
 
 // Post-save hook to handle stock management when status changes to 'Paid'

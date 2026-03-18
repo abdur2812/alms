@@ -40,6 +40,7 @@ export default function FullEditInvoicePage({ params }) {
     isGstBill: true,
     isIgst: false,
     billType: "pay",
+    copyType: "original",
   });
 
   useEffect(() => {
@@ -114,6 +115,7 @@ export default function FullEditInvoicePage({ params }) {
         isGstBill: invoice.isGstBill !== undefined ? invoice.isGstBill : true,
         isIgst: invoice.isIgst || false,
         billType: invoice.billType || "pay",
+        copyType: invoice.copyType || "original",
       });
       setLoading(false);
     } catch (err) {
@@ -294,6 +296,7 @@ export default function FullEditInvoicePage({ params }) {
         isGstBill: formData.isGstBill,
         isIgst: formData.isIgst,
         billType: formData.billType,
+        copyType: formData.copyType || "original",
       };
 
       await invoicesAPI.update(id, updateData);
@@ -760,6 +763,43 @@ export default function FullEditInvoicePage({ params }) {
                     { value: "credit", label: "🏦 Credit Bill" },
                   ]}
                 />
+
+                {/* Original / Duplicate toggle */}
+                {formData.isGstBill && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+                      Copy Type
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100/80 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, copyType: "original" })
+                        }
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${
+                          formData.copyType === "original"
+                            ? "bg-linear-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200 -translate-y-0.5"
+                            : "text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        Original
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, copyType: "duplicate" })
+                        }
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${
+                          formData.copyType === "duplicate"
+                            ? "bg-linear-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-200 -translate-y-0.5"
+                            : "text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        Duplicate
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Submit CTA */}

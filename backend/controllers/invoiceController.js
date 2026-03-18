@@ -3,11 +3,26 @@ const Customer = require("../models/Customer");
 const Product = require("../models/Product");
 const { AppError, asyncHandler } = require("../middleware/errorHandler");
 
+const parseOptionalBoolean = (value) => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return Boolean(value);
+};
+
 // @desc    Preview next invoice number (without creating)
 // @route   GET /api/invoices/preview-number
 // @access  Public
 exports.previewInvoiceNumber = asyncHandler(async (req, res, next) => {
-  const nextNumber = await Invoice.generateInvoiceNumber();
+  const parsedIsGstBill = parseOptionalBoolean(req.query.isGstBill);
+  const isGstBill = parsedIsGstBill === undefined ? true : parsedIsGstBill;
+  const nextNumber = isGstBill
+    ? await Invoice.peekNextInvoiceNumber()
+    : await Invoice.peekNextEstimateNumber();
   res.status(200).json({ success: true, data: { invoiceNumber: nextNumber } });
 });
 
@@ -15,7 +30,14 @@ exports.previewInvoiceNumber = asyncHandler(async (req, res, next) => {
 // @route   GET /api/invoices
 // @access  Public
 exports.getAllInvoices = asyncHandler(async (req, res, next) => {
-  const { page = 1, limit = 10, customerId, billType, search } = req.query;
+  const {
+    page = 1,
+    limit = 10,
+    customerId,
+    billType,
+    isGstBill,
+    search,
+  } = req.query;
 
   const query = {};
 
@@ -27,6 +49,13 @@ exports.getAllInvoices = asyncHandler(async (req, res, next) => {
   // Filter by customer
   if (customerId) {
     query.customerId = customerId;
+  }
+
+  // Filter by invoice mode (tax invoice vs estimate)
+  if (isGstBill === "true") {
+    query.isGstBill = true;
+  } else if (isGstBill === "false") {
+    query.isGstBill = false;
   }
 
   if (search) {
@@ -50,7 +79,7 @@ exports.getAllInvoices = asyncHandler(async (req, res, next) => {
     .populate("items.productId", "name")
     .limit(limit * 1)
     .skip((page - 1) * limit)
-    .sort({ invoiceNumber: -1, createdAt: -1 });
+    .sort({ numberAssignedAt: -1, createdAt: -1, _id: -1 });
 
   const count = await Invoice.countDocuments(query);
 
@@ -196,27 +225,28 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
     validatedItems.push(validatedItem);
   }
 
-  const resolvedIsGstBill = isGstBill !== undefined ? isGstBill : true;
+  const parsedIsGstBill = parseOptionalBoolean(isGstBill);
+  const parsedIsIgst = parseOptionalBoolean(isIgst);
+  const parsedLegacyIsIgst = parseOptionalBoolean(isIGST);
+
+  const resolvedIsGstBill =
+    parsedIsGstBill === undefined ? true : parsedIsGstBill;
   const resolvedIsIgst = resolvedIsGstBill
-    ? (isIgst ?? isIGST ?? false)
+    ? (parsedIsIgst ?? parsedLegacyIsIgst ?? false)
     : false;
 
   const invoiceNumber = resolvedIsGstBill
     ? await Invoice.generateInvoiceNumber()
     : await Invoice.generateEstimateNumber();
 
-  // For estimates: pre-reserve the next GST invoice number so that if/when
-  // this estimate is converted it gets a number consistent with its creation
-  // order, not the conversion time order.
-  let pendingInvoiceNumber = null;
-  if (!resolvedIsGstBill) {
-    pendingInvoiceNumber = await Invoice.generateInvoiceNumber();
-  }
+  // Legacy field retained for backward compatibility with older records.
+  const pendingInvoiceNumber = null;
 
   // Create invoice with all new fields
   const invoiceData = {
     invoiceNumber,
     pendingInvoiceNumber,
+    numberAssignedAt: new Date(),
     customerId,
     customerData: snapshotCustomerData,
     items: validatedItems,
@@ -313,6 +343,7 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
     isGstBill,
     isIGST,
     isIgst,
+    copyType,
     vehicleNumber,
   } = req.body;
 
@@ -383,24 +414,27 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
   // Update other fields
   if (taxRate !== undefined) invoice.taxRate = taxRate;
   if (billType) invoice.billType = billType;
-  if (isGstBill !== undefined) invoice.isGstBill = isGstBill;
-  if (isIgst !== undefined || isIGST !== undefined) {
-    invoice.isIgst = invoice.isGstBill ? (isIgst ?? isIGST ?? false) : false;
+  if (copyType) invoice.copyType = copyType;
+  const parsedIsGstBill = parseOptionalBoolean(isGstBill);
+  const parsedIsIgst = parseOptionalBoolean(isIgst);
+  const parsedLegacyIsIgst = parseOptionalBoolean(isIGST);
+
+  if (parsedIsGstBill !== undefined) invoice.isGstBill = parsedIsGstBill;
+  if (parsedIsIgst !== undefined || parsedLegacyIsIgst !== undefined) {
+    invoice.isIgst = invoice.isGstBill
+      ? (parsedIsIgst ?? parsedLegacyIsIgst ?? false)
+      : false;
   } else if (!invoice.isGstBill) {
     invoice.isIgst = false;
   }
   if (vehicleNumber !== undefined) invoice.vehicleNumber = vehicleNumber;
 
   if (!wasGstBill && invoice.isGstBill) {
-    // Use the pre-reserved number assigned at estimate creation time so the
-    // converted invoice keeps its original sequential position. Fall back to
-    // generating a new number for old estimates that predate this feature.
-    if (invoice.pendingInvoiceNumber) {
-      invoice.invoiceNumber = invoice.pendingInvoiceNumber;
-      invoice.pendingInvoiceNumber = undefined;
-    } else {
-      invoice.invoiceNumber = await Invoice.generateInvoiceNumber();
-    }
+    // Assign the next available GST invoice number at conversion time.
+    // This keeps converted estimates after the latest already-created invoice.
+    invoice.invoiceNumber = await Invoice.generateInvoiceNumber();
+    invoice.numberAssignedAt = new Date();
+    invoice.pendingInvoiceNumber = null;
   }
 
   await invoice.save();

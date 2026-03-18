@@ -26,6 +26,7 @@ export default function InvoicesPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [billTypeFilter, setBillTypeFilter] = useState("");
+  const [invoiceModeFilter, setInvoiceModeFilter] = useState("");
   const [customerFilter, setCustomerFilter] = useState("");
   const [error, setError] = useState("");
   const [converting, setConverting] = useState(null);
@@ -42,20 +43,25 @@ export default function InvoicesPage() {
     // Read URL parameters
     const customer = searchParams.get("customer");
     const billType = searchParams.get("billType");
+    const invoiceMode = searchParams.get("isGstBill");
 
     if (customer) setCustomerFilter(customer);
     if (billType) setBillTypeFilter(billType);
+    if (invoiceMode === "true" || invoiceMode === "false") {
+      setInvoiceModeFilter(invoiceMode);
+    }
   }, [searchParams]);
 
   useEffect(() => {
     fetchInvoices();
-  }, [page, billTypeFilter, customerFilter, search]);
+  }, [page, billTypeFilter, invoiceModeFilter, customerFilter, search]);
 
   const fetchInvoices = async () => {
     try {
       setLoading(true);
       const params = { page, limit: 10 };
       if (billTypeFilter) params.billType = billTypeFilter;
+      if (invoiceModeFilter) params.isGstBill = invoiceModeFilter;
       if (customerFilter) params.customerId = customerFilter;
       if (search.trim()) params.search = search.trim();
 
@@ -302,6 +308,7 @@ export default function InvoicesPage() {
                 onClick={() => {
                   setCustomerFilter("");
                   setBillTypeFilter("");
+                  setInvoiceModeFilter("");
                   window.history.pushState({}, "", "/dashboard/invoices");
                   setPage(1);
                 }}
@@ -350,6 +357,47 @@ export default function InvoicesPage() {
                 }`}
               >
                 Credit Bill
+              </button>
+            </div>
+            <div className="flex bg-gray-100 p-1 rounded-xl">
+              <button
+                onClick={() => {
+                  setInvoiceModeFilter("");
+                  setPage(1);
+                }}
+                className={`px-5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
+                  invoiceModeFilter === ""
+                    ? "bg-white text-indigo-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                All Docs
+              </button>
+              <button
+                onClick={() => {
+                  setInvoiceModeFilter("true");
+                  setPage(1);
+                }}
+                className={`px-5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
+                  invoiceModeFilter === "true"
+                    ? "bg-white text-green-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Tax Invoice
+              </button>
+              <button
+                onClick={() => {
+                  setInvoiceModeFilter("false");
+                  setPage(1);
+                }}
+                className={`px-5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
+                  invoiceModeFilter === "false"
+                    ? "bg-white text-amber-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Estimate
               </button>
             </div>
           </div>
