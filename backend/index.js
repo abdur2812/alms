@@ -38,21 +38,29 @@ app.use(
 
 // Database connection
 const MONGODB_URI = process.env.MONGODB_URI;
+// Fail fast on bad connections; avoid buffered queries hiding real errors
+mongoose.set("bufferCommands", false);
 
-mongoose
-  .connect(MONGODB_URI, {
-    readPreference: "primary", // always read from primary — no stale replica reads
-    readConcern: { level: "majority" }, // only return data acknowledged by majority
-    writeConcern: { w: "majority" }, // wait for majority write before confirming
-  })
-  .then(() => {
+async function startServer() {
+  try {
+    await mongoose.connect(MONGODB_URI, {
+      readPreference: "primary", // always read from primary — no stale replica reads
+      readConcern: { level: "majority" }, // only return data acknowledged by majority
+      writeConcern: { w: "majority" }, // wait for majority write before confirming
+      serverSelectionTimeoutMS: 10000, // fail fast if DB is unreachable
+    });
     console.log("✅ MongoDB connected successfully");
-  })
-  .catch((err) => {
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on http://localhost:${PORT}`);
+    });
+  } catch (err) {
     console.error("❌ MongoDB connection error:", err.message);
-    // Do not exit — let the server keep running so health checks pass.
-    // Individual requests will fail gracefully if DB is unavailable.
-  });
+    process.exit(1);
+  }
+}
+
+startServer();
 
 // Root routes
 const apiInfo = (req, res) => {
@@ -97,8 +105,3 @@ app.use((req, res, next) => {
 
 // Error handling middleware (must be last)
 app.use(errorHandler);
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
