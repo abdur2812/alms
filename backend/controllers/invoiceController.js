@@ -98,7 +98,10 @@ exports.getAllInvoices = asyncHandler(async (req, res, next) => {
 // @access  Public
 exports.getInvoiceById = asyncHandler(async (req, res, next) => {
   const invoice = await Invoice.findById(req.params.id)
-    .populate("customerId", "name phone address")
+    .populate(
+      "customerId",
+      "name phone gstNumber permanentAddress shippingAddress address",
+    )
     .populate("items.productId", "name description");
 
   if (!invoice) {

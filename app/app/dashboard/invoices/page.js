@@ -118,7 +118,7 @@ export default function InvoicesPage() {
 
   const downloadBulkPDFZip = async () => {
     if (!bulkPdfMonth) return;
-    const currentInvoicePattern = /^ALMS \d{4}-\d{4}$/;
+    const currentInvoicePattern = /^ALMS \d{2}-\d{2}\/\d{4}$/;
     const [yearStr, monthStr] = bulkPdfMonth.split("-");
     const year = parseInt(yearStr, 10);
     const month = parseInt(monthStr, 10);
@@ -145,7 +145,7 @@ export default function InvoicesPage() {
 
       if (validInvoices.length === 0) {
         alert(
-          "No invoices with the current format (ALMS XXXX-XXXX) found for this month.",
+          "No invoices with the current format (ALMS XX-XX/XXXX) found for this month.",
         );
         setBulkPdfLoading(false);
         return;

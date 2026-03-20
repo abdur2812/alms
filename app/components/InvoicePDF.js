@@ -563,11 +563,23 @@ export default function InvoiceDocument({ invoice }) {
   const bizLine1 = `${addr.door_no_new}, ${addr.street}, ${addr.area},`;
   const bizLine2 = `${addr.landmark}, ${addr.district} - ${addr.pincode}`;
 
+  const cleanAddressSegment = (value) =>
+    String(value || "")
+      .replace(/\s*,+\s*/g, ", ")
+      .replace(/^,+|,+$/g, "")
+      .trim();
+
+  const cityAndPincode = [
+    cleanAddressSegment(permAddr.city),
+    cleanAddressSegment(permAddr.postalCode),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   const custAddrStr = [
-    permAddr.companyAddress,
-    permAddr.city,
-    permAddr.state,
-    permAddr.postalCode,
+    cleanAddressSegment(permAddr.companyAddress),
+    cityAndPincode,
+    cleanAddressSegment(permAddr.state),
   ]
     .filter(Boolean)
     .join(", ");
@@ -651,6 +663,12 @@ export default function InvoiceDocument({ invoice }) {
                     }}
                   >
                     <Text style={S.bizPhone}>Ph: {biz.phone_numbers[0]}</Text>
+                    {biz.phone_numbers[1] && (
+                      <Text style={S.bizPhone}>
+                        {" "}
+                        | Ph: {biz.phone_numbers[1]}
+                      </Text>
+                    )}
                   </View>
                 </View>
                 <View style={S.headerRight}>
@@ -852,7 +870,7 @@ export default function InvoiceDocument({ invoice }) {
                                 textAlign: "center",
                               }}
                             >
-                              GPay: {biz.phone_numbers[1]}
+                              GPay: {biz.phone_numbers[0]}
                             </Text>
                           </View>
                         </View>

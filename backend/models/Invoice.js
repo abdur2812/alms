@@ -178,7 +178,7 @@ invoiceSchema.pre("save", function (next) {
   next();
 });
 
-// Static method to generate invoice number with format ALMS 0001-2526
+// Static method to generate invoice number with format ALMS 25-26/0001
 // Fiscal year April 1 to March 31, sequence increments from latest number in that year.
 invoiceSchema.statics.generateInvoiceNumber = async function () {
   const Counter = mongoose.model("Counter");
@@ -191,6 +191,7 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
   const fyStartLabel = String(fiscalYearStart).slice(-2);
   const fyEndLabel = String(fiscalYearEnd).slice(-2);
   const fiscalSeries = `${fyStartLabel}${fyEndLabel}`;
+  const fiscalRange = `${fyStartLabel}-${fyEndLabel}`;
   const counterId = `inv-${fiscalSeries}`;
 
   // Fast path: counter already exists — do one atomic increment.
@@ -204,18 +205,30 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
   if (!result) {
     // Counter does not exist yet for this fiscal year.
     // Scan GST invoice numbers to find the current maximum sequence.
-    const pattern = new RegExp(`^ALMS \\d{4}-${fiscalSeries}$`);
+    const currentPattern = new RegExp(
+      `^ALMS ${fiscalRange.replace("-", "\\-")}\\/\\d{4}$`,
+    );
+    const legacyPattern = new RegExp(`^ALMS \\d{4}-${fiscalSeries}$`);
     const gstInvoices = await this.find({
       isGstBill: true,
-      invoiceNumber: { $regex: pattern },
+      $or: [
+        { invoiceNumber: { $regex: currentPattern } },
+        { invoiceNumber: { $regex: legacyPattern } },
+      ],
     })
       .select("invoiceNumber")
       .lean();
 
     let dbMax = 0;
+    const currentFormatParser = new RegExp(
+      `^ALMS ${fiscalRange.replace("-", "\\-")}\\/(\\d{4})$`,
+    );
+    const legacyFormatParser = new RegExp(`^ALMS (\\d{4})-${fiscalSeries}$`);
     for (const inv of gstInvoices) {
-      const m = inv.invoiceNumber.match(/^ALMS (\d{4})-\d{4}$/);
-      if (m) dbMax = Math.max(dbMax, Number(m[1]));
+      const currentMatch = inv.invoiceNumber.match(currentFormatParser);
+      const legacyMatch = inv.invoiceNumber.match(legacyFormatParser);
+      if (currentMatch) dbMax = Math.max(dbMax, Number(currentMatch[1]));
+      if (legacyMatch) dbMax = Math.max(dbMax, Number(legacyMatch[1]));
     }
 
     // Create the counter at current max. $setOnInsert is a no-op if a concurrent
@@ -234,7 +247,7 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
     );
   }
 
-  return `ALMS ${String(result.sequence).padStart(4, "0")}-${fiscalSeries}`;
+  return `ALMS ${fiscalRange}/${String(result.sequence).padStart(4, "0")}`;
 };
 
 // Read-only preview of next GST invoice number.
@@ -249,28 +262,41 @@ invoiceSchema.statics.peekNextInvoiceNumber = async function () {
   const fyStartLabel = String(fiscalYearStart).slice(-2);
   const fyEndLabel = String(fiscalYearEnd).slice(-2);
   const fiscalSeries = `${fyStartLabel}${fyEndLabel}`;
+  const fiscalRange = `${fyStartLabel}-${fyEndLabel}`;
   const counterId = `inv-${fiscalSeries}`;
 
   const counter = await Counter.findById(counterId).lean();
   if (counter && Number.isFinite(counter.sequence)) {
-    return `ALMS ${String(counter.sequence + 1).padStart(4, "0")}-${fiscalSeries}`;
+    return `ALMS ${fiscalRange}/${String(counter.sequence + 1).padStart(4, "0")}`;
   }
 
-  const pattern = new RegExp(`^ALMS \\d{4}-${fiscalSeries}$`);
+  const currentPattern = new RegExp(
+    `^ALMS ${fiscalRange.replace("-", "\\-")}\\/\\d{4}$`,
+  );
+  const legacyPattern = new RegExp(`^ALMS \\d{4}-${fiscalSeries}$`);
   const gstInvoices = await this.find({
     isGstBill: true,
-    invoiceNumber: { $regex: pattern },
+    $or: [
+      { invoiceNumber: { $regex: currentPattern } },
+      { invoiceNumber: { $regex: legacyPattern } },
+    ],
   })
     .select("invoiceNumber")
     .lean();
 
   let dbMax = 0;
+  const currentFormatParser = new RegExp(
+    `^ALMS ${fiscalRange.replace("-", "\\-")}\\/(\\d{4})$`,
+  );
+  const legacyFormatParser = new RegExp(`^ALMS (\\d{4})-${fiscalSeries}$`);
   for (const inv of gstInvoices) {
-    const m = inv.invoiceNumber.match(/^ALMS (\d{4})-\d{4}$/);
-    if (m) dbMax = Math.max(dbMax, Number(m[1]));
+    const currentMatch = inv.invoiceNumber.match(currentFormatParser);
+    const legacyMatch = inv.invoiceNumber.match(legacyFormatParser);
+    if (currentMatch) dbMax = Math.max(dbMax, Number(currentMatch[1]));
+    if (legacyMatch) dbMax = Math.max(dbMax, Number(legacyMatch[1]));
   }
 
-  return `ALMS ${String(dbMax + 1).padStart(4, "0")}-${fiscalSeries}`;
+  return `ALMS ${fiscalRange}/${String(dbMax + 1).padStart(4, "0")}`;
 };
 
 invoiceSchema.statics.generateEstimateNumber = async function () {

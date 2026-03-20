@@ -13,7 +13,7 @@ const businessConfig = {
       state: "Tamil Nadu",
       country: "India",
     },
-    phone_numbers: ["+919884496668", "+919791021564"],
+    phone_numbers: ["+919791021564", "+919884496668"], // Swapped order
     gst_number: "33AXHPK8999E1ZY",
   },
   bank_details: {

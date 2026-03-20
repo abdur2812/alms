@@ -35,11 +35,27 @@ export default function FullEditInvoicePage({ params }) {
         postalCode: "",
         country: "India",
       },
+      permanentAddress: {
+        companyAddress: "",
+        city: "",
+        state: "",
+        postalCode: "",
+        country: "India",
+      },
+      shippingAddress: {
+        companyAddress: "",
+        city: "",
+        state: "",
+        postalCode: "",
+        country: "India",
+      },
+      sameAsPermanent: true,
     },
     items: [],
     isGstBill: true,
     isIgst: false,
     billType: "pay",
+    vehicleNumber: "",
     copyType: "original",
   });
 
@@ -54,53 +70,41 @@ export default function FullEditInvoicePage({ params }) {
       const response = await invoicesAPI.getById(id);
       const invoice = response.data.data;
 
-      // Populate form with invoice data
-      const customerData = invoice.customerData || {
-        name: invoice.customerData?.name || invoice.customerId?.name || "",
-        phone: invoice.customerId?.phone || "",
-        gstNumber: invoice.customerId?.gstNumber || "",
-        address: {
-          companyAddress: "",
-          city: "",
-          state: "",
-          postalCode: "",
-          country: "India",
-        },
-      };
+      const snapshotCustomer = invoice.customerData || {};
+      const sourcePermanentAddress =
+        snapshotCustomer.permanentAddress ||
+        snapshotCustomer.address ||
+        invoice.customerId?.permanentAddress ||
+        invoice.customerId?.address ||
+        {};
+      const sourceShippingAddress =
+        snapshotCustomer.shippingAddress || sourcePermanentAddress;
 
-      // Ensure address object exists with all properties
-      if (!customerData.address) {
-        customerData.address = {
-          companyAddress: "",
-          city: "",
-          state: "",
-          postalCode: "",
-          country: "India",
-        };
-      } else {
-        customerData.address = {
-          companyAddress:
-            customerData.address.companyAddress ||
-            invoice.customerId?.address?.companyAddress ||
-            "",
-          city:
-            customerData.address.city ||
-            invoice.customerId?.address?.city ||
-            "",
-          state:
-            customerData.address.state ||
-            invoice.customerId?.address?.state ||
-            "",
-          postalCode:
-            customerData.address.postalCode ||
-            invoice.customerId?.address?.postalCode ||
-            "",
-          country:
-            customerData.address.country ||
-            invoice.customerId?.address?.country ||
-            "India",
-        };
-      }
+      const normalizeAddress = (address = {}) => ({
+        companyAddress: address.companyAddress || "",
+        city: address.city || "",
+        state: address.state || "",
+        postalCode: address.postalCode || "",
+        country: address.country || "India",
+      });
+
+      const permanentAddress = normalizeAddress(sourcePermanentAddress);
+      const shippingAddress = normalizeAddress(sourceShippingAddress);
+
+      const customerData = {
+        name: snapshotCustomer.name || invoice.customerId?.name || "",
+        phone: snapshotCustomer.phone || invoice.customerId?.phone || "",
+        gstNumber:
+          snapshotCustomer.gstNumber || invoice.customerId?.gstNumber || "",
+        // Keep `address` for this form's existing field bindings.
+        address: permanentAddress,
+        permanentAddress,
+        shippingAddress,
+        sameAsPermanent:
+          snapshotCustomer.sameAsPermanent !== undefined
+            ? snapshotCustomer.sameAsPermanent
+            : true,
+      };
 
       setFormData({
         customerData,
@@ -115,6 +119,7 @@ export default function FullEditInvoicePage({ params }) {
         isGstBill: invoice.isGstBill !== undefined ? invoice.isGstBill : true,
         isIgst: invoice.isIgst || false,
         billType: invoice.billType || "pay",
+        vehicleNumber: invoice.vehicleNumber || "",
         copyType: invoice.copyType || "original",
       });
       setLoading(false);
@@ -284,7 +289,28 @@ export default function FullEditInvoicePage({ params }) {
       }
 
       const updateData = {
-        customerData: formData.customerData,
+        customerData: {
+          ...formData.customerData,
+          // Keep legacy `address` and current `permanentAddress` in sync.
+          address: {
+            ...formData.customerData.address,
+          },
+          permanentAddress: {
+            ...formData.customerData.address,
+          },
+          shippingAddress:
+            formData.customerData.sameAsPermanent === false
+              ? {
+                  ...formData.customerData.shippingAddress,
+                }
+              : {
+                  ...formData.customerData.address,
+                },
+          sameAsPermanent:
+            formData.customerData.sameAsPermanent !== undefined
+              ? formData.customerData.sameAsPermanent
+              : true,
+        },
         items: formData.items.map((item) => ({
           productId: item.productId,
           name: item.name,
@@ -296,6 +322,7 @@ export default function FullEditInvoicePage({ params }) {
         isGstBill: formData.isGstBill,
         isIgst: formData.isIgst,
         billType: formData.billType,
+        vehicleNumber: formData.vehicleNumber || "",
         copyType: formData.copyType || "original",
       };
 
@@ -763,6 +790,25 @@ export default function FullEditInvoicePage({ params }) {
                     { value: "credit", label: "🏦 Credit Bill" },
                   ]}
                 />
+
+                {/* Vehicle number */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+                    Vehicle Number
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.vehicleNumber}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        vehicleNumber: e.target.value.toUpperCase(),
+                      })
+                    }
+                    placeholder="e.g. TN 01 AB 1234"
+                    className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 bg-gray-50/50 text-gray-900 placeholder-gray-400 transition-all duration-200 uppercase tracking-widest font-medium"
+                  />
+                </div>
 
                 {/* Original / Duplicate toggle */}
                 {formData.isGstBill && (
