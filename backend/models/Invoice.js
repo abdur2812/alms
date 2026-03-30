@@ -136,6 +136,105 @@ const invoiceSchema = new mongoose.Schema(
   },
 );
 
+const getCurrentFiscalMeta = () => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const fiscalYearStart = currentMonth < 3 ? currentYear - 1 : currentYear;
+  const fiscalYearEnd = fiscalYearStart + 1;
+  const fyStartLabel = String(fiscalYearStart).slice(-2);
+  const fyEndLabel = String(fiscalYearEnd).slice(-2);
+  return {
+    fiscalSeries: `${fyStartLabel}${fyEndLabel}`,
+    fiscalRange: `${fyStartLabel}-${fyEndLabel}`,
+  };
+};
+
+const parseGstInvoiceNumber = (invoiceNumber) => {
+  if (typeof invoiceNumber !== "string") return null;
+
+  const currentMatch = invoiceNumber.match(/^ALMS (\d{2})-(\d{2})\/(\d{4})$/);
+  if (currentMatch) {
+    return {
+      fiscalSeries: `${currentMatch[1]}${currentMatch[2]}`,
+      sequence: Number(currentMatch[3]),
+    };
+  }
+
+  const legacyMatch = invoiceNumber.match(/^ALMS (\d{4})-(\d{4})$/);
+  if (legacyMatch) {
+    return {
+      fiscalSeries: legacyMatch[2],
+      sequence: Number(legacyMatch[1]),
+    };
+  }
+
+  return null;
+};
+
+const getGstPatternsForSeries = (fiscalSeries) => {
+  const start = fiscalSeries.slice(0, 2);
+  const end = fiscalSeries.slice(2, 4);
+  const fiscalRange = `${start}-${end}`;
+
+  return {
+    currentPattern: new RegExp(
+      `^ALMS ${fiscalRange.replace("-", "\\-")}\\/\\d{4}$`,
+    ),
+    legacyPattern: new RegExp(`^ALMS \\d{4}-${fiscalSeries}$`),
+    currentFormatParser: new RegExp(
+      `^ALMS ${fiscalRange.replace("-", "\\-")}\\/(\\d{4})$`,
+    ),
+    legacyFormatParser: new RegExp(`^ALMS (\\d{4})-${fiscalSeries}$`),
+  };
+};
+
+const findMaxGstSequenceForSeries = async (InvoiceModel, fiscalSeries) => {
+  const {
+    currentPattern,
+    legacyPattern,
+    currentFormatParser,
+    legacyFormatParser,
+  } = getGstPatternsForSeries(fiscalSeries);
+
+  const gstInvoices = await InvoiceModel.find({
+    isGstBill: true,
+    $or: [
+      { invoiceNumber: { $regex: currentPattern } },
+      { invoiceNumber: { $regex: legacyPattern } },
+    ],
+  })
+    .select("invoiceNumber")
+    .lean();
+
+  let dbMax = 0;
+  for (const inv of gstInvoices) {
+    const currentMatch = inv.invoiceNumber.match(currentFormatParser);
+    const legacyMatch = inv.invoiceNumber.match(legacyFormatParser);
+    if (currentMatch) dbMax = Math.max(dbMax, Number(currentMatch[1]));
+    if (legacyMatch) dbMax = Math.max(dbMax, Number(legacyMatch[1]));
+  }
+
+  return dbMax;
+};
+
+const findMaxEstimateSequence = async (InvoiceModel) => {
+  const estimates = await InvoiceModel.find({
+    isGstBill: false,
+    invoiceNumber: { $regex: /^EST-\d{4}$/ },
+  })
+    .select("invoiceNumber")
+    .lean();
+
+  let dbMax = 0;
+  for (const est of estimates) {
+    const m = est.invoiceNumber.match(/^EST-(\d{4})$/);
+    if (m) dbMax = Math.max(dbMax, Number(m[1]));
+  }
+
+  return dbMax;
+};
+
 // Virtual for subtotal (before GST)
 invoiceSchema.virtual("subtotal").get(function () {
   if (!this.items || !Array.isArray(this.items)) return 0;
@@ -182,16 +281,7 @@ invoiceSchema.pre("save", function (next) {
 // Fiscal year April 1 to March 31, sequence increments from latest number in that year.
 invoiceSchema.statics.generateInvoiceNumber = async function () {
   const Counter = mongoose.model("Counter");
-
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  const fiscalYearStart = currentMonth < 3 ? currentYear - 1 : currentYear;
-  const fiscalYearEnd = fiscalYearStart + 1;
-  const fyStartLabel = String(fiscalYearStart).slice(-2);
-  const fyEndLabel = String(fiscalYearEnd).slice(-2);
-  const fiscalSeries = `${fyStartLabel}${fyEndLabel}`;
-  const fiscalRange = `${fyStartLabel}-${fyEndLabel}`;
+  const { fiscalSeries, fiscalRange } = getCurrentFiscalMeta();
   const counterId = `inv-${fiscalSeries}`;
 
   // Fast path: counter already exists — do one atomic increment.
@@ -205,31 +295,7 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
   if (!result) {
     // Counter does not exist yet for this fiscal year.
     // Scan GST invoice numbers to find the current maximum sequence.
-    const currentPattern = new RegExp(
-      `^ALMS ${fiscalRange.replace("-", "\\-")}\\/\\d{4}$`,
-    );
-    const legacyPattern = new RegExp(`^ALMS \\d{4}-${fiscalSeries}$`);
-    const gstInvoices = await this.find({
-      isGstBill: true,
-      $or: [
-        { invoiceNumber: { $regex: currentPattern } },
-        { invoiceNumber: { $regex: legacyPattern } },
-      ],
-    })
-      .select("invoiceNumber")
-      .lean();
-
-    let dbMax = 0;
-    const currentFormatParser = new RegExp(
-      `^ALMS ${fiscalRange.replace("-", "\\-")}\\/(\\d{4})$`,
-    );
-    const legacyFormatParser = new RegExp(`^ALMS (\\d{4})-${fiscalSeries}$`);
-    for (const inv of gstInvoices) {
-      const currentMatch = inv.invoiceNumber.match(currentFormatParser);
-      const legacyMatch = inv.invoiceNumber.match(legacyFormatParser);
-      if (currentMatch) dbMax = Math.max(dbMax, Number(currentMatch[1]));
-      if (legacyMatch) dbMax = Math.max(dbMax, Number(legacyMatch[1]));
-    }
+    const dbMax = await findMaxGstSequenceForSeries(this, fiscalSeries);
 
     // Create the counter at current max. $setOnInsert is a no-op if a concurrent
     // request already created it between our check above.
@@ -253,16 +319,7 @@ invoiceSchema.statics.generateInvoiceNumber = async function () {
 // Read-only preview of next GST invoice number.
 invoiceSchema.statics.peekNextInvoiceNumber = async function () {
   const Counter = mongoose.model("Counter");
-
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  const fiscalYearStart = currentMonth < 3 ? currentYear - 1 : currentYear;
-  const fiscalYearEnd = fiscalYearStart + 1;
-  const fyStartLabel = String(fiscalYearStart).slice(-2);
-  const fyEndLabel = String(fiscalYearEnd).slice(-2);
-  const fiscalSeries = `${fyStartLabel}${fyEndLabel}`;
-  const fiscalRange = `${fyStartLabel}-${fyEndLabel}`;
+  const { fiscalSeries, fiscalRange } = getCurrentFiscalMeta();
   const counterId = `inv-${fiscalSeries}`;
 
   const counter = await Counter.findById(counterId).lean();
@@ -270,31 +327,7 @@ invoiceSchema.statics.peekNextInvoiceNumber = async function () {
     return `ALMS ${fiscalRange}/${String(counter.sequence + 1).padStart(4, "0")}`;
   }
 
-  const currentPattern = new RegExp(
-    `^ALMS ${fiscalRange.replace("-", "\\-")}\\/\\d{4}$`,
-  );
-  const legacyPattern = new RegExp(`^ALMS \\d{4}-${fiscalSeries}$`);
-  const gstInvoices = await this.find({
-    isGstBill: true,
-    $or: [
-      { invoiceNumber: { $regex: currentPattern } },
-      { invoiceNumber: { $regex: legacyPattern } },
-    ],
-  })
-    .select("invoiceNumber")
-    .lean();
-
-  let dbMax = 0;
-  const currentFormatParser = new RegExp(
-    `^ALMS ${fiscalRange.replace("-", "\\-")}\\/(\\d{4})$`,
-  );
-  const legacyFormatParser = new RegExp(`^ALMS (\\d{4})-${fiscalSeries}$`);
-  for (const inv of gstInvoices) {
-    const currentMatch = inv.invoiceNumber.match(currentFormatParser);
-    const legacyMatch = inv.invoiceNumber.match(legacyFormatParser);
-    if (currentMatch) dbMax = Math.max(dbMax, Number(currentMatch[1]));
-    if (legacyMatch) dbMax = Math.max(dbMax, Number(legacyMatch[1]));
-  }
+  const dbMax = await findMaxGstSequenceForSeries(this, fiscalSeries);
 
   return `ALMS ${fiscalRange}/${String(dbMax + 1).padStart(4, "0")}`;
 };
@@ -311,18 +344,7 @@ invoiceSchema.statics.generateEstimateNumber = async function () {
 
   if (!result) {
     // Initialise from existing estimate numbers in the DB.
-    const estimates = await this.find({
-      isGstBill: false,
-      invoiceNumber: { $regex: /^EST-\d{4}$/ },
-    })
-      .select("invoiceNumber")
-      .lean();
-
-    let dbMax = 0;
-    for (const est of estimates) {
-      const m = est.invoiceNumber.match(/^EST-(\d{4})$/);
-      if (m) dbMax = Math.max(dbMax, Number(m[1]));
-    }
+    const dbMax = await findMaxEstimateSequence(this);
 
     await Counter.findOneAndUpdate(
       { _id: counterId },
@@ -350,20 +372,38 @@ invoiceSchema.statics.peekNextEstimateNumber = async function () {
     return `EST-${String(counter.sequence + 1).padStart(4, "0")}`;
   }
 
-  const estimates = await this.find({
-    isGstBill: false,
-    invoiceNumber: { $regex: /^EST-\d{4}$/ },
-  })
-    .select("invoiceNumber")
-    .lean();
-
-  let dbMax = 0;
-  for (const est of estimates) {
-    const m = est.invoiceNumber.match(/^EST-(\d{4})$/);
-    if (m) dbMax = Math.max(dbMax, Number(m[1]));
-  }
+  const dbMax = await findMaxEstimateSequence(this);
 
   return `EST-${String(dbMax + 1).padStart(4, "0")}`;
+};
+
+// Resync counter after invoice deletion so deleting the latest number
+// allows the next create to reuse that number.
+invoiceSchema.statics.syncCounterAfterDelete = async function ({
+  isGstBill,
+  invoiceNumber,
+}) {
+  const Counter = mongoose.model("Counter");
+
+  if (isGstBill) {
+    const parsed = parseGstInvoiceNumber(invoiceNumber);
+    const fiscalSeries =
+      parsed?.fiscalSeries || getCurrentFiscalMeta().fiscalSeries;
+    const dbMax = await findMaxGstSequenceForSeries(this, fiscalSeries);
+    await Counter.findOneAndUpdate(
+      { _id: `inv-${fiscalSeries}` },
+      { $set: { sequence: dbMax } },
+      { upsert: true },
+    );
+    return;
+  }
+
+  const dbMax = await findMaxEstimateSequence(this);
+  await Counter.findOneAndUpdate(
+    { _id: "est" },
+    { $set: { sequence: dbMax } },
+    { upsert: true },
+  );
 };
 
 // Post-save hook to handle stock management when status changes to 'Paid'

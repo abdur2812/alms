@@ -472,6 +472,10 @@ exports.deleteInvoice = asyncHandler(async (req, res, next) => {
   });
 
   await Invoice.findByIdAndDelete(req.params.id);
+  await Invoice.syncCounterAfterDelete({
+    isGstBill: invoice.isGstBill,
+    invoiceNumber: invoice.invoiceNumber,
+  });
 
   res.status(200).json({
     success: true,
