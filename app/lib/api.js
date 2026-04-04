@@ -68,7 +68,7 @@ export const invoicesAPI = {
   create: (data) => api.post("/api/invoices", data),
   update: (id, data) => api.put(`/api/invoices/${id}`, data),
   delete: (id) => api.delete(`/api/invoices/${id}`),
-  getStats: () => api.get("/api/invoices/stats/summary"),
+  getStats: (params) => api.get("/api/invoices/stats/summary", { params }),
   getByDateRange: (params) =>
     api.get("/api/invoices/reports/date-range", { params }),
   previewNumber: () => api.get("/api/invoices/preview-number"),

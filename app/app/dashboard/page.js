@@ -9,10 +9,18 @@ import {
   FiUsers,
   FiPackage,
   FiFileText,
-  FiDollarSign,
   FiAlertCircle,
   FiTrendingUp,
 } from "react-icons/fi";
+
+const RupeeIcon = ({ className = "" }) => (
+  <span
+    className={`inline-flex h-8 w-8 items-center justify-center text-3xl leading-none font-bold text-white ${className}`}
+    aria-hidden="true"
+  >
+    ₹
+  </span>
+);
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -42,31 +50,45 @@ export default function DashboardPage() {
 
       // Fetch operational data
       try {
-        const [customersRes, productsRes, invoicesRes, lowStockRes] =
-          await Promise.all([
-            customersAPI.getAll({ limit: 1 }),
-            productsAPI.getAll({ limit: 1 }),
-            invoicesAPI.getAll({ limit: 5 }),
-            productsAPI.getLowStock(),
-          ]);
-
-        // Calculate total revenue from paid invoices
-        const allInvoicesRes = await invoicesAPI.getAll({
-          status: "Paid",
-          limit: 1000,
-        });
-        const totalRevenue = allInvoicesRes.data.data.reduce(
-          (sum, invoice) => sum + (invoice.totalAmount || 0),
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthEnd = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
           0,
+          23,
+          59,
+          59,
+          999,
         );
+        const monthRangeParams = {
+          startDate: monthStart.toISOString(),
+          endDate: monthEnd.toISOString(),
+          isGstBill: "true",
+        };
+
+        const [
+          customersRes,
+          productsRes,
+          monthlyStatsRes,
+          recentInvoicesRes,
+          lowStockRes,
+        ] = await Promise.all([
+          customersAPI.getAll({ limit: 1 }),
+          productsAPI.getAll({ limit: 1 }),
+          invoicesAPI.getStats(monthRangeParams),
+          invoicesAPI.getAll({ limit: 5 }),
+          productsAPI.getLowStock(),
+        ]);
+        const monthlyStats = monthlyStatsRes.data?.data || {};
 
         setStats({
           totalCustomers: customersRes.data.total,
           totalProducts: productsRes.data.total,
-          totalInvoices: invoicesRes.data.total,
-          totalRevenue: totalRevenue,
+          totalInvoices: monthlyStats.totalInvoices || 0,
+          totalRevenue: monthlyStats.totalRevenue || 0,
           lowStockProducts: lowStockRes.data.data.slice(0, 5),
-          recentInvoices: invoicesRes.data.data,
+          recentInvoices: recentInvoicesRes.data.data,
         });
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -82,9 +104,9 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Failed to fetch dashboard data", err);
       console.error("Error details:", {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
       });
     } finally {
       setLoading(false);
@@ -117,7 +139,7 @@ export default function DashboardPage() {
       {
         title: "Total Revenue",
         value: formatINR(stats.totalRevenue),
-        icon: FiDollarSign,
+        icon: RupeeIcon,
         color: "bg-indigo-500",
         link: "/dashboard/invoices",
       },

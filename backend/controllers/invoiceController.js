@@ -37,6 +37,8 @@ exports.getAllInvoices = asyncHandler(async (req, res, next) => {
     billType,
     isGstBill,
     search,
+    startDate,
+    endDate,
   } = req.query;
 
   const query = {};
@@ -56,6 +58,17 @@ exports.getAllInvoices = asyncHandler(async (req, res, next) => {
     query.isGstBill = true;
   } else if (isGstBill === "false") {
     query.isGstBill = false;
+  }
+
+  // Optional date-range filter (inclusive)
+  if (startDate || endDate) {
+    query.createdAt = {};
+    if (startDate) {
+      query.createdAt.$gte = new Date(startDate);
+    }
+    if (endDate) {
+      query.createdAt.$lte = new Date(endDate);
+    }
   }
 
   if (search) {
@@ -488,7 +501,32 @@ exports.deleteInvoice = asyncHandler(async (req, res, next) => {
 // @route   GET /api/invoices/stats/summary
 // @access  Public
 exports.getInvoiceStats = asyncHandler(async (req, res, next) => {
+  const { isGstBill, startDate, endDate, billType } = req.query;
+
+  const baseMatch = {};
+
+  if (isGstBill === "true") {
+    baseMatch.isGstBill = true;
+  } else if (isGstBill === "false") {
+    baseMatch.isGstBill = false;
+  }
+
+  if (startDate || endDate) {
+    baseMatch.createdAt = {};
+    if (startDate) {
+      baseMatch.createdAt.$gte = new Date(startDate);
+    }
+    if (endDate) {
+      baseMatch.createdAt.$lte = new Date(endDate);
+    }
+  }
+
+  if (billType) {
+    baseMatch.billType = billType;
+  }
+
   const stats = await Invoice.aggregate([
+    { $match: baseMatch },
     {
       $group: {
         _id: "$billType",
@@ -498,9 +536,13 @@ exports.getInvoiceStats = asyncHandler(async (req, res, next) => {
     },
   ]);
 
-  const totalInvoices = await Invoice.countDocuments();
+  const totalInvoices = await Invoice.countDocuments(baseMatch);
+  const revenueMatch = {
+    ...baseMatch,
+    billType: "pay",
+  };
   const totalRevenue = await Invoice.aggregate([
-    { $match: { billType: "pay" } },
+    { $match: revenueMatch },
     { $group: { _id: null, total: { $sum: "$totalAmount" } } },
   ]);
 
