@@ -34,13 +34,13 @@ export default function ProductsPage() {
       if (search) {
         // When searching, use normal pagination
         response = await productsAPI.getAll({ page, limit: 10, search });
-        setTotalPages(response.data.totalPages);
+        setTotalPages(response?.data?.totalPages || 1);
       } else {
         // Default: show most billed products first
         response = await productsAPI.getPopular({ limit: 10000 });
         setTotalPages(1);
       }
-      setProducts(response.data.data);
+      setProducts(Array.isArray(response?.data?.data) ? response.data.data : []);
       setError("");
     } catch (err) {
       setError("Failed to fetch products");

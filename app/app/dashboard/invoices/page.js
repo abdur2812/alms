@@ -57,8 +57,8 @@ export default function InvoicesPage() {
       if (search.trim()) params.search = search.trim();
 
       const response = await invoicesAPI.getAll(params);
-      setInvoices(response.data.data);
-      setTotalPages(response.data.totalPages);
+      setInvoices(Array.isArray(response?.data?.data) ? response.data.data : []);
+      setTotalPages(response?.data?.totalPages || 1);
       setError("");
     } catch (err) {
       setError("Failed to fetch invoices");

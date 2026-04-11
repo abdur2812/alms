@@ -73,22 +73,55 @@ export default function DashboardPage() {
           monthlyStatsRes,
           recentInvoicesRes,
           lowStockRes,
-        ] = await Promise.all([
+        ] = await Promise.allSettled([
           customersAPI.getAll({ limit: 1 }),
           productsAPI.getAll({ limit: 1 }),
           invoicesAPI.getStats(monthRangeParams),
           invoicesAPI.getAll({ limit: 5 }),
           productsAPI.getLowStock(),
         ]);
-        const monthlyStats = monthlyStatsRes.data?.data || {};
+        const customersData =
+          customersRes.status === "fulfilled" ? customersRes.value?.data : null;
+        const productsData =
+          productsRes.status === "fulfilled" ? productsRes.value?.data : null;
+        const monthlyStats =
+          monthlyStatsRes.status === "fulfilled"
+            ? monthlyStatsRes.value?.data?.data || {}
+            : {};
+        const lowStockProducts =
+          lowStockRes.status === "fulfilled" &&
+          Array.isArray(lowStockRes.value?.data?.data)
+            ? lowStockRes.value.data.data
+            : [];
+        const recentInvoices =
+          recentInvoicesRes.status === "fulfilled" &&
+          Array.isArray(recentInvoicesRes.value?.data?.data)
+            ? recentInvoicesRes.value.data.data
+          : [];
+
+        if (customersRes.status === "rejected") {
+          console.error("customersAPI.getAll failed", customersRes.reason);
+        }
+        if (productsRes.status === "rejected") {
+          console.error("productsAPI.getAll failed", productsRes.reason);
+        }
+        if (monthlyStatsRes.status === "rejected") {
+          console.error("invoicesAPI.getStats failed", monthlyStatsRes.reason);
+        }
+        if (recentInvoicesRes.status === "rejected") {
+          console.error("invoicesAPI.getAll failed", recentInvoicesRes.reason);
+        }
+        if (lowStockRes.status === "rejected") {
+          console.error("productsAPI.getLowStock failed", lowStockRes.reason);
+        }
 
         setStats({
-          totalCustomers: customersRes.data.total,
-          totalProducts: productsRes.data.total,
+          totalCustomers: customersData?.total || 0,
+          totalProducts: productsData?.total || 0,
           totalInvoices: monthlyStats.totalInvoices || 0,
           totalRevenue: monthlyStats.totalRevenue || 0,
-          lowStockProducts: lowStockRes.data.data.slice(0, 5),
-          recentInvoices: recentInvoicesRes.data.data,
+          lowStockProducts: lowStockProducts.slice(0, 5),
+          recentInvoices,
         });
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -152,6 +185,13 @@ export default function DashboardPage() {
     Paid: "bg-green-100 text-green-800",
     Cancelled: "bg-red-100 text-red-800",
   };
+
+  const recentInvoices = Array.isArray(stats?.recentInvoices)
+    ? stats.recentInvoices
+    : [];
+  const lowStockProducts = Array.isArray(stats?.lowStockProducts)
+    ? stats.lowStockProducts
+    : [];
 
   if (loading) {
     return (
@@ -272,7 +312,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="divide-y divide-gray-100">
-            {stats.recentInvoices.length === 0 ? (
+            {recentInvoices.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FiFileText className="w-8 h-8 text-gray-400" />
@@ -286,7 +326,7 @@ export default function DashboardPage() {
                 </Link>
               </div>
             ) : (
-              stats.recentInvoices.map((invoice) => (
+              recentInvoices.map((invoice) => (
                 <Link
                   key={invoice._id}
                   href={`/dashboard/invoices/${invoice._id}/view`}
@@ -354,7 +394,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="divide-y divide-gray-100">
-            {stats.lowStockProducts.length === 0 ? (
+            {lowStockProducts.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <FiPackage className="w-8 h-8 text-green-500" />
@@ -362,7 +402,7 @@ export default function DashboardPage() {
                 <p className="font-medium">All products are well stocked!</p>
               </div>
             ) : (
-              stats.lowStockProducts.map((product) => (
+              lowStockProducts.map((product) => (
                 <Link
                   key={product._id}
                   href={`/dashboard/products/${product._id}`}

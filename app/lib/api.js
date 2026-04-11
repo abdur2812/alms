@@ -1,8 +1,8 @@
 import axios from "axios";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://alms-bills.duckdns.org";
-//160.250.204.182
+// Use same-origin requests and let Next.js rewrites proxy to NEXT_PUBLIC_API_URL.
+// This avoids browser CORS/preflight/network issues with tunneled hosts.
+const API_BASE_URL = "";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
