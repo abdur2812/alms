@@ -1,14 +1,13 @@
 import axios from "axios";
 
-// Use same-origin requests and let Next.js rewrites proxy to NEXT_PUBLIC_API_URL.
-// This avoids browser CORS/preflight/network issues with tunneled hosts.
-const API_BASE_URL = "https://unglacially-unconsidered-loida.ngrok-free.dev";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://unglacially-unconsidered-loida.ngrok-free.dev";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000, // 10 second timeout
   headers: {
     Accept: "application/json",
+    "ngrok-skip-browser-warning": "true",
     // Don't set Content-Type here - let axios set it automatically to avoid preflight
   },
   withCredentials: false,
