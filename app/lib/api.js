@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Use same-origin requests and let Next.js rewrites proxy to NEXT_PUBLIC_API_URL.
 // This avoids browser CORS/preflight/network issues with tunneled hosts.
-const API_BASE_URL = "";
+const API_BASE_URL = "https://unglacially-unconsidered-loida.ngrok-free.dev";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
