@@ -30,7 +30,6 @@ app.use(
       "Authorization",
       "X-Requested-With",
       "Accept",
-      "ngrok-skip-browser-warning",
     ],
     credentials: false,
     optionsSuccessStatus: 200,
