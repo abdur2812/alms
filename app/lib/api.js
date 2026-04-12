@@ -1,13 +1,13 @@
 import axios from "axios";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://unglacially-unconsidered-loida.ngrok-free.dev";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "https://alms-bills.duckdns.org";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000, // 10 second timeout
   headers: {
     Accept: "application/json",
-    "ngrok-skip-browser-warning": "true",
     // Don't set Content-Type here - let axios set it automatically to avoid preflight
   },
   withCredentials: false,
