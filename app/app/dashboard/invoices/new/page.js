@@ -75,6 +75,7 @@ export default function NewInvoicePage() {
   const [customerAutofill, setCustomerAutofill] = useState("");
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [productAutofill, setProductAutofill] = useState("");
+  const [hoveredProductIndex, setHoveredProductIndex] = useState(0);
 
   useEffect(() => {
     fetchCustomers();
@@ -205,6 +206,7 @@ export default function NewInvoicePage() {
       setError("");
       setShowProductDropdown(false); // Close dropdown after selection
       setProductAutofill("");
+      setHoveredProductIndex(0); // Reset hover index
     } catch (err) {
       console.error("Failed to fetch product details", err);
     }
@@ -220,6 +222,7 @@ export default function NewInvoicePage() {
     if (!value) {
       setShowProductDropdown(false);
       setProductAutofill("");
+      setHoveredProductIndex(0);
       return;
     }
 
@@ -230,6 +233,7 @@ export default function NewInvoicePage() {
 
     if (matchingProducts.length > 0) {
       setShowProductDropdown(true);
+      setHoveredProductIndex(0); // Default to first item
 
       // Google-style autofill
       const exactMatch = matchingProducts.find((product) =>
@@ -244,11 +248,12 @@ export default function NewInvoicePage() {
     } else {
       setShowProductDropdown(false);
       setProductAutofill("");
+      setHoveredProductIndex(0);
     }
   };
 
   const handleProductKeyDown = (e) => {
-    if (e.key !== "Enter") return;
+    if (e.key !== "Enter" && e.key !== "Tab") return;
 
     const value = e.currentTarget.value.trim();
     const matchingProducts = value
@@ -257,9 +262,9 @@ export default function NewInvoicePage() {
         )
       : products;
 
-    if (matchingProducts.length > 0) {
+    if (matchingProducts.length > 0 && hoveredProductIndex < matchingProducts.length) {
       e.preventDefault();
-      handleProductSelect(matchingProducts[0]._id);
+      handleProductSelect(matchingProducts[hoveredProductIndex]._id);
     }
   };
 
@@ -296,6 +301,7 @@ export default function NewInvoicePage() {
     });
     setShowProductDropdown(false);
     setProductAutofill("");
+    setHoveredProductIndex(0);
   };
 
   const editItem = (index) => {
@@ -319,6 +325,7 @@ export default function NewInvoicePage() {
       });
       setShowProductDropdown(false);
       setProductAutofill("");
+      setHoveredProductIndex(0);
     }
   };
 
@@ -335,6 +342,7 @@ export default function NewInvoicePage() {
     });
     setShowProductDropdown(false);
     setProductAutofill("");
+    setHoveredProductIndex(0);
   };
 
   const handleCustomerInputChange = (field, value) => {
@@ -927,19 +935,53 @@ export default function NewInvoicePage() {
                                   .includes(itemForm.name.toLowerCase()),
                               )
                               .slice(0, 8)
-                              .map((product) => (
+                              .map((product, index) => (
                                 <button
                                   key={product._id}
                                   type="button"
-                                  className="w-full text-left px-4 py-2.5 hover:bg-linear-to-r hover:from-violet-50 hover:to-purple-50 flex items-center justify-between border-b border-gray-50 last:border-0 transition-all duration-150 group"
+                                  className={`w-full text-left px-4 py-2.5 flex items-center justify-between border-b border-gray-50 last:border-0 transition-all duration-150 group ${
+                                    hoveredProductIndex === index
+                                      ? "bg-linear-to-r from-violet-100 to-purple-100 border-purple-200"
+                                      : "hover:bg-linear-to-r hover:from-violet-50 hover:to-purple-50"
+                                  }`}
+                                  onMouseEnter={() => setHoveredProductIndex(index)}
                                   onClick={() =>
                                     handleProductSelect(product._id)
                                   }
                                 >
-                                  <span className="text-sm font-semibold text-gray-900 group-hover:text-purple-700 transition-colors">
-                                    {product.name}
-                                  </span>
-                                  <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                                  <div className="flex items-center gap-3 flex-1">
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-150 ${
+                                      hoveredProductIndex === index
+                                        ? "border-purple-600 bg-purple-600"
+                                        : "border-gray-300 bg-white group-hover:border-purple-400"
+                                    }`}>
+                                      {hoveredProductIndex === index && (
+                                        <svg
+                                          className="w-3 h-3 text-white"
+                                          fill="currentColor"
+                                          viewBox="0 0 20 20"
+                                        >
+                                          <path
+                                            fillRule="evenodd"
+                                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                            clipRule="evenodd"
+                                          />
+                                        </svg>
+                                      )}
+                                    </div>
+                                    <span className={`text-sm font-semibold transition-colors ${
+                                      hoveredProductIndex === index
+                                        ? "text-purple-700"
+                                        : "text-gray-900 group-hover:text-purple-700"
+                                    }`}>
+                                      {product.name}
+                                    </span>
+                                  </div>
+                                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full transition-all ${
+                                    hoveredProductIndex === index
+                                      ? "text-white bg-purple-600"
+                                      : "text-purple-600 bg-purple-50 group-hover:bg-purple-100"
+                                  }`}>
                                     {formatINR(product.price)}
                                   </span>
                                 </button>
