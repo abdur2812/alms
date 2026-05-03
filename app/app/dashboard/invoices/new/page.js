@@ -76,6 +76,8 @@ export default function NewInvoicePage() {
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [productAutofill, setProductAutofill] = useState("");
   const [hoveredProductIndex, setHoveredProductIndex] = useState(0);
+  const [productSearchResults, setProductSearchResults] = useState([]);
+  const [isSearchingProducts, setIsSearchingProducts] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -212,7 +214,7 @@ export default function NewInvoicePage() {
     }
   };
 
-  const handleProductNameChange = (value) => {
+  const handleProductNameChange = async (value) => {
     setItemForm((prev) => ({
       ...prev,
       name: value,
@@ -223,48 +225,55 @@ export default function NewInvoicePage() {
       setShowProductDropdown(false);
       setProductAutofill("");
       setHoveredProductIndex(0);
+      setIsSearchingProducts(false);
       return;
     }
 
-    // Find matching products
-    const matchingProducts = products.filter((product) =>
-      product.name.toLowerCase().includes(value.toLowerCase()),
-    );
+    try {
+      // Search for matching products via API
+      setIsSearchingProducts(true);
+      const results = await searchProducts(value);
+      setProductSearchResults(results);
 
-    if (matchingProducts.length > 0) {
-      setShowProductDropdown(true);
-      setHoveredProductIndex(0); // Default to first item
+      if (results.length > 0) {
+        setShowProductDropdown(true);
+        setHoveredProductIndex(0); // Default to first item
 
-      // Google-style autofill
-      const exactMatch = matchingProducts.find((product) =>
-        product.name.toLowerCase().startsWith(value.toLowerCase()),
-      );
+        // Google-style autofill
+        const exactMatch = results.find((product) =>
+          product.label.toLowerCase().startsWith(value.toLowerCase()),
+        );
 
-      if (exactMatch && value.length > 0) {
-        setProductAutofill(exactMatch.name);
+        if (exactMatch && value.length > 0) {
+          setProductAutofill(exactMatch.label);
+        } else {
+          setProductAutofill("");
+        }
       } else {
+        setShowProductDropdown(false);
         setProductAutofill("");
+        setHoveredProductIndex(0);
       }
-    } else {
+    } catch (err) {
+      console.error("Failed to search products", err);
       setShowProductDropdown(false);
       setProductAutofill("");
       setHoveredProductIndex(0);
+    } finally {
+      setIsSearchingProducts(false);
     }
   };
 
   const handleProductKeyDown = (e) => {
     if (e.key !== "Enter" && e.key !== "Tab") return;
 
-    const value = e.currentTarget.value.trim();
-    const matchingProducts = value
-      ? products.filter((product) =>
-          product.name.toLowerCase().includes(value.toLowerCase()),
-        )
-      : products;
+    // Use search results if searching, otherwise use popular products
+    const displayProducts = itemForm.name && productSearchResults.length > 0 ? productSearchResults : products;
 
-    if (matchingProducts.length > 0 && hoveredProductIndex < matchingProducts.length) {
+    if (displayProducts.length > 0 && hoveredProductIndex < displayProducts.length) {
       e.preventDefault();
-      handleProductSelect(matchingProducts[hoveredProductIndex]._id);
+      const selectedProduct = displayProducts[hoveredProductIndex];
+      handleProductSelect(selectedProduct.value || selectedProduct._id);
     }
   };
 
@@ -925,67 +934,71 @@ export default function NewInvoicePage() {
                         />
                         {/* Inline preview removed to avoid visual misalignment */}
                         <div
-                          className={`absolute top-full left-0 right-0 z-30 transition-all duration-200 ${showProductDropdown && products.filter((p) => p.name.toLowerCase().includes(itemForm.name.toLowerCase())).length > 0 ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}
+                          className={`absolute top-full left-0 right-0 z-30 transition-all duration-200 ${showProductDropdown && ((itemForm.name && productSearchResults.length > 0) || (!itemForm.name && products.length > 0)) ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}
                         >
                           <div className="bg-white/95 backdrop-blur-xl border border-purple-100 rounded-2xl shadow-2xl shadow-purple-200/40 mt-1.5 max-h-48 overflow-auto">
-                            {products
-                              .filter((p) =>
-                                p.name
-                                  .toLowerCase()
-                                  .includes(itemForm.name.toLowerCase()),
-                              )
-                              .slice(0, 8)
-                              .map((product, index) => (
-                                <button
-                                  key={product._id}
-                                  type="button"
-                                  className={`w-full text-left px-4 py-2.5 flex items-center justify-between border-b border-gray-50 last:border-0 transition-all duration-150 group ${
+                            {(itemForm.name && productSearchResults.length > 0
+                              ? productSearchResults.map((product) => ({
+                                  _id: product.value,
+                                  name: product.label.split("(")[0].trim(),
+                                  price: parseFloat(
+                                    product.label.match(/₹([0-9.]+)/)?.[1] || 0,
+                                  ),
+                                }))
+                              : !itemForm.name && products.length > 0
+                                ? products.slice(0, 8)
+                                : []
+                            ).map((product, index) => (
+                              <button
+                                key={product._id}
+                                type="button"
+                                className={`w-full text-left px-4 py-2.5 flex items-center justify-between border-b border-gray-50 last:border-0 transition-all duration-150 group ${
+                                  hoveredProductIndex === index
+                                    ? "bg-linear-to-r from-violet-100 to-purple-100 border-purple-200"
+                                    : "hover:bg-linear-to-r hover:from-violet-50 hover:to-purple-50"
+                                }`}
+                                onMouseEnter={() => setHoveredProductIndex(index)}
+                                onClick={() =>
+                                  handleProductSelect(product._id)
+                                }
+                              >
+                                <div className="flex items-center gap-3 flex-1">
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-150 ${
                                     hoveredProductIndex === index
-                                      ? "bg-linear-to-r from-violet-100 to-purple-100 border-purple-200"
-                                      : "hover:bg-linear-to-r hover:from-violet-50 hover:to-purple-50"
-                                  }`}
-                                  onMouseEnter={() => setHoveredProductIndex(index)}
-                                  onClick={() =>
-                                    handleProductSelect(product._id)
-                                  }
-                                >
-                                  <div className="flex items-center gap-3 flex-1">
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-150 ${
-                                      hoveredProductIndex === index
-                                        ? "border-purple-600 bg-purple-600"
-                                        : "border-gray-300 bg-white group-hover:border-purple-400"
-                                    }`}>
-                                      {hoveredProductIndex === index && (
-                                        <svg
-                                          className="w-3 h-3 text-white"
-                                          fill="currentColor"
-                                          viewBox="0 0 20 20"
-                                        >
-                                          <path
-                                            fillRule="evenodd"
-                                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                            clipRule="evenodd"
-                                          />
-                                        </svg>
-                                      )}
-                                    </div>
-                                    <span className={`text-sm font-semibold transition-colors ${
-                                      hoveredProductIndex === index
-                                        ? "text-purple-700"
-                                        : "text-gray-900 group-hover:text-purple-700"
-                                    }`}>
-                                      {product.name}
-                                    </span>
-                                  </div>
-                                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full transition-all ${
-                                    hoveredProductIndex === index
-                                      ? "text-white bg-purple-600"
-                                      : "text-purple-600 bg-purple-50 group-hover:bg-purple-100"
+                                      ? "border-purple-600 bg-purple-600"
+                                      : "border-gray-300 bg-white group-hover:border-purple-400"
                                   }`}>
-                                    {formatINR(product.price)}
+                                    {hoveredProductIndex === index && (
+                                      <svg
+                                        className="w-3 h-3 text-white"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                      >
+                                        <path
+                                          fillRule="evenodd"
+                                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                          clipRule="evenodd"
+                                        />
+                                      </svg>
+                                    )}
+                                  </div>
+                                  <span className={`text-sm font-semibold transition-colors ${
+                                    hoveredProductIndex === index
+                                      ? "text-purple-700"
+                                      : "text-gray-900 group-hover:text-purple-700"
+                                  }`}>
+                                    {product.name}
                                   </span>
-                                </button>
-                              ))}
+                                </div>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full transition-all ${
+                                  hoveredProductIndex === index
+                                    ? "text-white bg-purple-600"
+                                    : "text-purple-600 bg-purple-50 group-hover:bg-purple-100"
+                                }`}>
+                                  {formatINR(product.price)}
+                                </span>
+                              </button>
+                            ))}
                           </div>
                         </div>
                       </div>
