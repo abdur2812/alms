@@ -31,7 +31,7 @@ export function PageHeader({ title, subtitle, action, backLink }) {
         </h1>
         {subtitle && <p className="mt-2 text-sm text-gray-600">{subtitle}</p>}
       </div>
-      {action && <div className="flex-shrink-0">{action}</div>}
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }
@@ -288,8 +288,8 @@ export function ConfirmDialog({
             onClick={onConfirm}
             className={`flex-1 px-4 py-2.5 rounded-xl text-white font-medium transition-all duration-200 ${
               isDangerous
-                ? "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 shadow-lg hover:shadow-xl"
-                : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl"
+                ? "bg-linear-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 shadow-lg hover:shadow-xl"
+                : "bg-linear-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl"
             }`}
           >
             {isDangerous ? "Logout" : "Confirm"}
@@ -377,7 +377,7 @@ export function NumberInput({
             type="button"
             onClick={handleIncrement}
             disabled={disabled || parseFloat(value || 0) >= max}
-            className="flex-1 px-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-tr-xl border-l border-gray-200 transition-all duration-200 flex items-center justify-center group hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100"
+            className="flex-1 px-3 bg-linear-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-tr-xl border-l border-gray-200 transition-all duration-200 flex items-center justify-center group hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100"
             title="Increase"
           >
             <svg
@@ -398,7 +398,7 @@ export function NumberInput({
             type="button"
             onClick={handleDecrement}
             disabled={disabled || parseFloat(value || 0) <= min}
-            className="flex-1 px-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-br-xl border-l border-t border-gray-200 transition-all duration-200 flex items-center justify-center group hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100"
+            className="flex-1 px-3 bg-linear-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-br-xl border-l border-t border-gray-200 transition-all duration-200 flex items-center justify-center group hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100"
             title="Decrease"
           >
             <svg
@@ -638,7 +638,7 @@ export function Dropdown({
             `}</style>
             {/* Only show search for dynamic lists (customers/products) */}
             {(onSearch || options.length > 5) && (
-              <div className="px-3 py-3 border-b border-indigo-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+              <div className="px-3 py-3 border-b border-indigo-100 bg-linear-to-r from-indigo-50 to-purple-50">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <svg
@@ -701,9 +701,9 @@ export function Dropdown({
                     onMouseLeave={() => setHoveredIndex(null)}
                     className={`w-full px-4 py-3 text-left text-sm font-medium transition-all duration-500 flex items-center justify-between group relative overflow-hidden ${
                       value === option.value
-                        ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 text-white shadow-lg"
+                        ? "bg-linear-to-r from-indigo-500 via-purple-500 to-indigo-600 text-white shadow-lg"
                         : hoveredIndex === index
-                          ? "bg-gradient-to-r from-indigo-100 via-purple-100 to-indigo-100 text-indigo-900"
+                          ? "bg-linear-to-r from-indigo-100 via-purple-100 to-indigo-100 text-indigo-900"
                           : "text-gray-700 hover:bg-gray-50"
                     }`}
                     style={{
@@ -719,7 +719,7 @@ export function Dropdown({
                       )}
                       {option.label}
                     </span>
-                    {value === option.value && (
+                    <span className="truncate text-xs opacity-75 ml-2">{value === option.value && (
                       <svg
                         className="h-5 w-5 text-white animate-bounce relative z-10 slide-in"
                         fill="currentColor"
@@ -731,7 +731,7 @@ export function Dropdown({
                           clipRule="evenodd"
                         />
                       </svg>
-                    )}
+                    )}</span>
                   </button>
                 ))
               ) : (

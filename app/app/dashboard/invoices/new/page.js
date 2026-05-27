@@ -78,6 +78,22 @@ export default function NewInvoicePage() {
   const [hoveredProductIndex, setHoveredProductIndex] = useState(0);
   const [productSearchResults, setProductSearchResults] = useState([]);
   const [isSearchingProducts, setIsSearchingProducts] = useState(false);
+  const [showHsnDropdown, setShowHsnDropdown] = useState(false);
+  const [hoveredHsnIndex, setHoveredHsnIndex] = useState(null);
+
+  const hsnOptions = [
+    { value: "73201020", label: "73201020" },
+    { value: "73201011", label: "73201011" },
+    { value: "73181500", label: "73181500" },
+    { value: "87089900", label: "87089900" },
+    { value: "73209020", label: "73209020" },
+    { value: "40169990", label: "40169990" },
+    { value: "73181011", label: "73181011" },
+    { value: "73182200", label: "73182200" },
+    { value: "73181600", label: "73181600" },
+    { value: "73209090", label: "73209090" },
+    { value: "87082900", label: "87082900" },
+  ];
 
   useEffect(() => {
     fetchCustomers();
@@ -942,7 +958,7 @@ export default function NewInvoicePage() {
                                   _id: product.value,
                                   name: product.label.split("(")[0].trim(),
                                   price: parseFloat(
-                                    product.label.match(/₹([0-9.]+)/)?.[1] || 0,
+                                    (product.label.match(/₹([0-9,]+(?:\.[0-9]+)?)/)?.[1] || "0").replace(/,/g, ""),
                                   ),
                                 }))
                               : !itemForm.name && products.length > 0
@@ -1015,15 +1031,50 @@ export default function NewInvoicePage() {
                       <label className="block text-xs font-bold text-purple-600/80 uppercase tracking-widest mb-1.5">
                         HSN Code
                       </label>
-                      <input
-                        type="text"
-                        value={itemForm.hsnCode}
-                        onChange={(e) =>
-                          handleItemFormChange("hsnCode", e.target.value)
-                        }
-                        placeholder="Optional"
-                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 bg-white text-gray-900 placeholder-gray-400 transition-all duration-200"
-                      />
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setShowHsnDropdown((s) => !s)}
+                          onBlur={() => setTimeout(() => setShowHsnDropdown(false), 150)}
+                          className={`w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 bg-white text-gray-900 placeholder-gray-400 transition-all duration-200 flex items-center justify-between`}
+                        >
+                          <span className={`${itemForm.hsnCode ? "text-gray-900" : "text-gray-500"} truncate`}>{itemForm.hsnCode || "(Optional) Select HSN code"}</span>
+                          <svg className={`h-5 w-5 text-gray-400 transition-transform ${showHsnDropdown ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+
+                        <div className={`absolute top-full left-0 right-0 z-30 transition-all duration-200 ${showHsnDropdown ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}>
+                          <div className="bg-white/95 backdrop-blur-xl border border-purple-100 rounded-2xl shadow-2xl shadow-purple-200/40 mt-1.5 max-h-48 overflow-auto">
+                            {hsnOptions.map((opt, index) => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                className={`w-full text-left px-4 py-2.5 flex items-center justify-between border-b border-gray-50 last:border-0 transition-all duration-150 group ${hoveredHsnIndex === index ? "bg-linear-to-r from-violet-100 to-purple-100 border-purple-200" : "hover:bg-linear-to-r hover:from-violet-50 hover:to-purple-50"}`}
+                                onMouseEnter={() => setHoveredHsnIndex(index)}
+                                onMouseLeave={() => setHoveredHsnIndex(null)}
+                                onClick={() => {
+                                  handleItemFormChange("hsnCode", opt.value);
+                                  setShowHsnDropdown(false);
+                                }}
+                              >
+                                <div className="flex items-center gap-3 flex-1">
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-150 ${hoveredHsnIndex === index ? "border-purple-600 bg-purple-600" : "border-gray-300 bg-white group-hover:border-purple-400"}`}>
+                                    {hoveredHsnIndex === index && (
+                                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                  <span className={`text-sm font-semibold transition-colors ${hoveredHsnIndex === index ? "text-purple-700" : "text-gray-900 group-hover:text-purple-700"}`}>
+                                    {opt.label}
+                                  </span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
