@@ -2,6 +2,8 @@ const Product = require("../models/Product");
 const Invoice = require("../models/Invoice");
 const { AppError, asyncHandler } = require("../middleware/errorHandler");
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 // @desc    Get products sorted by most billed (invoice frequency)
 // @route   GET /api/products/popular
 // @access  Public
@@ -29,9 +31,10 @@ exports.getPopularProducts = asyncHandler(async (req, res, next) => {
 
   const query = {};
   if (search) {
+    const safe = escapeRegex(search);
     query.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { description: { $regex: search, $options: "i" } },
+      { name: { $regex: safe, $options: "i" } },
+      { description: { $regex: safe, $options: "i" } },
     ];
   }
 
@@ -61,9 +64,10 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
 
   // Search by name or description
   if (search) {
+    const safe = escapeRegex(search);
     query.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { description: { $regex: search, $options: "i" } },
+      { name: { $regex: safe, $options: "i" } },
+      { description: { $regex: safe, $options: "i" } },
     ];
   }
 

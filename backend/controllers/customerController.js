@@ -2,6 +2,8 @@ const Customer = require("../models/Customer");
 const Invoice = require("../models/Invoice");
 const { AppError, asyncHandler } = require("../middleware/errorHandler");
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 // @desc    Get all customers
 // @route   GET /api/customers
 // @access  Public
@@ -21,9 +23,10 @@ exports.getAllCustomers = asyncHandler(async (req, res, next) => {
 
   // Search by name or phone
   if (search) {
+    const safe = escapeRegex(search);
     query.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { phone: { $regex: search, $options: "i" } },
+      { name: { $regex: safe, $options: "i" } },
+      { phone: { $regex: safe, $options: "i" } },
     ];
   }
 
@@ -233,12 +236,12 @@ exports.getCustomerStats = asyncHandler(async (req, res, next) => {
 
   const stats = {
     totalInvoices: customer.invoices.length,
-    paidInvoices: customer.invoices.filter((inv) => inv.status === "Paid")
+    paidInvoices: customer.invoices.filter((inv) => inv.billType === "pay")
       .length,
-    pendingInvoices: customer.invoices.filter((inv) => inv.status === "Pending")
+    pendingInvoices: customer.invoices.filter((inv) => inv.billType === "credit")
       .length,
     totalRevenue: customer.invoices
-      .filter((inv) => inv.status === "Paid")
+      .filter((inv) => inv.billType === "pay")
       .reduce((sum, inv) => sum + inv.totalAmount, 0),
   };
 

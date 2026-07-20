@@ -3,6 +3,8 @@ const Customer = require("../models/Customer");
 const Product = require("../models/Product");
 const { AppError, asyncHandler } = require("../middleware/errorHandler");
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const parseOptionalBoolean = (value) => {
   if (value === undefined || value === null) return undefined;
   if (typeof value === "boolean") return value;
@@ -72,7 +74,7 @@ exports.getAllInvoices = asyncHandler(async (req, res, next) => {
   }
 
   if (search) {
-    const regex = new RegExp(search.trim(), "i");
+    const regex = new RegExp(escapeRegex(search.trim()), "i");
     const matchingCustomers = await Customer.find({ name: regex }).select(
       "_id",
     );
@@ -479,10 +481,12 @@ exports.deleteInvoice = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // Remove invoice reference from customer
-  await Customer.findByIdAndUpdate(invoice.customerId, {
-    $pull: { invoices: invoice._id },
-  });
+  // Remove invoice reference from customer (only if linked)
+  if (invoice.customerId) {
+    await Customer.findByIdAndUpdate(invoice.customerId, {
+      $pull: { invoices: invoice._id },
+    });
+  }
 
   await Invoice.findByIdAndDelete(req.params.id);
   await Invoice.syncCounterAfterDelete({

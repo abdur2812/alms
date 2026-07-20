@@ -40,13 +40,14 @@ A complete Billing System for AL M.S. TRADERS built with Next.js 16, featuring i
 - Create invoices with multiple line items
 - Select customers and products from dropdown
 - Auto-calculate prices from products
-- Real-time subtotal, tax, and total calculations
-- Invoice status management (Draft, Pending, Paid, Cancelled)
+- Real-time subtotal, GST, and total calculations
+- GST/Estimate toggle: create tax invoices or estimates; estimates can be converted to GST invoices on edit
 - View invoice details
-- Print-friendly invoice layout
-- Edit invoice (limited to tax rate and status)
+- Print-friendly invoice layout (A4)
+- Edit invoice (items, tax rate, HSN, bill type, copy type)
+- Duplicate an existing invoice into a new draft
 - Delete invoices
-- Filter by status
+- Filter by GST vs estimate and by bill type (pay/credit)
 
 ## Tech Stack
 
@@ -95,7 +96,7 @@ npm run dev
 
 ### Login
 
-For demo purposes, you can login with any email and password combination. The authentication is simplified for development.
+Demo auth via `AuthContext`: login with `alms@gmail.com` / `alms`. The session is kept in localStorage.
 
 ## Project Structure
 
@@ -142,31 +143,41 @@ app/
 
 ## API Endpoints Used
 
+The API client lives in `lib/api.js` (`customersAPI`, `productsAPI`, `invoicesAPI`). Key endpoints:
+
 ### Customers
 
-- `GET /api/customers` - Get all customers (with pagination & search)
-- `GET /api/customers/:id` - Get customer by ID
-- `POST /api/customers` - Create new customer
-- `PUT /api/customers/:id` - Update customer
-- `DELETE /api/customers/:id` - Delete customer
+- `GET /api/customers` - List (pagination, search by name/phone)
+- `GET /api/customers/:id` - Get by ID
+- `POST /api/customers` - Create
+- `PUT /api/customers/:id` - Update
+- `DELETE /api/customers/:id` - Delete
+- `GET /api/customers/:id/stats` - Stats (paid/pending counts derived from `billType`)
+- `GET /api/customers/:id/credit` - Credit summary
 
 ### Products
 
-- `GET /api/products` - Get all products (with pagination & search)
-- `GET /api/products/:id` - Get product by ID
-- `POST /api/products` - Create new product
-- `PUT /api/products/:id` - Update product
-- `DELETE /api/products/:id` - Delete product
-- `GET /api/products/alerts/low-stock` - Get low stock products
+- `GET /api/products` - List (pagination, search by name/description)
+- `GET /api/products/popular` - Sorted by invoice frequency (used to seed the item dropdown)
+- `GET /api/products/:id` - Get by ID
+- `POST /api/products` - Create
+- `PUT /api/products/:id` - Update
+- `DELETE /api/products/:id` - Delete
+- `PATCH /api/products/:id/stock` - Adjust stock
+- `GET /api/products/alerts/low-stock` / `out-of-stock` - Alerts
+- `POST /api/products/bulk` - Bulk import
 
 ### Invoices
 
-- `GET /api/invoices` - Get all invoices (with pagination & status filter)
-- `GET /api/invoices/:id` - Get invoice by ID
-- `POST /api/invoices` - Create new invoice
-- `PUT /api/invoices/:id` - Update invoice
-- `DELETE /api/invoices/:id` - Delete invoice
-- `PATCH /api/invoices/:id/status` - Update invoice status
+- `GET /api/invoices` - List (pagination, search, GST/estimate & bill-type filters)
+- `GET /api/invoices/:id` - Get by ID
+- `POST /api/invoices` - Create
+- `PUT /api/invoices/:id` - Update (can convert estimate -> GST invoice)
+- `DELETE /api/invoices/:id` - Delete (resyncs counter)
+- `GET /api/invoices/preview-number` - Next GST number (live header)
+- `GET /api/invoices/stats/summary`, `/reports/date-range`, `/reports/bulk-pdf`
+
+> Note: Invoices have **no `status` field**. Use `billType` (`pay`/`credit`) and `isGstBill` (`true`/`false`) to filter/classify. Prices are **GST-inclusive**.
 
 ## Features in Detail
 
@@ -232,6 +243,7 @@ npm run lint
 ## Notes
 
 - Make sure the backend server is running before starting the frontend
-- The application uses demo authentication - implement proper JWT authentication for production
-- Invoice items cannot be edited after creation (by design to maintain invoice integrity)
-- All monetary values are displayed with 2 decimal places
+- Auth is demo-only (`AuthContext` + localStorage); implement proper JWT for production
+- Invoice items are fully editable on the edit page (and via "duplicate" to seed a new draft)
+- All monetary values are formatted as INR with `formatINR` in `lib/formatters.js`
+- HSN codes are selected from a fixed dropdown of common auto-parts HSNs on the invoice item form

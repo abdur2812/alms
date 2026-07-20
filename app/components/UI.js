@@ -1,7 +1,9 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
+
 // Reusable UI Components
 
 export function PageHeader({ title, subtitle, action, backLink }) {
-  const Link = require("next/link").default;
   return (
     <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div>
@@ -437,11 +439,12 @@ export function Dropdown({
   className = "",
   onSearch = null, // Function to fetch more data when searching
 }) {
-  const [isOpen, setIsOpen] = require("react").useState(false);
-  const [searchTerm, setSearchTerm] = require("react").useState("");
-  const [hoveredIndex, setHoveredIndex] = require("react").useState(null);
-  const [searchOptions, setSearchOptions] = require("react").useState([]);
-  const dropdownRef = require("react").useRef(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+  const [searchOptions, setSearchOptions] = useState([]);
+  const dropdownRef = useRef(null);
+  const searchIdRef = useRef(0);
 
   // Use search results if searching, otherwise use regular options
   // Limit to 3 only if onSearch is provided (large dynamic lists)
@@ -451,15 +454,19 @@ export function Dropdown({
       ? options.slice(0, 3)
       : options;
 
-  const selectedLabel = (searchTerm ? searchOptions : options).find(
+  // Always look in full options for selected label, so it doesn't
+  // disappear while the user is searching.
+  const selectedLabel = options.find(
     (opt) => opt.value === value,
   )?.label;
 
   // Close dropdown when clicking outside
-  require("react").useEffect(() => {
+  useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
+        setSearchTerm("");
+        setSearchOptions([]);
       }
     }
 
@@ -467,16 +474,21 @@ export function Dropdown({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Handle search with debouncing
-  require("react").useEffect(() => {
+  // Handle search with debouncing — uses an incrementing ID to
+  // ignore stale async responses (race condition prevention).
+  useEffect(() => {
     if (searchTerm && onSearch) {
+      const id = ++searchIdRef.current;
       const timeoutId = setTimeout(async () => {
         try {
           const results = await onSearch(searchTerm);
-          setSearchOptions(results);
+          if (id === searchIdRef.current) {
+            setSearchOptions(results);
+          }
         } catch (error) {
-          console.error("Search failed:", error);
-          setSearchOptions([]);
+          if (id === searchIdRef.current) {
+            setSearchOptions([]);
+          }
         }
       }, 300);
 

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { invoicesAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
-import { PageHeader, Card, CardBody, Button } from "@/components/UI";
+import { PageHeader, Card, CardBody, Button, Modal } from "@/components/UI";
 import {
   FiPlus,
   FiEdit,
@@ -15,9 +15,11 @@ import {
   FiSearch,
   FiFileText,
   FiDownload,
+  FiCopy,
 } from "react-icons/fi";
 
 export default function InvoicesPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,7 @@ export default function InvoicesPage() {
   const [customerFilter, setCustomerFilter] = useState("");
   const [error, setError] = useState("");
   const [converting, setConverting] = useState(null);
+  const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -96,6 +99,28 @@ export default function InvoicesPage() {
     } finally {
       setConverting(null);
     }
+  };
+
+  const handleDuplicate = () => {
+    if (!showDuplicateConfirm) return;
+    const invoice = showDuplicateConfirm;
+    setShowDuplicateConfirm(null);
+
+    sessionStorage.setItem(
+      "duplicateInvoice",
+      JSON.stringify({
+        customerData: invoice.customerData,
+        customerId: invoice.customerId?._id || null,
+        items: invoice.items,
+        isGstBill: invoice.isGstBill,
+        isIgst: invoice.isIgst,
+        billType: invoice.billType,
+        vehicleNumber: invoice.vehicleNumber,
+        copyType: invoice.copyType,
+      }),
+    );
+
+    router.push("/dashboard/invoices/new");
   };
 
   const downloadBulkInvoiceCSV = async () => {
@@ -171,7 +196,7 @@ export default function InvoicesPage() {
               Download CSV
             </Button>
             <Button
-              onClick={() => (window.location.href = "/dashboard/invoices/new")}
+              onClick={() => router.push("/dashboard/invoices/new")}
               variant="primary"
             >
               <FiPlus className="mr-2" />
@@ -205,7 +230,7 @@ export default function InvoicesPage() {
                   setCustomerFilter("");
                   setBillTypeFilter("");
                   setInvoiceModeFilter("");
-                  window.history.pushState({}, "", "/dashboard/invoices");
+                  router.replace("/dashboard/invoices", { scroll: false });
                   setPage(1);
                 }}
                 variant="secondary"
@@ -451,6 +476,13 @@ export default function InvoicesPage() {
                             <FiEdit className="h-4 w-4" />
                           </Link>
                           <button
+                            onClick={() => setShowDuplicateConfirm(invoice)}
+                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors duration-200"
+                            title="Duplicate Items to New Invoice"
+                          >
+                            <FiCopy className="h-4 w-4" />
+                          </button>
+                          <button
                             onClick={() => handleDelete(invoice._id)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
                             title="Delete Invoice"
@@ -517,6 +549,79 @@ export default function InvoicesPage() {
           )}
         </div>
       </Card>
+      {/* Duplicate Confirmation Modal */}
+      <Modal
+        isOpen={!!showDuplicateConfirm}
+        onClose={() => setShowDuplicateConfirm(null)}
+        title="Duplicate Invoice Items"
+      >
+        {showDuplicateConfirm && (
+          <div>
+            <div className="space-y-3 mb-6">
+              <p className="text-sm text-gray-600">
+                Pre-fill a new invoice with items from:
+              </p>
+              <div className="bg-gray-50 rounded-xl p-4 space-y-2 border border-gray-100">
+                <div className="flex justify-between">
+                  <span className="text-xs font-medium text-gray-500">
+                    Invoice
+                  </span>
+                  <span className="text-sm font-bold text-indigo-600">
+                    {showDuplicateConfirm.invoiceNumber}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-xs font-medium text-gray-500">
+                    Customer
+                  </span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {showDuplicateConfirm.customerData?.name ||
+                      showDuplicateConfirm.customerId?.name ||
+                      "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-xs font-medium text-gray-500">
+                    Items
+                  </span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {showDuplicateConfirm.items?.length || 0} product(s)
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-xs font-medium text-gray-500">
+                    Total
+                  </span>
+                  <span className="text-sm font-bold text-gray-900">
+                    ₹
+                    {(showDuplicateConfirm.totalAmount || 0).toLocaleString(
+                      "en-IN",
+                    )}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500">
+                You&apos;ll be taken to the create invoice screen with all
+                details pre-filled. Review and create with one click.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDuplicateConfirm(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border-2 border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDuplicate}
+                className="flex-1 px-4 py-2.5 rounded-xl text-white font-medium bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2"
+              >
+                Continue to Create
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

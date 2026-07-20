@@ -109,6 +109,76 @@ export default function NewInvoicePage() {
     setNextInvoiceNumber(null);
   }, [formData.isGstBill]);
 
+  // Pre-fill form when duplicating from another invoice
+  useEffect(() => {
+    const stored = sessionStorage.getItem("duplicateInvoice");
+    if (!stored) return;
+
+    sessionStorage.removeItem("duplicateInvoice");
+
+    try {
+      const data = JSON.parse(stored);
+
+      if (data.customerData) {
+        setCustomerDetails({
+          name: data.customerData.name || "",
+          phone: data.customerData.phone || "",
+          gstNumber: data.customerData.gstNumber || "",
+          permanentAddress: {
+            companyAddress:
+              data.customerData.permanentAddress?.companyAddress || "",
+            city: data.customerData.permanentAddress?.city || "",
+            state: data.customerData.permanentAddress?.state || "",
+            postalCode: data.customerData.permanentAddress?.postalCode || "",
+            country: data.customerData.permanentAddress?.country || "India",
+          },
+          shippingAddress: {
+            companyAddress:
+              data.customerData.shippingAddress?.companyAddress || "",
+            city: data.customerData.shippingAddress?.city || "",
+            state: data.customerData.shippingAddress?.state || "",
+            postalCode: data.customerData.shippingAddress?.postalCode || "",
+            country: data.customerData.shippingAddress?.country || "India",
+          },
+        });
+
+        if (data.customerData.sameAsPermanent === false) {
+          setUsePermanentAddress(false);
+        }
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        customerId: data.customerId || "",
+        customerName: data.customerData?.name || "",
+        items: (data.items || []).map((item) => ({
+          productId: item.productId?._id || item.productId || "",
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          gst: item.gst,
+          hsnCode: item.hsnCode || "",
+          availableStock: null,
+        })),
+        isGstBill: data.isGstBill !== false,
+        isIgst: data.isIgst || false,
+        billType: data.billType || "pay",
+        vehicleNumber: data.vehicleNumber || "",
+        copyType: data.copyType || "original",
+      }));
+
+      // If the original invoice was linked to a customer, fetch their full
+      // details so the new invoice stays linked to the same customer record.
+      if (data.customerId) {
+        customersAPI.getById(data.customerId).then((response) => {
+          setSelectedCustomer(response.data.data);
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.error("Failed to parse duplicate invoice data", e);
+    }
+  }, []);
+
   const fetchNextInvoiceNumber = async () => {
     try {
       const response = await invoicesAPI.previewNumber();
@@ -330,6 +400,7 @@ export default function NewInvoicePage() {
   };
 
   const editItem = (index) => {
+    if (index < 0 || index >= formData.items.length) return;
     setItemForm({ ...formData.items[index] });
     setEditingIndex(index);
   };
@@ -1324,7 +1395,7 @@ export default function NewInvoicePage() {
                     <button
                       type="button"
                       onClick={() =>
-                        setFormData({ ...formData, isGstBill: true })
+                        setFormData((prev) => ({ ...prev, isGstBill: true }))
                       }
                       className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${formData.isGstBill ? "bg-linear-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200 -translate-y-0.5" : "text-gray-500 hover:text-gray-700"}`}
                     >
@@ -1333,7 +1404,7 @@ export default function NewInvoicePage() {
                     <button
                       type="button"
                       onClick={() =>
-                        setFormData({ ...formData, isGstBill: false })
+                        setFormData((prev) => ({ ...prev, isGstBill: false }))
                       }
                       className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${!formData.isGstBill ? "bg-linear-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-200 -translate-y-0.5" : "text-gray-500 hover:text-gray-700"}`}
                     >
@@ -1360,8 +1431,10 @@ export default function NewInvoicePage() {
                       type="button"
                       disabled={!formData.isGstBill}
                       onClick={() => {
-                        if (!formData.isGstBill) return;
-                        setFormData({ ...formData, isIgst: false });
+                        setFormData((prev) => {
+                          if (!prev.isGstBill) return prev;
+                          return { ...prev, isIgst: false };
+                        });
                       }}
                       className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${!formData.isIgst ? "bg-linear-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200 -translate-y-0.5" : "text-gray-500 hover:text-gray-700"}`}
                     >
@@ -1371,8 +1444,10 @@ export default function NewInvoicePage() {
                       type="button"
                       disabled={!formData.isGstBill}
                       onClick={() => {
-                        if (!formData.isGstBill) return;
-                        setFormData({ ...formData, isIgst: true });
+                        setFormData((prev) => {
+                          if (!prev.isGstBill) return prev;
+                          return { ...prev, isIgst: true };
+                        });
                       }}
                       className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${formData.isIgst ? "bg-linear-to-r from-teal-500 to-emerald-600 text-white shadow-lg shadow-teal-200 -translate-y-0.5" : "text-gray-500 hover:text-gray-700"}`}
                     >
@@ -1395,7 +1470,7 @@ export default function NewInvoicePage() {
                   name="billType"
                   value={formData.billType}
                   onChange={(e) =>
-                    setFormData({ ...formData, billType: e.target.value })
+                    setFormData((prev) => ({ ...prev, billType: e.target.value }))
                   }
                   placeholder="Select payment method"
                   options={[
@@ -1413,10 +1488,10 @@ export default function NewInvoicePage() {
                     type="text"
                     value={formData.vehicleNumber}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
+                      setFormData((prev) => ({
+                        ...prev,
                         vehicleNumber: e.target.value.toUpperCase(),
-                      })
+                      }))
                     }
                     placeholder="e.g. TN 01 AB 1234"
                     className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 bg-gray-50/50 text-gray-900 placeholder-gray-400 transition-all duration-200 uppercase tracking-widest font-medium"
@@ -1433,7 +1508,7 @@ export default function NewInvoicePage() {
                       <button
                         type="button"
                         onClick={() =>
-                          setFormData({ ...formData, copyType: "original" })
+                          setFormData((prev) => ({ ...prev, copyType: "original" }))
                         }
                         className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${
                           formData.copyType === "original"
@@ -1446,7 +1521,7 @@ export default function NewInvoicePage() {
                       <button
                         type="button"
                         onClick={() =>
-                          setFormData({ ...formData, copyType: "duplicate" })
+                          setFormData((prev) => ({ ...prev, copyType: "duplicate" }))
                         }
                         className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${
                           formData.copyType === "duplicate"
