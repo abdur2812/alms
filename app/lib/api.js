@@ -5,10 +5,9 @@ const API_BASE_URL =
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000, // 10 second timeout
+  timeout: 30000, // 30s for 512MB + heavy reports (stock snapshots, aggregated reports)
   headers: {
     Accept: "application/json",
-    // Don't set Content-Type here - let axios set it automatically to avoid preflight
   },
   withCredentials: false,
 });
@@ -71,8 +70,84 @@ export const invoicesAPI = {
   getStats: (params) => api.get("/api/invoices/stats/summary", { params }),
   getByDateRange: (params) =>
     api.get("/api/invoices/reports/date-range", { params }),
+  getRevenueInsights: (params) =>
+    api.get("/api/invoices/reports/revenue", { params }),
   previewNumber: () => api.get("/api/invoices/preview-number"),
   bulkExport: () => api.get("/api/invoices/reports/bulk-pdf"),
+};
+
+// Vendors API
+export const vendorsAPI = {
+  getAll: (params) => api.get("/api/vendors", { params }),
+  getById: (id) => api.get(`/api/vendors/${id}`),
+  create: (data) => api.post("/api/vendors", data),
+  update: (id, data) => api.put(`/api/vendors/${id}`, data),
+  delete: (id) => api.delete(`/api/vendors/${id}`),
+};
+
+// Purchases API
+export const purchasesAPI = {
+  getAll: (params) => api.get("/api/purchases", { params }),
+  getById: (id) => api.get(`/api/purchases/${id}`),
+  create: (data) => api.post("/api/purchases", data),
+  update: (id, data) => api.put(`/api/purchases/${id}`, data),
+  delete: (id) => api.delete(`/api/purchases/${id}`),
+  getNextNumber: () => api.get("/api/purchases/preview-number"),
+  getMonthlyReport: (params) => {
+    // Supports: { month: "YYYY-MM" } (legacy) or { vendorId, startDate, endDate } or { vendorId, month }
+    // If a string is passed for backward compat, treat as month
+    const query = typeof params === "string" ? { month: params } : params || {};
+    return api.get("/api/purchases/reports/monthly", { params: query });
+  },
+};
+
+// HSN Codes API
+export const hsnsAPI = {
+  getAll: (params) => api.get("/api/hsns", { params }),
+  create: (data) => api.post("/api/hsns", data),
+  delete: (id) => api.delete(`/api/hsns/${id}`),
+};
+
+// General Expenses API
+export const expensesAPI = {
+  getAll: (params) => api.get("/api/expenses", { params }),
+  getById: (id) => api.get(`/api/expenses/${id}`),
+  create: (data) => api.post("/api/expenses", data),
+  update: (id, data) => api.put(`/api/expenses/${id}`, data),
+  delete: (id) => api.delete(`/api/expenses/${id}`),
+};
+
+// Expense Categories API
+export const expenseCategoriesAPI = {
+  getAll: (params) => api.get("/api/expense-categories", { params }),
+  create: (data) => api.post("/api/expense-categories", data),
+  update: (id, data) => api.put(`/api/expense-categories/${id}`, data),
+  delete: (id) => api.delete(`/api/expense-categories/${id}`),
+};
+
+// Accounts API
+export const accountsAPI = {
+  getSummary: (params) => api.get("/api/accounts/summary", { params }),
+  getHsnSummary: (params) => api.get("/api/accounts/hsn", { params }),
+  getReport: (params) => api.get("/api/accounts/report", { params }),
+};
+
+// Staff API
+export const staffAPI = {
+  getAll: (params) => api.get("/api/staff", { params }),
+  getById: (id) => api.get(`/api/staff/${id}`),
+  create: (data) => api.post("/api/staff", data),
+  update: (id, data) => api.put(`/api/staff/${id}`, data),
+  delete: (id) => api.delete(`/api/staff/${id}`),
+  getDailyAttendance: (date) =>
+    api.get("/api/staff/attendance/daily", { params: { date } }),
+  saveDailyAttendance: (data) => api.post("/api/staff/attendance/daily", data),
+  getPayments: (params) => api.get("/api/staff/payments", { params }),
+  getCalendar: (id, params) => api.get(`/api/staff/${id}/calendar`, { params }),
+  // Daily per-day payments (track each staff's particular day's payment)
+  getDailyPayments: (params) => api.get("/api/staff/payments/daily", { params }),
+  markDayPaid: (data) => api.post("/api/staff/payments/daily", data),
+  markDayUnpaid: (params) => api.delete("/api/staff/payments/daily", { params }),
 };
 
 export default api;

@@ -12,20 +12,44 @@ export default function ViewInvoicePage({ params }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState(null);
+  const [upiUri, setUpiUri] = useState(null);
 
   const loadInvoice = () => {
     return Promise.all([
       invoicesAPI.getById(id),
       import("@react-pdf/renderer"),
       import("@/components/InvoicePDF"),
+      import("@/components/EstimateCleanPDF"),
     ])
-      .then(([res, pdfLib, invoiceDoc]) => {
-        setInvoice(res.data.data);
+      .then(async ([res, pdfLib, invoiceDoc, cleanDoc]) => {
+        const inv = res.data.data;
+        setInvoice(inv);
+        const isClean = !!inv.isCleanEstimate;
         setPdfComponents({
           PDFViewer: pdfLib.PDFViewer,
-          InvoiceDoc: invoiceDoc.default,
+          InvoiceDoc: isClean ? cleanDoc.default : invoiceDoc.default,
         });
         setLoading(false);
+        if (isClean) {
+          setQrDataUrl(null);
+          setUpiUri(null);
+          return;
+        }
+        // Generate dynamic UPI QR for preview (only for non-clean)
+        try {
+          const { generateUpiQrForInvoice } = await import("@/lib/upi");
+          const result = await generateUpiQrForInvoice(inv);
+          if (result) {
+            setQrDataUrl(result.dataUrl);
+            setUpiUri(result.uri);
+          } else {
+            setQrDataUrl(null);
+            setUpiUri(null);
+          }
+        } catch (e) {
+          console.error("UPI QR generation failed", e);
+        }
       })
       .catch(() => {
         setError(true);
@@ -40,15 +64,37 @@ export default function ViewInvoicePage({ params }) {
   const handleDownload = async () => {
     if (!invoice) return;
     try {
-      const [{ pdf }, { default: InvoiceDoc }] = await Promise.all([
+      const isClean = !!invoice.isCleanEstimate;
+      const [{ pdf }, invoiceMod, cleanMod, upiMod] = await Promise.all([
         import("@react-pdf/renderer"),
         import("@/components/InvoicePDF"),
+        import("@/components/EstimateCleanPDF"),
+        import("@/lib/upi"),
       ]);
-      const blob = await pdf(<InvoiceDoc invoice={invoice} />).toBlob();
+      const Doc = isClean ? cleanMod.default : invoiceMod.default;
+
+      // Ensure QR is generated even if preview generation hadn't completed (skip for clean)
+      let dataUrl = qrDataUrl;
+      let uri = upiUri;
+      if (!isClean && !dataUrl) {
+        try {
+          const result = await upiMod.generateUpiQrForInvoice(invoice);
+          if (result) {
+            dataUrl = result.dataUrl;
+            uri = result.uri;
+          }
+        } catch (_) {
+          // fallback to no QR
+        }
+      }
+
+      const blob = await pdf(
+        isClean ? <Doc invoice={invoice} /> : <Doc invoice={invoice} qrDataUrl={dataUrl} upiUri={uri} />
+      ).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${invoice.isGstBill ? "Invoice" : "Estimate"}-${invoice.invoiceNumber || id}.pdf`;
+      a.download = `${isClean ? "Estimate-Clean" : invoice.isGstBill ? "Invoice" : "Estimate"}-${invoice.invoiceNumber || id}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -66,11 +112,13 @@ export default function ViewInvoicePage({ params }) {
       return;
     setConverting(true);
     try {
-      await invoicesAPI.update(id, { isGstBill: true });
+      await invoicesAPI.update(id, { isGstBill: true, isCleanEstimate: false });
       // Reload the invoice
       setLoading(true);
       setPdfComponents(null);
       setInvoice(null);
+      setQrDataUrl(null);
+      setUpiUri(null);
       await loadInvoice();
     } catch (err) {
       alert(
@@ -103,7 +151,7 @@ export default function ViewInvoicePage({ params }) {
             </span>
             {invoice && !invoice.isGstBill && (
               <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200 rounded-full font-medium">
-                Estimate
+                {invoice.isCleanEstimate ? "Clean Estimate • A5" : "Estimate"}
               </span>
             )}
           </div>
@@ -151,7 +199,11 @@ export default function ViewInvoicePage({ params }) {
           </div>
         ) : PDFViewer && InvoiceDoc && invoice ? (
           <PDFViewer width="100%" height="100%" style={{ border: "none" }}>
-            <InvoiceDoc invoice={invoice} />
+            <InvoiceDoc
+              invoice={invoice}
+              qrDataUrl={qrDataUrl}
+              upiUri={upiUri}
+            />
           </PDFViewer>
         ) : null}
       </div>

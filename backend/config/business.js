@@ -28,6 +28,11 @@ const businessConfig = {
     account_number: "50200109601612",
     ifsc_code: "HDFC0007824",
   },
+  upi: {
+    // Merchant UPI ID — used to build dynamic UPI QR: upi://pay?pa=...&pn=...&am=...&cu=INR
+    id: "almstraders2017-5@okaxis",
+    name: "AL M.S. TRADERS",
+  },
   invoice_defaults: {
     currency: "INR",
     country: "India",

@@ -9,15 +9,19 @@ import {
   FiUsers,
   FiPackage,
   FiFileText,
+  FiFilePlus,
   FiLogOut,
   FiMenu,
   FiX,
   FiSettings,
-  FiUpload,
   FiExternalLink,
   FiTruck,
+  FiShoppingBag,
+  FiDollarSign,
+  FiDownload,
 } from "react-icons/fi";
 import { useState } from "react";
+import { productsAPI } from "@/lib/api";
 
 const getNavigation = () => {
   return [
@@ -25,11 +29,10 @@ const getNavigation = () => {
     { name: "Customers", href: "/dashboard/customers", icon: FiUsers },
     { name: "Products", href: "/dashboard/products", icon: FiPackage },
     { name: "Invoices", href: "/dashboard/invoices", icon: FiFileText },
-    {
-      name: "Bulk Import",
-      href: "/dashboard/admin/bulk-products",
-      icon: FiUpload,
-    },
+    { name: "New Estimate", href: "/dashboard/estimates/new", icon: FiFilePlus },
+    { name: "Purchases", href: "/dashboard/purchases", icon: FiShoppingBag },
+    { name: "Staff", href: "/dashboard/staff", icon: FiUsers },
+    { name: "Accounts", href: "/dashboard/accounts", icon: FiDollarSign },
   ];
 };
 
@@ -52,6 +55,39 @@ export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
   const navigation = getNavigation();
+
+  const handleExportStock = async () => {
+    if (!confirm("Export stock report as CSV?")) return;
+    try {
+      const response = await productsAPI.getAll({ limit: 10000 });
+      const allProducts = response.data.data || [];
+      const headers = ["Product Name", "Price", "GST %", "HSN Code", "Stock Quantity"];
+      const csvContent = [
+        headers.join(","),
+        ...allProducts.map((product) =>
+          [
+            `"${product.name}"`,
+            product.price,
+            product.gst || 0,
+            product.hsnCode || "-",
+            product.stockQuantity,
+          ].join(","),
+        ),
+      ].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `stock-report-${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Failed to export stock");
+      console.error(err);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50">
@@ -114,6 +150,16 @@ export default function DashboardLayout({ children }) {
                 </Link>
               );
             })}
+            <button
+              onClick={() => {
+                setSidebarOpen(false);
+                handleExportStock();
+              }}
+              className="flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200"
+            >
+              <FiDownload className="mr-3 h-5 w-5" />
+              Export Stock
+            </button>
             {/* External Links */}
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
@@ -203,6 +249,13 @@ export default function DashboardLayout({ children }) {
               </Link>
             );
           })}
+          <button
+            onClick={handleExportStock}
+            className="flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200"
+          >
+            <FiDownload className="mr-3 h-5 w-5" />
+            Export Stock
+          </button>
           {/* External Links */}
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">

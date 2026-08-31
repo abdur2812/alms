@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "start": "node --max-old-space-size=400 index.js",
+    "start:prod": "NODE_ENV=production node --max-old-space-size=400 index.js",
+    "dev": "nodemon --max-old-space-size=400 index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -12,10 +13,12 @@
   "description": "AL M.S. TRADERS Billing System REST API with Express, MongoDB, and Mongoose",
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
-    "mongoose": "^8.22.0"
+    "mongoose": "^8.22.0",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"

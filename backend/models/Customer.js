@@ -57,6 +57,10 @@ customerSchema.virtual("invoiceCount").get(function () {
     : 0;
 });
 
+customerSchema.index({ name: 1 });
+customerSchema.index({ phone: 1 });
+customerSchema.index({ createdAt: -1 });
+
 // Ensure virtuals are included when converting to JSON
 customerSchema.set("toJSON", { virtuals: true });
 customerSchema.set("toObject", { virtuals: true });

@@ -32,11 +32,31 @@ export default function DashboardPage() {
     lowStockProducts: [],
     recentInvoices: [],
   });
+  const [creditReminders, setCreditReminders] = useState([]);
+  const [creditLoading, setCreditLoading] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchDashboardData();
   }, [user]);
+
+  useEffect(() => {
+    const fetchCreditReminders = async () => {
+      try {
+        setCreditLoading(true);
+        const res = await invoicesAPI.getAll({ billType: "credit", limit: 50, page: 1 });
+        const data = Array.isArray(res.data?.data) ? res.data.data : [];
+        const sorted = [...data].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        setCreditReminders(sorted.slice(0, 5));
+      } catch (err) {
+        console.error("Failed to fetch credit reminders", err);
+        setCreditReminders([]);
+      } finally {
+        setCreditLoading(false);
+      }
+    };
+    fetchCreditReminders();
+  }, []);
 
   const fetchDashboardData = async () => {
     try {
@@ -275,6 +295,81 @@ export default function DashboardPage() {
             </Link>
           );
         })}
+      </div>
+
+      {/* Credit Sales Reminder - Most Delayed */}
+      <div className="mb-8 bg-white rounded-2xl shadow-lg overflow-hidden border border-red-100">
+        <div className="px-6 py-5 bg-gradient-to-r from-red-50 to-orange-50 border-b border-red-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl flex items-center justify-center mr-3">
+                <FiAlertCircle className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Credit Sales Reminder</h2>
+                <p className="text-xs text-gray-600">Most delayed unpaid credit invoices</p>
+              </div>
+            </div>
+            <Link
+              href="/dashboard/invoices?billType=credit"
+              className="text-sm font-medium text-red-600 hover:text-red-700 flex items-center"
+            >
+              View all
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {creditLoading ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto"></div>
+              <p className="mt-2 text-sm text-gray-500">Loading credit reminders...</p>
+            </div>
+          ) : creditReminders.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FiFileText className="w-8 h-8 text-green-500" />
+              </div>
+              <p className="font-medium">No pending credit sales!</p>
+              <p className="text-sm">All credit payments are settled.</p>
+            </div>
+          ) : (
+            creditReminders.map((invoice) => {
+              const daysOverdue = Math.floor((Date.now() - new Date(invoice.createdAt)) / (1000 * 60 * 60 * 24));
+              const overdueText = daysOverdue === 0 ? "Today" : `${daysOverdue} day${daysOverdue > 1 ? "s" : ""} ago`;
+              const overdueColor =
+                daysOverdue > 30
+                  ? "bg-red-100 text-red-800 border-red-200"
+                  : daysOverdue > 7
+                    ? "bg-orange-100 text-orange-800 border-orange-200"
+                    : "bg-yellow-100 text-yellow-800 border-yellow-200";
+              return (
+                <Link
+                  key={invoice._id}
+                  href={`/dashboard/invoices/${invoice._id}/view`}
+                  className="block px-6 py-4 hover:bg-red-50/50 transition-all duration-200"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{invoice.invoiceNumber}</p>
+                      <p className="text-sm text-gray-600 truncate">
+                        {invoice.customerData?.name || invoice.customerId?.name || "N/A"} • {new Date(invoice.createdAt).toLocaleDateString("en-IN")}
+                      </p>
+                    </div>
+                    <div className="ml-4 flex-shrink-0 text-right">
+                      <p className="text-sm font-bold text-gray-900">{formatINR(invoice.totalAmount || 0)}</p>
+                      <span className={`mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${overdueColor}`}>
+                        {overdueText}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

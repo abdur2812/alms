@@ -1,33 +1,49 @@
 const Product = require("../models/Product");
-const Invoice = require("../models/Invoice");
+const Counter = require("../models/Counter");
 const { AppError, asyncHandler } = require("../middleware/errorHandler");
+const { parsePagination } = require("../utils/queryHelpers");
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-// @desc    Get products sorted by most billed (invoice frequency)
+// NOTE: backfillMissingSerialNumbers is now run once at server startup (see index.js)
+// to avoid per-request COLLSCAN on 3k docs. Kept export for manual migration.
+const backfillMissingSerialNumbers = async () => {
+  const missing = await Product.find({
+    $or: [{ serialNo: null }, { serialNo: { $exists: false } }, { serialNo: 0 }],
+  }).select("_id serialNo createdAt").sort({ createdAt: 1 }).lean();
+  if (missing.length === 0) return 0;
+  // Batch allocate serial numbers: one atomic increment by missing.length
+  const counterId = "prod";
+  const dbMaxDoc = await Product.findOne().sort({ serialNo: -1 }).select("serialNo").lean();
+  const dbMax = dbMaxDoc?.serialNo || 0;
+  const counter = await Counter.findOneAndUpdate(
+    { _id: counterId },
+    { $setOnInsert: { sequence: dbMax } },
+    { upsert: true, new: true }
+  );
+  // Actually need to bump to dbMax if counter is stale
+  if (counter.sequence < dbMax) {
+    await Counter.findOneAndUpdate({ _id: counterId }, { $set: { sequence: dbMax } });
+  }
+  const inc = await Counter.findOneAndUpdate(
+    { _id: counterId },
+    { $inc: { sequence: missing.length } },
+    { new: true }
+  );
+  const start = inc.sequence - missing.length + 1;
+  const ops = missing.map((p, i) => ({
+    updateOne: { filter: { _id: p._id }, update: { $set: { serialNo: start + i } } },
+  }));
+  await Product.bulkWrite(ops, { ordered: false });
+  return missing.length;
+};
+
+// @desc    Get products sorted by serial number (ascending)
 // @route   GET /api/products/popular
 // @access  Public
 exports.getPopularProducts = asyncHandler(async (req, res, next) => {
-  const { limit = 1000, search } = req.query;
-
-  // Aggregate invoice items to count how many times each product was billed
-  const billed = await Invoice.aggregate([
-    { $unwind: "$items" },
-    { $match: { "items.productId": { $ne: null } } },
-    {
-      $group: {
-        _id: "$items.productId",
-        billedCount: { $sum: "$items.quantity" },
-      },
-    },
-    { $sort: { billedCount: -1 } },
-  ]);
-
-  // Map productId -> billedCount for quick lookup
-  const countMap = {};
-  billed.forEach((b) => {
-    countMap[b._id.toString()] = b.billedCount;
-  });
+  const { search } = req.query;
+  const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 20 });
 
   const query = {};
   if (search) {
@@ -38,19 +54,18 @@ exports.getPopularProducts = asyncHandler(async (req, res, next) => {
     ];
   }
 
-  const products = await Product.find(query).limit(Number(limit));
-
-  // Sort: products that appear in invoices first (desc), rest after
-  products.sort((a, b) => {
-    const ca = countMap[a._id.toString()] || 0;
-    const cb = countMap[b._id.toString()] || 0;
-    return cb - ca;
-  });
+  const [total, data] = await Promise.all([
+    Product.countDocuments(query),
+    Product.find(query).sort({ serialNo: 1 }).skip(skip).limit(limit).lean(),
+  ]);
 
   res.status(200).json({
     success: true,
-    count: products.length,
-    data: products,
+    count: data.length,
+    total,
+    totalPages: Math.ceil(total / limit),
+    currentPage: page,
+    data,
   });
 });
 
@@ -58,11 +73,16 @@ exports.getPopularProducts = asyncHandler(async (req, res, next) => {
 // @route   GET /api/products
 // @access  Public
 exports.getAllProducts = asyncHandler(async (req, res, next) => {
-  const { page = 1, limit = 10, search, inStock, lowStock } = req.query;
+  const { search, inStock, lowStock } = req.query;
+  const wantLarge = String(req.query.limit) === "10000" || Number(req.query.limit) > 50;
+  const { page, limit, skip } = parsePagination(req.query, {
+    defaultLimit: 10,
+    allowLarge: wantLarge,
+  });
+  const effLimit = limit; // already capped to 50 or 5000 by parsePagination
 
   const query = {};
 
-  // Search by name or description
   if (search) {
     const safe = escapeRegex(search);
     query.$or = [
@@ -71,73 +91,56 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
     ];
   }
 
-  // Filter by stock status
   if (inStock === "true") {
     query.stockQuantity = { $gt: 0 };
   } else if (inStock === "false") {
     query.stockQuantity = 0;
   }
 
-  // Filter by low stock
   if (lowStock === "true") {
     query.stockQuantity = { $gt: 0, $lt: 10 };
   }
 
-  try {
-    const products = await Product.find(query)
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .sort({ createdAt: -1 });
+  const [products, count] = await Promise.all([
+    Product.find(query).sort({ serialNo: 1 }).skip(skip).limit(effLimit).lean(),
+    Product.countDocuments(query),
+  ]);
 
-    const count = await Product.countDocuments(query);
-
-    res.status(200).json({
-      success: true,
-      count: products.length,
-      total: count,
-      totalPages: Math.ceil(count / limit),
-      currentPage: page,
-      data: products,
-    });
-  } catch (error) {
-    console.error("=== GET ALL PRODUCTS ERROR ===");
-    console.error("Error:", error);
-    throw error;
-  }
+  res.status(200).json({
+    success: true,
+    count: products.length,
+    total: count,
+    totalPages: Math.ceil(count / effLimit),
+    currentPage: page,
+    data: products,
+  });
 });
 
 // @desc    Get single product by ID
 // @route   GET /api/products/:id
 // @access  Public
 exports.getProductById = asyncHandler(async (req, res, next) => {
-  const product = await Product.findById(req.params.id);
-
+  const product = await Product.findById(req.params.id).lean();
   if (!product) {
-    return next(
-      new AppError(`Product not found with id: ${req.params.id}`, 404),
-    );
+    return next(new AppError(`Product not found with id: ${req.params.id}`, 404));
   }
-
-  res.status(200).json({
-    success: true,
-    data: product,
-  });
+  res.status(200).json({ success: true, data: product });
 });
 
 // @desc    Create new product
 // @route   POST /api/products
 // @access  Public
 exports.createProduct = asyncHandler(async (req, res, next) => {
-  const { name, description, price, stockQuantity, gst, hsnCode, partNo } =
-    req.body;
+  const { name, description, price, stockQuantity, gst, hsnCode, partNo } = req.body;
 
-  // Check if product with this name already exists
-  const existingProduct = await Product.findOne({ name });
+  const existingProduct = await Product.findOne({ name }).lean();
   if (existingProduct) {
     return next(new AppError("Product with this name already exists", 400));
   }
 
-  const productData = {
+  const serialNo = await Product.generateSerialNo();
+
+  const product = await Product.create({
     name,
     description,
     price,
@@ -145,9 +148,8 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
     gst: Number(gst) || 0,
     hsnCode,
     partNo,
-  };
-
-  const product = await Product.create(productData);
+    serialNo,
+  });
 
   res.status(201).json({
     success: true,
@@ -160,20 +162,15 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/products/:id
 // @access  Public
 exports.updateProduct = asyncHandler(async (req, res, next) => {
-  const { name, description, price, stockQuantity, gst, hsnCode, partNo } =
-    req.body;
+  const { name, description, price, stockQuantity, gst, hsnCode, partNo } = req.body;
 
   let product = await Product.findById(req.params.id);
-
   if (!product) {
-    return next(
-      new AppError(`Product not found with id: ${req.params.id}`, 404),
-    );
+    return next(new AppError(`Product not found with id: ${req.params.id}`, 404));
   }
 
-  // Check if name is being changed to an existing name
   if (name && name !== product.name) {
-    const existingProduct = await Product.findOne({ name });
+    const existingProduct = await Product.findOne({ name }).lean();
     if (existingProduct) {
       return next(new AppError("Product name already in use", 400));
     }
@@ -206,62 +203,39 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
 // @access  Public
 exports.deleteProduct = asyncHandler(async (req, res, next) => {
   const product = await Product.findById(req.params.id);
-
   if (!product) {
-    return next(
-      new AppError(`Product not found with id: ${req.params.id}`, 404),
-    );
+    return next(new AppError(`Product not found with id: ${req.params.id}`, 404));
   }
-
   await Product.findByIdAndDelete(req.params.id);
-
-  res.status(200).json({
-    success: true,
-    message: "Product deleted successfully",
-    data: {},
-  });
+  await Product.syncCounterAfterDelete();
+  res.status(200).json({ success: true, message: "Product deleted successfully", data: {} });
 });
 
 // @desc    Adjust stock quantity
 // @route   PATCH /api/products/:id/stock
 // @access  Public
 exports.adjustStock = asyncHandler(async (req, res, next) => {
-  const { adjustment, action } = req.body; // action: 'add' or 'subtract'
-
+  const { adjustment, action } = req.body;
   if (!adjustment || adjustment <= 0) {
-    return next(
-      new AppError("Please provide a valid adjustment quantity", 400),
-    );
+    return next(new AppError("Please provide a valid adjustment quantity", 400));
   }
-
   if (!action || !["add", "subtract"].includes(action)) {
-    return next(
-      new AppError("Please provide a valid action (add or subtract)", 400),
-    );
+    return next(new AppError("Please provide a valid action (add or subtract)", 400));
   }
-
   const product = await Product.findById(req.params.id);
-
   if (!product) {
-    return next(
-      new AppError(`Product not found with id: ${req.params.id}`, 404),
-    );
+    return next(new AppError(`Product not found with id: ${req.params.id}`, 404));
   }
-
   if (action === "add") {
     await product.increaseStock(adjustment);
   } else {
     if (product.stockQuantity < adjustment) {
       return next(
-        new AppError(
-          `Insufficient stock. Available: ${product.stockQuantity}, Requested: ${adjustment}`,
-          400,
-        ),
+        new AppError(`Insufficient stock. Available: ${product.stockQuantity}, Requested: ${adjustment}`, 400)
       );
     }
     await product.decreaseStock(adjustment);
   }
-
   res.status(200).json({
     success: true,
     message: `Stock ${action === "add" ? "increased" : "decreased"} successfully`,
@@ -273,91 +247,142 @@ exports.adjustStock = asyncHandler(async (req, res, next) => {
 // @route   GET /api/products/alerts/low-stock
 // @access  Public
 exports.getLowStockProducts = asyncHandler(async (req, res, next) => {
-  const query = {
-    stockQuantity: { $gt: 0, $lt: 10 },
-  };
-
-  const products = await Product.find(query).sort({ stockQuantity: 1 });
-
-  res.status(200).json({
-    success: true,
-    count: products.length,
-    data: products,
-  });
+  const products = await Product.find({ stockQuantity: { $gt: 0, $lt: 10 } })
+    .sort({ stockQuantity: 1 })
+    .select("name price stockQuantity serialNo")
+    .lean();
+  res.status(200).json({ success: true, count: products.length, data: products });
 });
 
 // @desc    Get out of stock products
 // @route   GET /api/products/alerts/out-of-stock
 // @access  Public
 exports.getOutOfStockProducts = asyncHandler(async (req, res, next) => {
-  const query = { stockQuantity: 0 };
-
-  const products = await Product.find(query).sort({
-    updatedAt: -1,
-  });
-
-  res.status(200).json({
-    success: true,
-    count: products.length,
-    data: products,
-  });
+  const products = await Product.find({ stockQuantity: 0 })
+    .sort({ updatedAt: -1 })
+    .select("name price stockQuantity serialNo updatedAt")
+    .lean();
+  res.status(200).json({ success: true, count: products.length, data: products });
 });
 
-// @desc    Bulk create products
+// @desc    Bulk create products - DSA-optimized O(n) dedup + single counter increment
 // @route   POST /api/products/bulk
 // @access  Public
 exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
   const { products } = req.body;
-
   if (!Array.isArray(products) || products.length === 0) {
     return next(new AppError("Products array is required", 400));
   }
+  // Hard cap bulk size to avoid OOM on 512 MB
+  if (products.length > 500) {
+    return next(new AppError("Bulk limit is 500 products per request. Split into smaller batches.", 400));
+  }
 
-  const results = {
-    success: [],
-    failed: [],
-  };
+  const results = { success: [], failed: [] };
 
-  for (const productData of products) {
-    try {
-      const { name, description, price, stockQuantity, gst, hsnCode, partNo } =
-        productData;
+  // 1) Validate + collect names; O(n) hash map for intra-batch duplicates
+  const nameSet = new Set();
+  const toInsert = [];
+  for (const pd of products) {
+    const { name, price } = pd;
+    if (!name || price === undefined || String(name).trim() === "" || String(price).trim() === "") {
+      results.failed.push({ data: pd, error: "Missing required fields (name, price)" });
+      continue;
+    }
+    const norm = String(name).trim();
+    if (nameSet.has(norm.toLowerCase())) {
+      results.failed.push({ data: pd, error: `Duplicate name in batch: "${norm}"` });
+      continue;
+    }
+    nameSet.add(norm.toLowerCase());
+    toInsert.push({ ...pd, _norm: norm.toLowerCase(), _origName: norm });
+  }
 
-      // Validate required fields
-      if (!name || !price) {
-        results.failed.push({
-          data: productData,
-          error: "Missing required fields (name, price)",
-        });
-        continue;
+  if (toInsert.length === 0) {
+    return res.status(201).json({
+      success: true,
+      message: `Bulk import completed: 0 succeeded, ${results.failed.length} failed`,
+      data: results,
+    });
+  }
+
+  // 2) Single DB query to find existing names (instead of N findOne)
+  const names = toInsert.map((p) => p._origName);
+  const existing = await Product.find({ name: { $in: names } }).select("name").lean();
+  const existingSet = new Set(existing.map((e) => String(e.name).toLowerCase()));
+  const filtered = [];
+  for (const pd of toInsert) {
+    if (existingSet.has(pd._norm)) {
+      results.failed.push({ data: pd, error: `Product with name "${pd._origName}" already exists` });
+    } else {
+      filtered.push(pd);
+    }
+  }
+
+  if (filtered.length === 0) {
+    return res.status(201).json({
+      success: true,
+      message: `Bulk import completed: 0 succeeded, ${results.failed.length} failed`,
+      data: results,
+    });
+  }
+
+  // 3) Batch allocate serial numbers: one atomic $inc by filtered.length
+  // Ensure counter exists
+  const dbMaxDoc = await Product.findOne().sort({ serialNo: -1 }).select("serialNo").lean();
+  const dbMax = dbMaxDoc?.serialNo || 0;
+  await Counter.findOneAndUpdate(
+    { _id: "prod" },
+    { $setOnInsert: { sequence: dbMax } },
+    { upsert: true }
+  );
+  // Ensure counter >= dbMax
+  await Counter.findOneAndUpdate(
+    { _id: "prod", sequence: { $lt: dbMax } },
+    { $set: { sequence: dbMax } }
+  );
+  const counter = await Counter.findOneAndUpdate(
+    { _id: "prod" },
+    { $inc: { sequence: filtered.length } },
+    { new: true }
+  );
+  const startSerial = counter.sequence - filtered.length + 1;
+
+  const docs = filtered.map((pd, i) => ({
+    name: pd._origName,
+    description: pd.description || "",
+    price: Number(pd.price),
+    stockQuantity: Number(pd.stockQuantity) || 0,
+    gst: Number(pd.gst) || 0,
+    hsnCode: pd.hsnCode,
+    partNo: pd.partNo,
+    serialNo: startSerial + i,
+  }));
+
+  try {
+    const inserted = await Product.insertMany(docs, { ordered: false });
+    results.success = inserted;
+  } catch (e) {
+    // insertMany ordered:false may still throw BulkWriteError with partial success
+    if (e.insertedDocs) {
+      results.success = e.insertedDocs;
+    }
+    const writeErrors = e.writeErrors || [];
+    const failedMap = new Map(writeErrors.map((we) => [we.index, we.errmsg]));
+    for (let i = 0; i < docs.length; i++) {
+      if (!results.success.find((s) => s.name === docs[i].name)) {
+        if (!failedMap.has(i)) results.failed.push({ data: filtered[i], error: e.message });
+        else results.failed.push({ data: filtered[i], error: failedMap.get(i) });
       }
-
-      // Check if product with this name already exists
-      const existingProduct = await Product.findOne({ name });
-      if (existingProduct) {
-        results.failed.push({
-          data: productData,
-          error: `Product with name "${name}" already exists`,
-        });
-        continue;
+    }
+    // Honour partial success if any inserted
+    if (results.success.length === 0 && !e.insertedDocs) {
+      // fallback: report all as failed
+      for (const d of filtered) {
+        if (!results.failed.find((f) => f.data._origName === d._origName)) {
+          results.failed.push({ data: d, error: e.message });
+        }
       }
-
-      const product = await Product.create({
-        name,
-        description: description || "",
-        price: Number(price),
-        stockQuantity: Number(stockQuantity) || 0,
-        gst: Number(gst) || 0,
-        hsnCode,
-        partNo,
-      });
-
-      results.success.push(product);
-    } catch (error) {
-      results.failed.push({
-        data: productData,
-        error: error.message,
-      });
     }
   }
 
@@ -367,26 +392,23 @@ exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
     data: results,
   });
 });
-// @desc    Get stock data for PDF generation
+
+// @desc    Get stock data for PDF generation - lean + capped sort
 // @route   GET /api/products/reports/stock-pdf
 // @access  Public
 exports.getStockPDF = asyncHandler(async (req, res, next) => {
   const products = await Product.find({})
     .select("name price gst hsnCode stockQuantity")
-    .sort({ name: 1 });
-
-  // Format data for PDF: name, price, gst, hsn, stock qty
-  const stockData = products.map((product) => ({
-    name: product.name,
-    price: product.price,
-    gst: product.gst,
-    hsnCode: product.hsnCode || "-",
-    stockQuantity: product.stockQuantity,
+    .sort({ name: 1 })
+    .lean();
+  const stockData = products.map((p) => ({
+    name: p.name,
+    price: p.price,
+    gst: p.gst,
+    hsnCode: p.hsnCode || "-",
+    stockQuantity: p.stockQuantity,
   }));
-
-  res.status(200).json({
-    success: true,
-    count: stockData.length,
-    data: stockData,
-  });
+  res.status(200).json({ success: true, count: stockData.length, data: stockData });
 });
+
+module.exports.backfillMissingSerialNumbers = backfillMissingSerialNumbers;

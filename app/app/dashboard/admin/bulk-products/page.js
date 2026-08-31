@@ -218,10 +218,12 @@ export default function BulkProductsPage() {
                 Upload your CSV to prefill rows, then adjust any values inline.
               </p>
             </div>
-            <div className="p-4 rounded-2xl bg-green-50 border border-green-100 shadow-sm">
-              <p className="text-sm text-green-900 font-semibold">GST</p>
-              <p className="text-sm text-green-800 mt-1">
-                Default GST is 18%. Update per-row if the rate differs.
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 shadow-sm">
+              <p className="text-sm text-amber-900 font-semibold flex items-center gap-2">
+                <FiAlertTriangle className="h-4 w-4" /> Heads Up
+              </p>
+              <p className="text-sm text-amber-800 mt-1">
+                HSN & Part No are optional — add for GST. Stock qty defaults to 0 if blank; GST defaults to 18%.
               </p>
             </div>
           </div>

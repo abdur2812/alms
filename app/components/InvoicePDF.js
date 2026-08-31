@@ -7,6 +7,8 @@ import {
   Image,
 } from "@react-pdf/renderer";
 import businessConfig from "@/lib/businessConfig";
+import { useState, useEffect } from "react";
+import { buildUpiUriForInvoice, getUpiId } from "@/lib/upi";
 
 // Build an absolute URL so @react-pdf/renderer can fetch images correctly.
 // Relative paths like "/logo.png" don't work inside the PDF renderer.
@@ -320,12 +322,32 @@ const S = StyleSheet.create({
   },
   bankValue: { fontSize: 9, flex: 1, color: "#000000" },
   qrWrapper: {
-    width: 70,
+    width: 88,
     alignItems: "center",
     alignSelf: "center",
     justifyContent: "center",
   },
-  qrImage: { width: 62, height: 62 },
+  qrImage: { width: 78, height: 78 },
+  qrLabel: {
+    fontSize: 6,
+    color: "#000000",
+    textAlign: "center",
+    marginTop: 2,
+    fontFamily: "Helvetica-Bold",
+  },
+  qrSubLabel: {
+    fontSize: 5.5,
+    color: "#374151",
+    textAlign: "center",
+    marginTop: 1,
+  },
+  qrAmountLabel: {
+    fontSize: 6.5,
+    color: "#000000",
+    textAlign: "center",
+    marginTop: 1,
+    fontFamily: "Helvetica-Bold",
+  },
   forText: {
     fontFamily: "Helvetica-Bold",
     fontSize: 10,
@@ -530,7 +552,11 @@ function ItemRow({ item, idx, isGstBill }) {
 
 // ─── Main document ────────────────────────────────────────────────────────────
 
-export default function InvoiceDocument({ invoice }) {
+export default function InvoiceDocument({
+  invoice,
+  qrDataUrl: propQrDataUrl,
+  upiUri: propUpiUri,
+}) {
   const biz = businessConfig.business_details;
   const bank = businessConfig.bank_details;
   const decl = businessConfig.declaration;
@@ -558,6 +584,46 @@ export default function InvoiceDocument({ invoice }) {
 
   const totalGst = Object.values(gstGroups).reduce((s, v) => s + v, 0);
   const grandTotal = subtotal + totalGst; // = sum of entered prices
+  const roundedTotal = Math.round(grandTotal);
+  const totalQty = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+  const upiId = getUpiId();
+  const upiUri = propUpiUri || buildUpiUriForInvoice(invoice) || "";
+
+  // Local QR state for preview when parent doesn't supply a pre-generated data URL.
+  // For `pdf(...).toBlob()` downloads the parent passes propQrDataUrl, so this
+  // effect is not needed there (effects don't run in the blob renderer).
+  const [localQr, setLocalQr] = useState(propQrDataUrl || null);
+  useEffect(() => {
+    if (propQrDataUrl) {
+      setLocalQr(propQrDataUrl);
+      return;
+    }
+    if (!upiUri) {
+      setLocalQr(null);
+      return;
+    }
+    let cancelled = false;
+    import("qrcode")
+      .then(({ default: QRCode }) =>
+        QRCode.toDataURL(upiUri, {
+          errorCorrectionLevel: "M",
+          margin: 1,
+          width: 220,
+        })
+      )
+      .then((url) => {
+        if (!cancelled) setLocalQr(url);
+      })
+      .catch(() => {
+        if (!cancelled) setLocalQr(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [upiUri, propQrDataUrl]);
+
+  const effectiveQr = propQrDataUrl || localQr;
+  const showQr = Boolean(effectiveQr && upiId && roundedTotal > 0);
 
   // ── Address strings ──────────────────────────────────────────────────────
   const bizLine1 = `${addr.door_no_new}, ${addr.street}, ${addr.area},`;
@@ -786,6 +852,18 @@ export default function InvoiceDocument({ invoice }) {
                       isGstBill={invoice.isGstBill}
                     />
                   ))}
+                  {/* Total Qty footer — shown only on last page, aligned under Qty column (8%) */}
+                  {isLastPage && (
+                    <View style={[S.tableRow, { backgroundColor: "#f3f4f6" }]}>
+                      <TableCell width={COL_WIDTHS[0]} align="center" isHeader isLast={false} bg="#f3f4f6"> </TableCell>
+                      <TableCell width={COL_WIDTHS[1]} align="right" isHeader isLast={false} bg="#f3f4f6">Total Qty</TableCell>
+                      <TableCell width={COL_WIDTHS[2]} align="center" isHeader isLast={false} bg="#f3f4f6"> </TableCell>
+                      <TableCell width={COL_WIDTHS[3]} align="center" isHeader isLast={false} bg="#f3f4f6"> </TableCell>
+                      <TableCell width={COL_WIDTHS[4]} align="center" isHeader isLast={false} bg="#f3f4f6">{String(totalQty)}</TableCell>
+                      <TableCell width={COL_WIDTHS[5]} align="right" isHeader isLast={false} bg="#f3f4f6"> </TableCell>
+                      <TableCell width={COL_WIDTHS[6]} align="right" isHeader isLast={true} bg="#f3f4f6"> </TableCell>
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -835,51 +913,105 @@ export default function InvoiceDocument({ invoice }) {
                     <Text style={S.eoeTitle}>E.&O.E.</Text>
                   </View>
 
-                  {invoice.isGstBill && (
+                  {/* ── Bank Details + Dynamic UPI QR + Signature ── */}
+                  {(invoice.isGstBill || showQr) && (
                     <View style={[S.splitRow, S.divider]}>
-                      <View style={S.splitLeft55}>
-                        <View
-                          style={{ flexDirection: "row", alignItems: "center" }}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={[S.sectionLabel, { marginBottom: 3 }]}>
-                              Account Details
-                            </Text>
-                            <BankRow
-                              label="A/C Holder"
-                              value={bank.account_holder}
-                            />
-                            <BankRow
-                              label="Account No"
-                              value={bank.account_number}
-                            />
-                            <BankRow label="IFSC" value={bank.ifsc_code} />
-                            <BankRow label="Branch" value={bank.branch_name} />
-                            <BankRow label="Bank Name" value={bank.bank_name} />
+                      <View
+                        style={
+                          invoice.isGstBill
+                            ? S.splitLeft55
+                            : {
+                                flex: 1,
+                                padding: 7,
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }
+                        }
+                      >
+                        {invoice.isGstBill ? (
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                            }}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={[S.sectionLabel, { marginBottom: 3 }]}
+                              >
+                                Account Details
+                              </Text>
+                              <BankRow
+                                label="A/C Holder"
+                                value={bank.account_holder}
+                              />
+                              <BankRow
+                                label="Account No"
+                                value={bank.account_number}
+                              />
+                              <BankRow label="IFSC" value={bank.ifsc_code} />
+                              <BankRow
+                                label="Branch"
+                                value={bank.branch_name}
+                              />
+                              <BankRow
+                                label="Bank Name"
+                                value={bank.bank_name}
+                              />
+                            </View>
+                            {showQr ? (
+                              <View style={S.qrWrapper}>
+                                <Image
+                                  style={S.qrImage}
+                                  src={effectiveQr}
+                                />
+                                <Text style={S.qrLabel}>Scan to Pay</Text>
+                                <Text style={S.qrAmountLabel}>
+                                  ₹{fmt(roundedTotal)}
+                                </Text>
+                                <Text style={S.qrSubLabel}>{upiId}</Text>
+                              </View>
+                            ) : (
+                              <View style={S.qrWrapper}>
+                                <Image
+                                  style={S.qrImage}
+                                  src={assetUrl("/gpay-qr.png")}
+                                />
+                                <Text style={S.qrSubLabel}>
+                                  UPI: {upiId || biz.phone_numbers[0]}
+                                </Text>
+                              </View>
+                            )}
                           </View>
-                          <View style={S.qrWrapper}>
-                            <Image
-                              style={S.qrImage}
-                              src={assetUrl("/gpay-qr.png")}
-                            />
+                        ) : showQr ? (
+                          <View style={{ alignItems: "center" }}>
                             <Text
-                              style={{
-                                fontSize: 7,
-                                marginTop: 3,
-                                color: "#000000",
-                                textAlign: "center",
-                              }}
+                              style={[S.sectionLabel, { marginBottom: 4 }]}
                             >
-                              GPay: {biz.phone_numbers[0]}
+                              Scan to Pay via UPI
                             </Text>
+                            <Image
+                              style={{ width: 90, height: 90 }}
+                              src={effectiveQr}
+                            />
+                            <Text style={S.qrAmountLabel}>
+                              Amount: ₹{fmt(roundedTotal)}
+                            </Text>
+                            <Text style={S.qrSubLabel}>UPI ID: {upiId}</Text>
                           </View>
+                        ) : null}
+                      </View>
+                      {invoice.isGstBill && (
+                        <View style={S.splitRight45}>
+                          <Text style={S.forText}>
+                            For {biz.business_name}
+                          </Text>
+                          <View style={S.sigLine} />
+                          <Text style={S.sigLabel}>
+                            {decl.signature_label}
+                          </Text>
                         </View>
-                      </View>
-                      <View style={S.splitRight45}>
-                        <Text style={S.forText}>For {biz.business_name}</Text>
-                        <View style={S.sigLine} />
-                        <Text style={S.sigLabel}>{decl.signature_label}</Text>
-                      </View>
+                      )}
                     </View>
                   )}
                 </>

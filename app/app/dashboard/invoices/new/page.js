@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { invoicesAPI, customersAPI, productsAPI } from "@/lib/api";
+import { invoicesAPI, customersAPI, productsAPI, hsnsAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
 import {
   FiPlus,
@@ -80,20 +80,20 @@ export default function NewInvoicePage() {
   const [isSearchingProducts, setIsSearchingProducts] = useState(false);
   const [showHsnDropdown, setShowHsnDropdown] = useState(false);
   const [hoveredHsnIndex, setHoveredHsnIndex] = useState(null);
+  const [hsnOptions, setHsnOptions] = useState([]);
 
-  const hsnOptions = [
-    { value: "73201020", label: "73201020" },
-    { value: "73201011", label: "73201011" },
-    { value: "73181500", label: "73181500" },
-    { value: "87089900", label: "87089900" },
-    { value: "73209020", label: "73209020" },
-    { value: "40169990", label: "40169990" },
-    { value: "73181011", label: "73181011" },
-    { value: "73182200", label: "73182200" },
-    { value: "73181600", label: "73181600" },
-    { value: "73209090", label: "73209090" },
-    { value: "87082900", label: "87082900" },
-  ];
+  useEffect(() => {
+    const loadHsns = async () => {
+      try {
+        const res = await hsnsAPI.getAll();
+        const data = res.data.data || [];
+        setHsnOptions(data.map((h) => ({ value: h.code, label: h.code })));
+      } catch (e) {
+        console.error("Failed to load HSN codes", e);
+      }
+    };
+    loadHsns();
+  }, []);
 
   useEffect(() => {
     fetchCustomers();
@@ -789,9 +789,9 @@ export default function NewInvoicePage() {
                                 .filter(Boolean)
                                 .join(", ")}
                             </div>
-                          </button>
-                        ))}
-                    </div>
+</button>
+                            ))}
+                          </div>
                   </div>
                 </div>
 
@@ -1117,7 +1117,13 @@ export default function NewInvoicePage() {
 
                         <div className={`absolute top-full left-0 right-0 z-30 transition-all duration-200 ${showHsnDropdown ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}>
                           <div className="bg-white/95 backdrop-blur-xl border border-purple-100 rounded-2xl shadow-2xl shadow-purple-200/40 mt-1.5 max-h-48 overflow-auto">
-                            {hsnOptions.map((opt, index) => (
+                            {hsnOptions.length === 0 ? (
+                              <div className="px-4 py-6 text-center text-sm text-gray-500">
+                                No HSN codes available. Add them from the
+                                Invoices page.
+                              </div>
+                            ) : (
+                            hsnOptions.map((opt, index) => (
                               <button
                                 key={opt.value}
                                 type="button"
@@ -1142,7 +1148,8 @@ export default function NewInvoicePage() {
                                   </span>
                                 </div>
                               </button>
-                            ))}
+                            ))
+                            )}
                           </div>
                         </div>
                       </div>

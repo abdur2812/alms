@@ -95,6 +95,10 @@ const invoiceSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isCleanEstimate: {
+      type: Boolean,
+      default: false,
+    },
     isIgst: {
       type: Boolean,
       default: false,
@@ -411,6 +415,16 @@ invoiceSchema.post("save", async function (doc, next) {
   // This will be handled in the controller for better error handling
   next();
 });
+
+// Indexes for 3k+ products / 700+ invoices on Free Tier + 512 MB
+// invoiceNumber already has unique index via unique:true — don't duplicate
+invoiceSchema.index({ createdAt: -1 });
+invoiceSchema.index({ isGstBill: 1, createdAt: -1 });
+invoiceSchema.index({ billType: 1, createdAt: -1 });
+invoiceSchema.index({ isGstBill: 1, billType: 1, createdAt: -1 });
+invoiceSchema.index({ customerId: 1, createdAt: -1 });
+invoiceSchema.index({ numberAssignedAt: -1, createdAt: -1 });
+invoiceSchema.index({ totalAmount: -1 });
 
 // Ensure virtuals are included when converting to JSON
 invoiceSchema.set("toJSON", { virtuals: true });

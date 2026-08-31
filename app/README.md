@@ -42,12 +42,32 @@ A complete Billing System for AL M.S. TRADERS built with Next.js 16, featuring i
 - Auto-calculate prices from products
 - Real-time subtotal, GST, and total calculations
 - GST/Estimate toggle: create tax invoices or estimates; estimates can be converted to GST invoices on edit
-- View invoice details
-- Print-friendly invoice layout (A4)
+- View invoice details with dynamic UPI QR (amount-embedded, `upi://pay` with `almstraders2017-5@okaxis`) and total qty footer under Qty
+- Print-friendly invoice layout (A4) with on-demand QR generation
 - Edit invoice (items, tax rate, HSN, bill type, copy type)
 - Duplicate an existing invoice into a new draft
 - Delete invoices
 - Filter by GST vs estimate and by bill type (pay/credit)
+
+### Staff Management
+
+- Staff list (name, phone, role, daily wage) with search and CRUD; per-row calendar icon to report
+- Daily attendance: per-day present/half/absent segmented control (active staff only, debounced auto-save, fixed date navigation with prev/next + `input[type=date]` + Today) — one record per staff per day (UTC-midnight)
+- **Salary is daily, paid weekly**: each staff earns `dailyWage` per present day (`half` = 0.5× wage); weekly credit `((presentDays + 0.5*halfDays) × dailyWage)` settled weekly via mark paid/unpaid (status synced to `present` boolean)
+- Individual staff report: big month calendar `app/app/dashboard/staff/[id]/report` (green=present/amber=half/red=absent, blue ring=paid week), click date to cycle status via `POST /api/staff/attendance/daily`, report below shows present/half/absent/paidDays/salaryPaid/totalSalary
+- Tab synced to URL (`?tab=attendance`) so it survives page reloads
+
+### Purchases & Vendors
+
+- Vendor management (add, edit, delete, search by name/GST/bank/IFSC) with `gstNumber` (uppercase) and `bankDetails` (accountHolder, bankName, branchName, accountNumber, ifscCode)
+- Purchase invoices with optional vendor link and cheque tracking (Pending / Cleared / Bounced, cheque amount, passed date), auto `PUR-XXXX` number, paginated 5/page with S.No descending like `purchaseNumber`
+- Per-vendor purchase reports: `GET /api/purchases/reports/monthly?month=YYYY-MM&vendorId&startDate&endDate` — simple PDF without shop header, columns `S.No | Date | Invoice No | Amount | Cheque Details (wider 29%) | Cheque Amt | Status | Passed Date` (Date/Invoice/Passed shrunk), vendor header + bank, per-row Report icon to `/dashboard/purchases/report?vendorId=...`, Generate button only (no auto preview)
+
+### Accounts & Revenue
+
+- Accounts: financial overview with date-range filtering (sales by `createdAt`, purchases by `date`, expenses by `date`, staff payments by `paidAt`, `netBalance`), HSN summary, purchase/expenses/salaries breakdowns
+- Expenses: general expenses with `date`/`description`/`category`/`amount`/`paidBy`, category selectable from managed `ExpenseCategory` list (`Manage Categories` in Accounts → Expenses), auto-seeded defaults (Utilities, Maintenance, Stationery, Miscellaneous, Rent, Salary, Fuel, Transport)
+- Revenue: revenue insights by date range (daily trend, top customers, top products)
 
 ## Tech Stack
 
@@ -56,6 +76,7 @@ A complete Billing System for AL M.S. TRADERS built with Next.js 16, featuring i
 - **State Management**: React Context API
 - **HTTP Client**: Axios
 - **Icons**: React Icons (Feather Icons)
+- **PDF**: @react-pdf/renderer + qrcode (dynamic UPI QR)
 - **Backend API**: Express.js with MongoDB
 
 ## Getting Started
@@ -119,11 +140,29 @@ app/
 │   │   ├── invoices/
 │   │   │   ├── [id]/
 │   │   │   │   ├── view/
-│   │   │   │   │   └── page.js (View Invoice)
+│   │   │   │   │   └── page.js (View Invoice — dynamic UPI QR, total qty)
 │   │   │   │   └── page.js (Edit Invoice)
 │   │   │   ├── new/
 │   │   │   │   └── page.js (New Invoice)
 │   │   │   └── page.js (Invoice List)
+│   │   ├── staff/
+│   │   │   ├── [id]/
+│   │   │   │   ├── report/page.js (Big calendar + report)
+│   │   │   │   └── page.js (Edit Staff)
+│   │   │   ├── new/page.js (New Staff)
+│   │   │   └── page.js (Staff List + Attendance (present/half/absent) + Report link)
+│   │   ├── purchases/
+│   │   │   ├── [id]/
+│   │   │   │   ├── edit/page.js (Edit Purchase)
+│   │   │   │   └── view/page.js (View Purchase — vendor GST/bank)
+│   │   │   ├── new/page.js (New Purchase)
+│   │   │   ├── report/page.js (Per-vendor report, vendor+month/range, Generate only)
+│   │   │   └── page.js (Purchase Invoices 5/page + Vendors with GST/bank + Report per vendor)
+│   │   ├── accounts/page.js (Financial Overview + Expenses with categories + HSN)
+│   │   ├── revenue/page.js (Revenue Insights)
+│   │   ├── admin/
+│   │   │   ├── bulk-products/page.js (Bulk Import)
+│   │   │   └── shops/page.js (Shop Management)
 │   │   ├── layout.js (Dashboard Layout Wrapper)
 │   │   └── page.js (Dashboard Home)
 │   ├── login/
@@ -132,18 +171,25 @@ app/
 │   ├── layout.js (Root Layout)
 │   └── page.js (Home - Redirects to Login/Dashboard)
 ├── components/
-│   └── DashboardLayout.js (Sidebar Navigation)
+│   ├── DashboardLayout.js (Sidebar Navigation)
+│   ├── InvoicePDF.js (React-PDF Invoice — dynamic UPI QR, total qty)
+│   ├── PurchaseReportPDF.js (Simplified per-vendor, no shop header)
+│   ├── DateRangePicker.js
+│   └── UI.js (PageHeader, Card, Button, Input, Select, Dropdown, etc.)
 ├── context/
 │   └── AuthContext.js (Authentication State)
 ├── lib/
-│   └── api.js (API Client & Endpoints)
+│   ├── api.js (API Client & Endpoints — customers, products, invoices, staff, vendors, purchases, expenses, expenseCategories, upi)
+│   ├── formatters.js
+│   ├── businessConfig.js (shop + bank + UPI `almstraders2017-5@okaxis`)
+│   └── upi.js (buildUpiUri, generateUpiQrForInvoice)
 ├── .env.local
 └── package.json
 ```
 
 ## API Endpoints Used
 
-The API client lives in `lib/api.js` (`customersAPI`, `productsAPI`, `invoicesAPI`). Key endpoints:
+The API client lives in `lib/api.js` (`customersAPI`, `productsAPI`, `invoicesAPI`, `staffAPI`, `vendorsAPI`, `purchasesAPI`, `expensesAPI`, `expenseCategoriesAPI`). Key endpoints:
 
 ### Customers
 
@@ -179,6 +225,40 @@ The API client lives in `lib/api.js` (`customersAPI`, `productsAPI`, `invoicesAP
 
 > Note: Invoices have **no `status` field**. Use `billType` (`pay`/`credit`) and `isGstBill` (`true`/`false`) to filter/classify. Prices are **GST-inclusive**.
 
+### Staff
+
+- `GET/POST /api/staff` - List (paginated, searchable) / Create
+- `GET/PUT/DELETE /api/staff/:id` - Get / Update / Delete (soft delete preserves history)
+- `GET /api/staff/attendance/daily?date=` - Get attendance for a date (all active staff) — now returns `status` `present/half/absent`
+- `POST /api/staff/attendance/daily` - Bulk upsert attendance for a date (`status` preferred, `present` legacy)
+- `GET /api/staff/payments/weekly?weekStart&weekEnd` - Weekly salary credit per staff (`presentDays` + `halfDays` + `absentDays`, `total` = `(present+0.5*half)*dailyWage`)
+- `POST /api/staff/payments/weekly` - Mark a week paid (upserts a `StaffPayment` with `halfDays`)
+- `DELETE /api/staff/payments/weekly` - Mark a week unpaid
+- `GET /api/staff/payments` - Salary payment history (used by Accounts)
+- `GET /api/staff/:id/calendar?month=YYYY-MM&startDate&endDate` - Individual calendar: attendance + overlapping weekly payments for big calendar (click to cycle status)
+
+> Salary is **daily** (attendance-based, `dailyWage` per present day, `half` = 0.5×); the weekly figure is only the **credit** owed, paid weekly.
+
+### Vendors
+
+- `GET/POST /api/vendors` - List (paginated, searchable by name/GST/bank/IFSC) / Create (with `gstNumber` + `bankDetails`)
+- `GET/PUT/DELETE /api/vendors/:id` - Get / Update / Delete
+
+### Purchases
+
+- `GET/POST /api/purchases` - List (paginated 5/page, S.No descending, searchable, date-filterable) / Create (`PUR-XXXX` auto)
+- `GET/PUT/DELETE /api/purchases/:id` - Get / Update / Delete
+- `GET /api/purchases/preview-number` - Next `PUR-XXXX`
+- `GET /api/purchases/reports/monthly?month=YYYY-MM&vendorId&startDate&endDate` - Per-vendor (or all) report, `startDate`/`endDate` range takes precedence over `month`
+- Cheque tracking via `chequeStatus` (`Pending`/`Cleared`/`Bounced`), `chequeDetails`, `chequeAmount`, `passedDate`; optional `vendorId` reference.
+
+### Expenses
+
+- `GET/POST /api/expenses` - List (paginated, date/category filtered) / Create (category from `ExpenseCategory`)
+- `GET/PUT/DELETE /api/expenses/:id` - Get / Update / Delete
+- `GET/POST /api/expense-categories` - List / Create categories
+- `PUT/DELETE /api/expense-categories/:id` - Update / Delete categories (seeded defaults: Utilities, Maintenance, Stationery, Miscellaneous, Rent, Salary, Fuel, Transport)
+
 ## Features in Detail
 
 ### Responsive Design
@@ -199,8 +279,8 @@ The API client lives in `lib/api.js` (`customersAPI`, `productsAPI`, `invoicesAP
 
 - Dynamic line items (add/remove)
 - Auto-fill product prices
-- Real-time calculations
-- Print-friendly layout
+- Real-time calculations (GST-inclusive, total qty footer)
+- Print-friendly layout with dynamic UPI QR (`almstraders2017-5@okaxis`)
 - Status badge indicators
 - Quick status updates
 
@@ -217,12 +297,11 @@ The API client lives in `lib/api.js` (`customersAPI`, `productsAPI`, `invoicesAP
 
 - Real authentication with JWT
 - User roles and permissions
-- Invoice PDF generation
 - Email notifications
-- Advanced reporting and analytics
-- Payment tracking
+- Advanced reporting and analytics (revenue/accounts already have date-range views)
+- General expenses backend (Accounts currently has no expense source)
 - Multi-currency support
-- Bulk operations
+- More bulk operations
 
 ## Development
 
@@ -247,3 +326,22 @@ npm run lint
 - Invoice items are fully editable on the edit page (and via "duplicate" to seed a new draft)
 - All monetary values are formatted as INR with `formatINR` in `lib/formatters.js`
 - HSN codes are selected from a fixed dropdown of common auto-parts HSNs on the invoice item form
+
+// Todo
+a5 size estimate
+accounts reports (opening, closing stock)
+
+estimate creation from left side bar. new estimate.
+Bill Type Cash Bill
+GST Bill No
+Vehicle No -
+
+
+
+Accounts, monthly filtering, Accounts report, expenses, Hsn code addition.
+
+Purchase, vendors, individual vendor report. 
+
+Staff, individual staff report, attendance
+
+Invoice copy.

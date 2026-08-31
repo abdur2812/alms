@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { invoicesAPI } from "@/lib/api";
+import { invoicesAPI, hsnsAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
 import { PageHeader, Card, CardBody, Button, Modal } from "@/components/UI";
 import {
@@ -16,6 +16,9 @@ import {
   FiFileText,
   FiDownload,
   FiCopy,
+  FiHash,
+  FiX,
+  FiCheck,
 } from "react-icons/fi";
 
 export default function InvoicesPage() {
@@ -32,6 +35,15 @@ export default function InvoicesPage() {
   const [converting, setConverting] = useState(null);
   const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(null);
   const [search, setSearch] = useState("");
+
+  // HSN management
+  const [showHsnModal, setShowHsnModal] = useState(false);
+  const [hsns, setHsns] = useState([]);
+  const [hsnLoading, setHsnLoading] = useState(false);
+  const [hsnSaving, setHsnSaving] = useState(false);
+  const [newHsnCode, setNewHsnCode] = useState("");
+  const [hsnError, setHsnError] = useState("");
+  const [deletingHsn, setDeletingHsn] = useState(null);
 
   useEffect(() => {
     // Read URL parameters
@@ -80,6 +92,56 @@ export default function InvoicesPage() {
     } catch (err) {
       alert("Failed to delete invoice");
       console.error(err);
+    }
+  };
+
+  const fetchHsns = async () => {
+    try {
+      setHsnLoading(true);
+      setHsnError("");
+      const response = await hsnsAPI.getAll();
+      setHsns(Array.isArray(response?.data?.data) ? response.data.data : []);
+    } catch (err) {
+      setHsnError(err.response?.data?.message || "Failed to load HSN codes");
+    } finally {
+      setHsnLoading(false);
+    }
+  };
+
+  const openHsnModal = () => {
+    setShowHsnModal(true);
+    setNewHsnCode("");
+    setHsnError("");
+    fetchHsns();
+  };
+
+  const addHsn = async (e) => {
+    e.preventDefault();
+    if (!newHsnCode.trim()) return;
+    setHsnSaving(true);
+    setHsnError("");
+    try {
+      await hsnsAPI.create({ code: newHsnCode.trim() });
+      setNewHsnCode("");
+      await fetchHsns();
+    } catch (err) {
+      setHsnError(err.response?.data?.message || "Failed to add HSN code");
+    } finally {
+      setHsnSaving(false);
+    }
+  };
+
+  const deleteHsn = async (id) => {
+    if (!confirm("Delete this HSN code?")) return;
+    setDeletingHsn(id);
+    setHsnError("");
+    try {
+      await hsnsAPI.delete(id);
+      await fetchHsns();
+    } catch (err) {
+      setHsnError(err.response?.data?.message || "Failed to delete HSN code");
+    } finally {
+      setDeletingHsn(null);
     }
   };
 
@@ -194,6 +256,10 @@ export default function InvoicesPage() {
             <Button onClick={downloadBulkInvoiceCSV} variant="secondary">
               <FiDownload className="mr-2" />
               Download CSV
+            </Button>
+            <Button onClick={openHsnModal} variant="secondary">
+              <FiHash className="mr-2" />
+              HSN Codes
             </Button>
             <Button
               onClick={() => router.push("/dashboard/invoices/new")}
@@ -621,6 +687,91 @@ export default function InvoicesPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* HSN Codes Management Modal */}
+      <Modal
+        isOpen={showHsnModal}
+        onClose={() => setShowHsnModal(false)}
+        title="Manage HSN Codes"
+      >
+        <div>
+          <p className="text-sm text-gray-600 mb-4">
+            Add or remove HSN codes. These appear in the HSN dropdown when
+            creating invoices.
+          </p>
+
+          <form onSubmit={addHsn} className="mb-5">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              New HSN Code
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newHsnCode}
+                onChange={(e) => setNewHsnCode(e.target.value)}
+                placeholder="e.g., 87084000"
+                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white"
+              />
+              <Button type="submit" disabled={hsnSaving || !newHsnCode.trim()}>
+                <FiCheck className="mr-1" />
+                {hsnSaving ? "Adding..." : "Add"}
+              </Button>
+            </div>
+          </form>
+
+          {hsnError && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
+              {hsnError}
+            </div>
+          )}
+
+          <div className="border border-gray-100 rounded-xl overflow-hidden">
+            {hsnLoading ? (
+              <div className="p-8 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                <p className="mt-3 text-sm text-gray-600 font-medium">
+                  Loading HSN codes...
+                </p>
+              </div>
+            ) : hsns.length === 0 ? (
+              <div className="p-8 text-center text-sm text-gray-500">
+                No HSN codes yet. Add one above.
+              </div>
+            ) : (
+              <ul className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+                {hsns.map((hsn) => (
+                  <li
+                    key={hsn._id}
+                    className="flex items-center justify-between px-4 py-2.5"
+                  >
+                    <span className="text-sm font-semibold text-gray-900 font-mono">
+                      {hsn.code}
+                    </span>
+                    <button
+                      onClick={() => deleteHsn(hsn._id)}
+                      disabled={deletingHsn === hsn._id}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200 disabled:opacity-50"
+                      title="Delete HSN code"
+                    >
+                      <FiX className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="mt-5">
+            <Button
+              variant="secondary"
+              onClick={() => setShowHsnModal(false)}
+              className="w-full"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

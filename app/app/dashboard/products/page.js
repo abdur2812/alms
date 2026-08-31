@@ -12,7 +12,7 @@ import {
   FiSearch,
   FiAlertCircle,
   FiPackage,
-  FiDownload,
+  FiUpload,
 } from "react-icons/fi";
 
 export default function ProductsPage() {
@@ -33,12 +33,12 @@ export default function ProductsPage() {
       let response;
       if (search) {
         // When searching, use normal pagination
-        response = await productsAPI.getAll({ page, limit: 10, search });
+        response = await productsAPI.getAll({ page, limit: 20, search });
         setTotalPages(response?.data?.totalPages || 1);
       } else {
-        // Default: show most billed products first
-        response = await productsAPI.getPopular({ limit: 10000 });
-        setTotalPages(1);
+        // Default: show most billed products first, paginated
+        response = await productsAPI.getPopular({ page, limit: 20 });
+        setTotalPages(response?.data?.totalPages || 1);
       }
       setProducts(Array.isArray(response?.data?.data) ? response.data.data : []);
       setError("");
@@ -139,9 +139,12 @@ export default function ProductsPage() {
         subtitle="Manage your product catalogue and stock"
         action={
           <div className="flex gap-3">
-            <Button onClick={exportStock} variant="secondary">
-              <FiDownload className="mr-2" />
-              Export Stock
+            <Button
+              onClick={() => (window.location.href = "/dashboard/admin/bulk-products")}
+              variant="secondary"
+            >
+              <FiUpload className="mr-2" />
+              Bulk Import
             </Button>
             <Button
               onClick={() => (window.location.href = "/dashboard/products/new")}
@@ -209,6 +212,9 @@ export default function ProductsPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      S.No
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                       Product
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -226,11 +232,16 @@ export default function ProductsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-50">
-                  {products.map((product) => (
+                  {products.map((product, idx) => (
                     <tr
                       key={product._id}
                       className="hover:bg-indigo-50/30 transition-colors duration-150"
                     >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500 font-mono">
+                          {product.serialNo || (page - 1) * 20 + idx + 1}
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         <div className="text-sm font-bold text-gray-900">
                           {product.name}

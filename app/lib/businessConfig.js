@@ -23,6 +23,12 @@ const businessConfig = {
     account_number: "50200109601612",
     ifsc_code: "HDFC0007824",
   },
+  upi: {
+    // Merchant UPI ID — used to build dynamic UPI QR: upi://pay?pa=...&pn=...&am=...&cu=INR
+    id: "almstraders2017-5@okaxis",
+    // Display name shown in UPI apps (must match name registered with this VPA)
+    name: "AL M.S. TRADERS",
+  },
   declaration: {
     signature_label: "Authorised Signatory",
     thank_you_note: "Thank You, Visit Again For AL M.S TRADERS",
