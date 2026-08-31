@@ -241,25 +241,37 @@ exports.saveDailyAttendance = asyncHandler(async (req, res, next) => {
   }
 
   for (const r of records) {
+    // status null explicitly means delete (deselect) - allow without validation
+    if (r.status === null) continue;
     if (r.status !== undefined && r.status !== null && String(r.status).trim() !== "") {
       const s = String(r.status).trim().toLowerCase();
       if (!["present", "absent", "half"].includes(s)) {
         return next(new AppError(`Invalid attendance status: ${r.status}`, 400));
       }
+    } else if (r.status === "" && r.present === null) {
+      // explicit deselect via empty + null present - allow
+      continue;
     }
   }
 
-  const ops = records.map((r) => {
+  const deleteIds = [];
+  const ops = [];
+  for (const r of records) {
+    // null status means delete the attendance record (toggle to no selection)
+    if (r.status === null || (r.status === "" && r.present === null)) {
+      deleteIds.push(r.staffId);
+      continue;
+    }
     let status;
     if (r.status !== undefined && r.status !== null && String(r.status).trim() !== "") {
       status = String(r.status).trim().toLowerCase();
-    } else if (r.present !== undefined) {
+    } else if (r.present !== undefined && r.present !== null) {
       status = r.present ? "present" : "absent";
     } else {
       status = "present";
     }
     const present = status === "absent" ? false : true;
-    return {
+    ops.push({
       updateOne: {
         filter: { staffId: r.staffId, date: dayStart },
         update: {
@@ -270,16 +282,33 @@ exports.saveDailyAttendance = asyncHandler(async (req, res, next) => {
         },
         upsert: true,
       },
-    };
-  });
+    });
+  }
 
-  await Attendance.bulkWrite(ops, { ordered: false });
+  if (deleteIds.length) {
+    await Attendance.deleteMany({ staffId: { $in: deleteIds }, date: dayStart });
+    // Also remove any daily payment for that deselected day (no wage)
+    await require("../models/StaffDailyPayment").deleteMany({ staffId: { $in: deleteIds }, date: dayStart });
+  }
+  if (ops.length) {
+    await Attendance.bulkWrite(ops, { ordered: false });
+  }
+  if (!deleteIds.length && !ops.length) {
+    return res.status(200).json({
+      success: true,
+      message: "No attendance changes",
+      date: toDateString(dayStart),
+      saved: 0,
+      deleted: deleteIds.length,
+    });
+  }
 
   res.status(200).json({
     success: true,
     message: "Attendance saved successfully",
     date: toDateString(dayStart),
-    saved: records.length,
+    saved: ops.length,
+    deleted: deleteIds.length,
   });
 });
 

@@ -56,31 +56,77 @@ export default function BulkProductsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Filter out completely empty rows before sending
+    const toSend = products
+      .map((p) => ({
+        name: String(p.name || "").trim(),
+        price: String(p.price || "").trim().replace(/[,₹\s]/g, ""),
+        stockQuantity: String(p.stockQuantity || "").trim().replace(/[,]/g, ""),
+        gst: String(p.gst || "").trim().replace(/[%]/g, ""),
+        hsnCode: String(p.hsnCode || "").trim(),
+        partNo: String(p.partNo || "").trim(),
+        description: String(p.description || "").trim(),
+      }))
+      .filter((p) => p.name !== "" || p.price !== "");
+    if (toSend.length === 0) {
+      alert("Please add at least one product with name and price");
+      return;
+    }
+    // Validate required fields client-side for clearer feedback
+    const emptyName = toSend.filter((p) => !p.name || !p.price);
+    if (emptyName.length) {
+      alert(`Found ${emptyName.length} row(s) missing name or price. Please fill them.`);
+      return;
+    }
     setLoading(true);
     setResults(null);
 
     try {
-      const response = await productsAPI.bulkCreate({ products });
+      const response = await productsAPI.bulkCreate({ products: toSend });
       const data = response.data;
       setResults(data.data);
 
-      if (data.data.success.length > 0) {
-        const failedProducts = data.data.failed.map((f) => f.data);
-        if (failedProducts.length > 0) {
-          setProducts(failedProducts);
-        } else {
-          setProducts([
-            {
-              name: "",
-              price: "",
-              stockQuantity: "",
-              description: "",
-              gst: "18",
-              hsnCode: "",
-              partNo: "",
-            },
-          ]);
-        }
+      const successCount = data.data?.success?.length || 0;
+      const failed = data.data?.failed || [];
+      if (successCount > 0 && failed.length === 0) {
+        setProducts([
+          {
+            name: "",
+            price: "",
+            stockQuantity: "",
+            description: "",
+            gst: "18",
+            hsnCode: "",
+            partNo: "",
+          },
+        ]);
+      } else if (failed.length > 0) {
+        // Keep only failed rows (with original user-entered values) for correction
+        const failedProducts = failed.map((f) => {
+          const d = f.data;
+          // f.data may contain _norm/_origName from backend - normalize back
+          return {
+            name: d._origName || d.name || "",
+            price: d.price ?? "",
+            stockQuantity: d.stockQuantity ?? "",
+            description: d.description ?? "",
+            gst: d.gst ?? "18",
+            hsnCode: d.hsnCode ?? "",
+            partNo: d.partNo ?? "",
+          };
+        });
+        setProducts(failedProducts.length ? failedProducts : toSend);
+      } else if (successCount === 0 && failed.length > 0) {
+        const failedProducts = failed.map((f) => ({
+          name: f.data._origName || f.data.name || "",
+          price: f.data.price ?? "",
+          stockQuantity: f.data.stockQuantity ?? "",
+          description: f.data.description ?? "",
+          gst: f.data.gst ?? "18",
+          hsnCode: f.data.hsnCode ?? "",
+          partNo: f.data.partNo ?? "",
+        }));
+        setProducts(failedProducts);
       }
     } catch (error) {
       console.error("Error bulk creating products:", error);
@@ -90,11 +136,34 @@ export default function BulkProductsPage() {
     }
   };
 
+  const parseCsvLine = (line) => {
+    const result = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (c === "," && !inQuotes) {
+        result.push(cur);
+        cur = "";
+      } else {
+        cur += c;
+      }
+    }
+    result.push(cur);
+    return result.map((v) => v.trim().replace(/^"|"$/g, "").trim());
+  };
+
   const parseCsv = (text) => {
-    const lines = text
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+    const rawLines = text.split(/\r?\n/);
+    // keep lines that have non-empty after trimming, but preserve quoted commas
+    const lines = rawLines.map((l) => l.trim()).filter((l) => l.length > 0);
 
     if (lines.length < 2) return [];
 
@@ -102,7 +171,8 @@ export default function BulkProductsPage() {
       const cleaned = h
         .replace(/^\uFEFF/, "")
         .trim()
-        .toLowerCase();
+        .toLowerCase()
+        .replace(/\s+/g, "");
       const map = {
         name: "name",
         price: "price",
@@ -119,14 +189,12 @@ export default function BulkProductsPage() {
       return map[cleaned] || cleaned;
     };
 
-    const headers = lines[0].split(",").map(normalizeHeader);
+    const headers = parseCsvLine(lines[0]).map(normalizeHeader);
 
     return lines
       .slice(1)
       .map((line) => {
-        const values = line
-          .split(",")
-          .map((v) => v.trim().replace(/^"|"$/g, ""));
+        const values = parseCsvLine(line);
         const product = {
           name: "",
           price: "",
@@ -141,6 +209,10 @@ export default function BulkProductsPage() {
             product[field] = values[i] ?? "";
           }
         });
+        // clean price/stock that may have commas or currency symbols
+        if (product.price) product.price = product.price.replace(/[,₹\s]/g, "");
+        if (product.stockQuantity) product.stockQuantity = product.stockQuantity.replace(/[,]/g, "");
+        if (product.gst) product.gst = product.gst.replace(/[%]/g, "");
         return product;
       })
       .filter((p) => p.name.trim() !== "");

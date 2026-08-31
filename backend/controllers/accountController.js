@@ -223,8 +223,18 @@ exports.getHsnSummary = asyncHandler(async (req, res, next) => {
         _id: { $toUpper: { $trim: { input: "$items.hsnCode" } } },
         quantity: { $sum: "$items.quantity" },
         totalPrice: { $sum: { $multiply: ["$items.quantity", { $ifNull: ["$items.unitPrice", 0] }] } },
+        totalBase: {
+          $sum: {
+            $divide: [
+              { $multiply: ["$items.quantity", { $ifNull: ["$items.unitPrice", 0] }] },
+              { $add: [1, { $divide: [{ $ifNull: ["$items.gst", 18] }, 100] }] },
+            ],
+          },
+        },
         minUnitPrice: { $min: { $ifNull: ["$items.unitPrice", 0] } },
         maxUnitPrice: { $max: { $ifNull: ["$items.unitPrice", 0] } },
+        minGst: { $min: { $ifNull: ["$items.gst", 18] } },
+        maxGst: { $max: { $ifNull: ["$items.gst", 18] } },
       },
     },
     { $sort: { quantity: -1, _id: 1 } },
@@ -232,16 +242,46 @@ exports.getHsnSummary = asyncHandler(async (req, res, next) => {
 
   const rows = hsnAgg.map((r) => {
     const totalPrice = Math.round(r.totalPrice * 100) / 100;
+    const totalBaseRaw = r.totalBase || 0;
+    const totalBase = Math.round(totalBaseRaw * 100) / 100;
+    const totalGst = Math.round((totalPrice - totalBase) * 100) / 100;
     const quantity = r.quantity;
     const unitPrice = quantity ? Math.round((r.totalPrice / quantity) * 100) / 100 : 0;
+    const baseUnitPrice = quantity ? Math.round((totalBase / quantity) * 100) / 100 : 0;
+    const gstPerUnit = Math.round((unitPrice - baseUnitPrice) * 100) / 100;
     const minUnitPrice = r.minUnitPrice != null ? Math.round(r.minUnitPrice * 100) / 100 : 0;
     const maxUnitPrice = r.maxUnitPrice != null ? Math.round(r.maxUnitPrice * 100) / 100 : 0;
-    return { hsnCode: r._id, quantity, totalPrice, unitPrice, minUnitPrice, maxUnitPrice, hasMultiplePrices: minUnitPrice !== maxUnitPrice };
+    // For range display, also compute base for min/max assuming same GST (approx)
+    const avgGst = r.minGst === r.maxGst ? r.minGst : 18;
+    const minBaseUnit = minUnitPrice ? Math.round((minUnitPrice / (1 + avgGst / 100)) * 100) / 100 : 0;
+    const maxBaseUnit = maxUnitPrice ? Math.round((maxUnitPrice / (1 + avgGst / 100)) * 100) / 100 : 0;
+    return {
+      hsnCode: r._id,
+      quantity,
+      totalPrice,
+      totalBase,
+      totalGst,
+      unitPrice,
+      baseUnitPrice,
+      gstPerUnit,
+      minUnitPrice,
+      maxUnitPrice,
+      minBaseUnit,
+      maxBaseUnit,
+      hasMultiplePrices: minUnitPrice !== maxUnitPrice,
+    };
   });
 
   res.status(200).json({
     success: true,
-    data: { total: sum(rows, (r) => r.quantity), totalValue: Math.round(sum(rows, (r) => r.totalPrice) * 100) / 100, count: rows.length, rows },
+    data: {
+      total: sum(rows, (r) => r.quantity),
+      totalValue: Math.round(sum(rows, (r) => r.totalPrice) * 100) / 100,
+      totalBase: Math.round(sum(rows, (r) => r.totalBase) * 100) / 100,
+      totalGst: Math.round(sum(rows, (r) => r.totalGst) * 100) / 100,
+      count: rows.length,
+      rows,
+    },
   });
 });
 

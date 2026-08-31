@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { customersAPI, productsAPI, invoicesAPI } from "@/lib/api";
+import { customersAPI, productsAPI, invoicesAPI, purchasesAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -11,6 +11,8 @@ import {
   FiFileText,
   FiAlertCircle,
   FiTrendingUp,
+  FiShoppingBag,
+  FiX,
 } from "react-icons/fi";
 
 const RupeeIcon = ({ className = "" }) => (
@@ -32,31 +34,166 @@ export default function DashboardPage() {
     lowStockProducts: [],
     recentInvoices: [],
   });
-  const [creditReminders, setCreditReminders] = useState([]);
-  const [creditLoading, setCreditLoading] = useState(true);
   const [loading, setLoading] = useState(true);
+
+  // Credit customers (grouped) - paginated with scroll
+  const [creditCustomers, setCreditCustomers] = useState([]);
+  const [creditPage, setCreditPage] = useState(1);
+  const [creditHasMore, setCreditHasMore] = useState(true);
+  const [creditLoading, setCreditLoading] = useState(true);
+  const [creditLoadingMore, setCreditLoadingMore] = useState(false);
+  const [selectedCreditCustomer, setSelectedCreditCustomer] = useState(null);
+  const [customerInvoices, setCustomerInvoices] = useState([]);
+  const [customerInvoicesLoading, setCustomerInvoicesLoading] = useState(false);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+
+  // Purchase pending vendors - grouped by vendor via pending purchases
+  const [vendorGroups, setVendorGroups] = useState([]); // array of { key, vendor, vendorName, count, total, purchases }
+  const [vendorGroupMap, setVendorGroupMap] = useState(new Map());
+  const [purchasePage, setPurchasePage] = useState(1);
+  const [purchaseHasMore, setPurchaseHasMore] = useState(true);
+  const [purchaseLoading, setPurchaseLoading] = useState(true);
+  const [purchaseLoadingMore, setPurchaseLoadingMore] = useState(false);
+  const [selectedVendorGroup, setSelectedVendorGroup] = useState(null);
+  const [vendorPurchases, setVendorPurchases] = useState([]);
+  const [vendorPurchasesLoading, setVendorPurchasesLoading] = useState(false);
+  const [showVendorModal, setShowVendorModal] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
   }, [user]);
 
-  useEffect(() => {
-    const fetchCreditReminders = async () => {
-      try {
-        setCreditLoading(true);
-        const res = await invoicesAPI.getAll({ billType: "credit", limit: 50, page: 1 });
-        const data = Array.isArray(res.data?.data) ? res.data.data : [];
-        const sorted = [...data].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-        setCreditReminders(sorted.slice(0, 5));
-      } catch (err) {
-        console.error("Failed to fetch credit reminders", err);
-        setCreditReminders([]);
-      } finally {
-        setCreditLoading(false);
+  const fetchCreditCustomers = async (page = 1, append = false) => {
+    if (append) setCreditLoadingMore(true);
+    else setCreditLoading(true);
+    try {
+      const res = await customersAPI.getAll({ hasCreditInvoices: "true", limit: 10, page });
+      const data = Array.isArray(res.data?.data) ? res.data.data : [];
+      const totalPages = res.data?.totalPages || 1;
+      if (append) setCreditCustomers((prev) => [...prev, ...data]);
+      else setCreditCustomers(data);
+      setCreditHasMore(page < totalPages);
+      setCreditPage(page);
+    } catch (err) {
+      console.error("Failed to fetch credit customers", err);
+      if (!append) setCreditCustomers([]);
+    } finally {
+      setCreditLoading(false);
+      setCreditLoadingMore(false);
+    }
+  };
+
+  const fetchPurchaseVendors = async (page = 1, append = false) => {
+    if (append) setPurchaseLoadingMore(true);
+    else setPurchaseLoading(true);
+    try {
+      const res = await purchasesAPI.getAll({ chequeStatus: "Pending", limit: 20, page });
+      const purchases = Array.isArray(res.data?.data) ? res.data.data : [];
+      const totalPages = res.data?.totalPages || 1;
+      setPurchaseHasMore(page < totalPages);
+      setPurchasePage(page);
+      // Group by vendor
+      setVendorGroupMap((prevMap) => {
+        const nextMap = append ? new Map(prevMap) : new Map();
+        for (const p of purchases) {
+          const vId = p.vendorId?._id || p.vendorId || "no-vendor";
+          const key = String(vId);
+          if (!nextMap.has(key)) {
+            nextMap.set(key, {
+              key,
+              vendor: p.vendorId,
+              vendorName: p.vendorId?.name || (p.vendorId ? "Unknown Vendor" : "No Vendor"),
+              vendorPhone: p.vendorId?.phone || "",
+              count: 0,
+              total: 0,
+              purchases: [],
+            });
+          }
+          const entry = nextMap.get(key);
+          entry.count += 1;
+          entry.total += Number(p.amount) || 0;
+          entry.purchases.push(p);
+        }
+        // Convert to sorted array (by total descending)
+        const arr = Array.from(nextMap.values()).sort((a, b) => b.total - a.total);
+        setVendorGroups(arr);
+        return nextMap;
+      });
+    } catch (err) {
+      console.error("Failed to fetch purchase vendors", err);
+      if (!append) {
+        setVendorGroups([]);
+        setVendorGroupMap(new Map());
       }
-    };
-    fetchCreditReminders();
+    } finally {
+      setPurchaseLoading(false);
+      setPurchaseLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCreditCustomers(1, false);
+    fetchPurchaseVendors(1, false);
   }, []);
+
+  const handleCreditScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    if (scrollHeight - scrollTop - clientHeight < 80 && creditHasMore && !creditLoadingMore && !creditLoading) {
+      fetchCreditCustomers(creditPage + 1, true);
+    }
+  };
+
+  const handlePurchaseScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    if (scrollHeight - scrollTop - clientHeight < 80 && purchaseHasMore && !purchaseLoadingMore && !purchaseLoading) {
+      fetchPurchaseVendors(purchasePage + 1, true);
+    }
+  };
+
+  const openCustomerCreditModal = async (customer) => {
+    setSelectedCreditCustomer(customer);
+    setShowCustomerModal(true);
+    setCustomerInvoicesLoading(true);
+    try {
+      // Prefer invoicesAPI for paginated, but use customersAPI.getCredit for full
+      const res = await customersAPI.getCredit(customer._id);
+      const data = res.data?.data;
+      const invoices = data?.creditInvoices || [];
+      // If not enough via that endpoint, fallback to invoicesAPI
+      if (invoices.length === 0) {
+        const invRes = await invoicesAPI.getAll({ customerId: customer._id, billType: "credit", limit: 100, page: 1 });
+        setCustomerInvoices(Array.isArray(invRes.data?.data) ? invRes.data.data : []);
+      } else {
+        setCustomerInvoices(invoices);
+      }
+    } catch (err) {
+      console.error("Failed to fetch customer credit invoices", err);
+      setCustomerInvoices([]);
+    } finally {
+      setCustomerInvoicesLoading(false);
+    }
+  };
+
+  const openVendorModal = async (group) => {
+    setSelectedVendorGroup(group);
+    setShowVendorModal(true);
+    // If vendor is "no-vendor", just show the grouped purchases we already have
+    if (!group.vendor?._id) {
+      setVendorPurchases(group.purchases);
+      return;
+    }
+    setVendorPurchasesLoading(true);
+    try {
+      const res = await purchasesAPI.getAll({ vendorId: group.vendor._id || group.vendor, chequeStatus: "Pending", limit: 100, page: 1 });
+      const data = Array.isArray(res.data?.data) ? res.data.data : [];
+      setVendorPurchases(data.length ? data : group.purchases);
+    } catch (err) {
+      console.error("Failed to fetch vendor purchases", err);
+      setVendorPurchases(group.purchases);
+    } finally {
+      setVendorPurchasesLoading(false);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -297,78 +434,138 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Credit Sales Reminder - Most Delayed */}
-      <div className="mb-8 bg-white rounded-2xl shadow-lg overflow-hidden border border-red-100">
-        <div className="px-6 py-5 bg-gradient-to-r from-red-50 to-orange-50 border-b border-red-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl flex items-center justify-center mr-3">
-                <FiAlertCircle className="w-5 h-5 text-white" />
+      {/* Credit & Purchase Reminders - Grouped by Company with scroll & modals */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Credit Sales Reminder - Customers with credit */}
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-red-100 flex flex-col">
+          <div className="px-6 py-5 bg-gradient-to-r from-red-50 to-orange-50 border-b border-red-100 shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl flex items-center justify-center mr-3">
+                  <FiAlertCircle className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Credit Sales</h2>
+                  <p className="text-xs text-gray-600">Customers with unpaid credit</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Credit Sales Reminder</h2>
-                <p className="text-xs text-gray-600">Most delayed unpaid credit invoices</p>
-              </div>
+              <Link href="/dashboard/invoices?billType=credit" className="text-sm font-medium text-red-600 hover:text-red-700 flex items-center">
+                View all
+                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
             </div>
-            <Link
-              href="/dashboard/invoices?billType=credit"
-              className="text-sm font-medium text-red-600 hover:text-red-700 flex items-center"
-            >
-              View all
-              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
+          </div>
+          <div onScroll={handleCreditScroll} className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+            {creditLoading ? (
+              <div className="p-8 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto"></div>
+                <p className="mt-2 text-sm text-gray-500">Loading credit customers...</p>
+              </div>
+            ) : creditCustomers.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FiFileText className="w-8 h-8 text-green-500" />
+                </div>
+                <p className="font-medium">No pending credit sales!</p>
+                <p className="text-sm">All credit payments are settled.</p>
+              </div>
+            ) : (
+              <>
+                {creditCustomers.map((customer) => {
+                  const count = customer.creditInvoices?.length || customer.totalInvoices || 0;
+                  const amount = customer.creditAmount ?? customer.creditInvoices?.reduce((s, inv) => s + (inv.totalAmount || 0), 0) ?? 0;
+                  return (
+                    <button
+                      key={customer._id}
+                      onClick={() => openCustomerCreditModal(customer)}
+                      className="w-full text-left px-6 py-4 hover:bg-red-50/50 transition-all duration-200 flex items-center justify-between"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{customer.name}</p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {customer.phone || "No phone"} • {count} invoice{count !== 1 ? "s" : ""} pending
+                        </p>
+                      </div>
+                      <div className="ml-4 flex-shrink-0 text-right">
+                        <p className="text-sm font-bold text-red-600">{formatINR(amount)}</p>
+                        <span className="mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">View</span>
+                      </div>
+                    </button>
+                  );
+                })}
+                {creditLoadingMore && (
+                  <div className="p-4 text-center text-xs text-gray-500">Loading more...</div>
+                )}
+                {!creditHasMore && creditCustomers.length > 0 && (
+                  <div className="p-3 text-center text-xs text-gray-400">All customers loaded • Scrollable</div>
+                )}
+              </>
+            )}
           </div>
         </div>
-        <div className="divide-y divide-gray-100">
-          {creditLoading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto"></div>
-              <p className="mt-2 text-sm text-gray-500">Loading credit reminders...</p>
-            </div>
-          ) : creditReminders.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FiFileText className="w-8 h-8 text-green-500" />
+
+        {/* Purchase Reminder - Vendors with unpaid (Pending cheque) */}
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-amber-100 flex flex-col">
+          <div className="px-6 py-5 bg-gradient-to-r from-amber-50 to-yellow-50 border-b border-amber-100 shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center mr-3">
+                  <FiShoppingBag className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Purchase Due</h2>
+                  <p className="text-xs text-gray-600">Vendors with unpaid purchases</p>
+                </div>
               </div>
-              <p className="font-medium">No pending credit sales!</p>
-              <p className="text-sm">All credit payments are settled.</p>
+              <Link href="/dashboard/purchases" className="text-sm font-medium text-amber-600 hover:text-amber-700 flex items-center">
+                View all
+                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
             </div>
-          ) : (
-            creditReminders.map((invoice) => {
-              const daysOverdue = Math.floor((Date.now() - new Date(invoice.createdAt)) / (1000 * 60 * 60 * 24));
-              const overdueText = daysOverdue === 0 ? "Today" : `${daysOverdue} day${daysOverdue > 1 ? "s" : ""} ago`;
-              const overdueColor =
-                daysOverdue > 30
-                  ? "bg-red-100 text-red-800 border-red-200"
-                  : daysOverdue > 7
-                    ? "bg-orange-100 text-orange-800 border-orange-200"
-                    : "bg-yellow-100 text-yellow-800 border-yellow-200";
-              return (
-                <Link
-                  key={invoice._id}
-                  href={`/dashboard/invoices/${invoice._id}/view`}
-                  className="block px-6 py-4 hover:bg-red-50/50 transition-all duration-200"
-                >
-                  <div className="flex items-center justify-between">
+          </div>
+          <div onScroll={handlePurchaseScroll} className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+            {purchaseLoading ? (
+              <div className="p-8 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto"></div>
+                <p className="mt-2 text-sm text-gray-500">Loading vendors...</p>
+              </div>
+            ) : vendorGroups.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FiShoppingBag className="w-8 h-8 text-green-500" />
+                </div>
+                <p className="font-medium">No pending purchases!</p>
+                <p className="text-sm">All vendor payments are cleared.</p>
+              </div>
+            ) : (
+              <>
+                {vendorGroups.map((group) => (
+                  <button
+                    key={group.key}
+                    onClick={() => openVendorModal(group)}
+                    className="w-full text-left px-6 py-4 hover:bg-amber-50/50 transition-all duration-200 flex items-center justify-between"
+                  >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{invoice.invoiceNumber}</p>
-                      <p className="text-sm text-gray-600 truncate">
-                        {invoice.customerData?.name || invoice.customerId?.name || "N/A"} • {new Date(invoice.createdAt).toLocaleDateString("en-IN")}
+                      <p className="text-sm font-semibold text-gray-900 truncate">{group.vendorName}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {group.vendorPhone || "No phone"} • {group.count} invoice{group.count !== 1 ? "s" : ""} pending
                       </p>
                     </div>
                     <div className="ml-4 flex-shrink-0 text-right">
-                      <p className="text-sm font-bold text-gray-900">{formatINR(invoice.totalAmount || 0)}</p>
-                      <span className={`mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${overdueColor}`}>
-                        {overdueText}
-                      </span>
+                      <p className="text-sm font-bold text-amber-600">{formatINR(group.total)}</p>
+                      <span className="mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">View</span>
                     </div>
-                  </div>
-                </Link>
-              );
-            })
-          )}
+                  </button>
+                ))}
+                {purchaseLoadingMore && <div className="p-4 text-center text-xs text-gray-500">Loading more...</div>}
+                {!purchaseHasMore && vendorGroups.length > 0 && <div className="p-3 text-center text-xs text-gray-400">All vendors loaded • Scrollable</div>}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -564,6 +761,104 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Customer Credit Modal - scrollable invoice list */}
+      {showCustomerModal && selectedCreditCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowCustomerModal(false)}></div>
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-red-50 to-orange-50">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">{selectedCreditCustomer.name}</h3>
+                <p className="text-xs text-gray-600">{selectedCreditCustomer.phone || "No phone"} • {formatINR(selectedCreditCustomer.creditAmount || 0)} pending</p>
+              </div>
+              <button onClick={() => setShowCustomerModal(false)} className="p-2 hover:bg-white rounded-lg text-gray-500 hover:text-gray-700">
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+              {customerInvoicesLoading ? (
+                <div className="p-8 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto"></div>
+                  <p className="mt-2 text-sm text-gray-500">Loading invoices...</p>
+                </div>
+              ) : customerInvoices.length === 0 ? (
+                <div className="p-8 text-center text-gray-500 text-sm">No credit invoices found for this customer.</div>
+              ) : (
+                customerInvoices.map((inv) => (
+                  <Link
+                    key={inv._id}
+                    href={`/dashboard/invoices/${inv._id}/view`}
+                    className="block px-6 py-4 hover:bg-red-50/50 transition-colors"
+                    onClick={() => setShowCustomerModal(false)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{inv.invoiceNumber}</p>
+                        <p className="text-xs text-gray-500">{new Date(inv.createdAt).toLocaleDateString("en-IN")} • {inv.billType}</p>
+                      </div>
+                      <div className="ml-4 text-right">
+                        <p className="text-sm font-bold text-gray-900">{formatINR(inv.totalAmount || 0)}</p>
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+            <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-500 text-center">Scrollable • All unpaid credit invoices for {selectedCreditCustomer.name}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Vendor Pending Modal - scrollable purchase list */}
+      {showVendorModal && selectedVendorGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowVendorModal(false)}></div>
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-50 to-yellow-50">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">{selectedVendorGroup.vendorName}</h3>
+                <p className="text-xs text-gray-600">{selectedVendorGroup.vendorPhone || "No phone"} • {formatINR(selectedVendorGroup.total)} pending • {selectedVendorGroup.count} invoices</p>
+              </div>
+              <button onClick={() => setShowVendorModal(false)} className="p-2 hover:bg-white rounded-lg text-gray-500 hover:text-gray-700">
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+              {vendorPurchasesLoading ? (
+                <div className="p-8 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto"></div>
+                  <p className="mt-2 text-sm text-gray-500">Loading purchases...</p>
+                </div>
+              ) : vendorPurchases.length === 0 ? (
+                <div className="p-8 text-center text-gray-500 text-sm">No pending purchases for this vendor.</div>
+              ) : (
+                vendorPurchases.map((pur) => (
+                  <Link
+                    key={pur._id}
+                    href={`/dashboard/purchases/${pur._id}/view`}
+                    className="block px-6 py-4 hover:bg-amber-50/50 transition-colors"
+                    onClick={() => setShowVendorModal(false)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{pur.purchaseNumber || pur.invoiceNumber}</p>
+                        <p className="text-xs text-gray-500">{new Date(pur.date).toLocaleDateString("en-IN")} • {pur.invoiceNumber}</p>
+                        {pur.chequeDetails && <p className="text-xs text-gray-400 truncate">Cheque: {pur.chequeDetails}</p>}
+                      </div>
+                      <div className="ml-4 text-right">
+                        <p className="text-sm font-bold text-gray-900">{formatINR(pur.amount || 0)}</p>
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">{pur.chequeStatus}</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+            <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-500 text-center">Scrollable • All unpaid purchase invoices for {selectedVendorGroup.vendorName}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

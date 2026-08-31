@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { invoicesAPI, customersAPI, productsAPI, hsnsAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
@@ -73,6 +73,10 @@ export default function NewInvoicePage() {
   const [customerInput, setCustomerInput] = useState("");
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [customerAutofill, setCustomerAutofill] = useState("");
+  const [customerSearchResults, setCustomerSearchResults] = useState([]);
+  const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
+  const [hoveredCustomerIndex, setHoveredCustomerIndex] = useState(0);
+  const customerSearchIdRef = useRef(0);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [productAutofill, setProductAutofill] = useState("");
   const [hoveredProductIndex, setHoveredProductIndex] = useState(0);
@@ -441,7 +445,7 @@ export default function NewInvoicePage() {
     setHoveredProductIndex(0);
   };
 
-  const handleCustomerInputChange = (field, value) => {
+  const handleCustomerInputChange = async (field, value) => {
     // Update customer details
     if (field.includes(".")) {
       const [parent, child] = field.split(".");
@@ -470,47 +474,79 @@ export default function NewInvoicePage() {
         setFormData((prev) => ({ ...prev, customerId: "", customerName: "" }));
         setShowCustomerDropdown(false);
         setCustomerAutofill("");
+        setCustomerSearchResults([]);
+        setIsSearchingCustomers(false);
         return;
       }
 
-      // Find matching customers for autocomplete
-      const matchingCustomers = customers.filter((customer) =>
+      // Always show dropdown when typing
+      setShowCustomerDropdown(true);
+      setHoveredCustomerIndex(0);
+
+      // Try local match first for instant feedback, but also fetch server results for completeness (handles >1000 customers & Saji case)
+      const localMatches = customers.filter((customer) =>
         customer.name.toLowerCase().includes(value.toLowerCase()),
       );
-
-      if (matchingCustomers.length > 0) {
-        setShowCustomerDropdown(true);
-
-        // Google-style autofill - find the first exact match that starts with the input
-        const exactMatch = matchingCustomers.find((customer) =>
+      if (localMatches.length > 0) {
+        setCustomerSearchResults(localMatches.slice(0, 8).map((c) => ({ _id: c._id, name: c.name, phone: c.phone, permanentAddress: c.permanentAddress })));
+        const exactLocal = localMatches.find((customer) =>
           customer.name.toLowerCase().startsWith(value.toLowerCase()),
         );
-
-        if (exactMatch && value.length > 0) {
-          setCustomerAutofill(exactMatch.name);
+        if (exactLocal && value.length > 0) {
+          setCustomerAutofill(exactLocal.name);
         } else {
           setCustomerAutofill("");
         }
-      } else {
-        setShowCustomerDropdown(false);
-        setCustomerAutofill("");
+      }
+
+      // Server search for full coverage (debounced via searchId guard)
+      const searchId = ++customerSearchIdRef.current;
+      setIsSearchingCustomers(true);
+      try {
+        const response = await customersAPI.getAll({ limit: 20, search: value });
+        const serverData = response.data?.data || [];
+        if (searchId !== customerSearchIdRef.current) return;
+        if (serverData.length > 0) {
+          setCustomerSearchResults(serverData.slice(0, 20));
+          // Update autofill from server if no local exact
+          if (!localMatches.length || !localMatches.find((c) => c.name.toLowerCase().startsWith(value.toLowerCase()))) {
+            const serverExact = serverData.find((c) => c.name.toLowerCase().startsWith(value.toLowerCase()));
+            if (serverExact) setCustomerAutofill(serverExact.name);
+          }
+          setShowCustomerDropdown(true);
+        } else if (localMatches.length === 0) {
+          setCustomerSearchResults([]);
+          setShowCustomerDropdown(false);
+          setCustomerAutofill("");
+        }
+      } catch (e) {
+        if (searchId !== customerSearchIdRef.current) return;
+        // Keep local results on server error
+        if (localMatches.length === 0) {
+          setCustomerSearchResults([]);
+          setShowCustomerDropdown(false);
+        }
+      } finally {
+        if (searchId === customerSearchIdRef.current) setIsSearchingCustomers(false);
       }
     }
   };
 
   const handleCustomerKeyDown = (e) => {
-    if (e.key !== "Enter") return;
+    if (e.key !== "Enter" && e.key !== "Tab") return;
 
     const value = e.currentTarget.value.trim();
-    const matchingCustomers = value
-      ? customers.filter((customer) =>
-          customer.name.toLowerCase().includes(value.toLowerCase()),
-        )
-      : customers;
+    // Prefer server search results when available, fallback to local
+    const displayCustomers = customerSearchResults.length > 0
+      ? customerSearchResults
+      : value
+        ? customers.filter((customer) => customer.name.toLowerCase().includes(value.toLowerCase()))
+        : customers;
 
-    if (matchingCustomers.length > 0) {
+    const idx = hoveredCustomerIndex >= 0 && hoveredCustomerIndex < displayCustomers.length ? hoveredCustomerIndex : 0;
+    if (displayCustomers.length > 0 && displayCustomers[idx]) {
       e.preventDefault();
-      handleCustomerSelect(matchingCustomers[0]._id);
+      handleCustomerSelect(displayCustomers[idx]._id);
     }
   };
 
@@ -753,45 +789,53 @@ export default function NewInvoicePage() {
                     />
                     {/* Inline preview removed to avoid visual misalignment */}
                   </div>
-                  <div
-                    className={`absolute top-full left-0 right-0 z-20 transition-all duration-200 ${showCustomerDropdown && customers.filter((c) => c.name.toLowerCase().includes(customerDetails.name.toLowerCase())).length > 0 ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}
+                    <div
+                    className={`absolute top-full left-0 right-0 z-20 transition-all duration-200 ${showCustomerDropdown && (customerDetails.name.trim() === "" ? customers.length > 0 : (customerSearchResults.length > 0 || customers.filter((c) => c.name.toLowerCase().includes(customerDetails.name.toLowerCase())).length > 0)) ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"}`}
                   >
                     <div className="bg-white/95 backdrop-blur-xl border border-indigo-100 rounded-2xl shadow-2xl shadow-indigo-200/40 mt-1.5 max-h-56 overflow-auto">
-                      {customers
-                        .filter((c) =>
-                          c.name
-                            .toLowerCase()
-                            .includes(customerDetails.name.toLowerCase()),
-                        )
-                        .slice(0, 8)
-                        .map((customer) => (
-                          <button
-                            key={customer._id}
-                            type="button"
-                            className="w-full text-left px-4 py-2.5 hover:bg-linear-to-r hover:from-indigo-50 hover:to-blue-50 flex items-center justify-between border-b border-gray-50 last:border-0 transition-all duration-150 group"
-                            onClick={() => handleCustomerSelect(customer._id)}
-                          >
-                            <div>
-                              <div className="text-sm font-semibold text-gray-900 group-hover:text-indigo-700 transition-colors">
-                                {customer.name}
-                              </div>
-                              {customer.phone && (
-                                <div className="text-xs text-gray-500">
-                                  {customer.phone}
+                      {isSearchingCustomers ? (
+                        <div className="px-4 py-3 text-sm text-gray-500 text-center">Searching...</div>
+                      ) : (
+                        (() => {
+                          const displayCustomers = customerDetails.name.trim() === ""
+                            ? customers.slice(0, 8)
+                            : customerSearchResults.length > 0
+                              ? customerSearchResults.slice(0, 20)
+                              : customers.filter((c) => c.name.toLowerCase().includes(customerDetails.name.toLowerCase())).slice(0, 8);
+                          if (displayCustomers.length === 0) {
+                            return <div className="px-4 py-3 text-sm text-gray-500 text-center">No customers found</div>;
+                          }
+                          return displayCustomers.map((customer, idx) => (
+                            <button
+                              key={customer._id}
+                              type="button"
+                              onMouseEnter={() => setHoveredCustomerIndex(idx)}
+                              className={`w-full text-left px-4 py-2.5 flex items-center justify-between border-b border-gray-50 last:border-0 transition-all duration-150 group ${hoveredCustomerIndex === idx ? "bg-linear-to-r from-indigo-50 to-blue-50" : "hover:bg-linear-to-r hover:from-indigo-50 hover:to-blue-50"}`}
+                              onClick={() => handleCustomerSelect(customer._id)}
+                            >
+                              <div>
+                                <div className="text-sm font-semibold text-gray-900 group-hover:text-indigo-700 transition-colors">
+                                  {customer.name}
                                 </div>
-                              )}
-                            </div>
-                            <div className="text-xs text-indigo-400 text-right max-w-32 truncate">
-                              {[
-                                customer.permanentAddress?.city,
-                                customer.permanentAddress?.state,
-                              ]
-                                .filter(Boolean)
-                                .join(", ")}
-                            </div>
-</button>
-                            ))}
-                          </div>
+                                {customer.phone && (
+                                  <div className="text-xs text-gray-500">
+                                    {customer.phone}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-xs text-indigo-400 text-right max-w-32 truncate">
+                                {[
+                                  customer.permanentAddress?.city,
+                                  customer.permanentAddress?.state,
+                                ]
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </div>
+                            </button>
+                          ));
+                        })()
+                      )}
+                    </div>
                   </div>
                 </div>
 

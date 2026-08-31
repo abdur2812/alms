@@ -162,6 +162,9 @@ export default function StaffPage() {
       setSaving(true);
       try {
         const records = Object.entries(map).map(([staffId, a]) => {
+          if (!a || !a.status) {
+            return { staffId, status: null, present: null };
+          }
           const status = a.status || (a.present ? "present" : "absent");
           return {
             staffId,
@@ -187,17 +190,23 @@ export default function StaffPage() {
 
   const updateAttendance = (staffId, patch) => {
     const current = attendanceRef.current;
-    const existing = current[staffId] || {};
-    let nextEntry = { ...existing, ...patch };
-    if (patch.status !== undefined) {
-      nextEntry.status = patch.status;
-      nextEntry.present = patch.status !== "absent";
+    const existing = current[staffId] || null;
+    const existingStatus = getAttendanceStatus(existing);
+    const newStatus = patch.status;
+    // Toggle: clicking the already-selected status clears it (null = no selection)
+    let nextEntry;
+    if (newStatus !== undefined) {
+      if (existingStatus === newStatus) {
+        nextEntry = null;
+      } else {
+        nextEntry = { status: newStatus, present: newStatus !== "absent" };
+      }
     } else if (patch.present !== undefined) {
-      nextEntry.present = !!patch.present;
-      nextEntry.status = patch.present ? "present" : "absent";
-    } else if (!nextEntry.status) {
-      nextEntry.status = "present";
-      nextEntry.present = true;
+      const want = !!patch.present ? "present" : "absent";
+      if (existingStatus === want) nextEntry = null;
+      else nextEntry = { status: want, present: !!patch.present };
+    } else {
+      nextEntry = { status: "present", present: true };
     }
     const next = {
       ...current,

@@ -150,10 +150,19 @@ exports.getMonthlyReport = asyncHandler(async (req, res, next) => {
 // @route   GET /api/purchases
 // @access  Public
 exports.getAllPurchases = asyncHandler(async (req, res, next) => {
-  const { search, startDate, endDate } = req.query;
+  const { search, startDate, endDate, chequeStatus, vendorId } = req.query;
   const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 10 });
 
   const query = {};
+
+  if (chequeStatus) {
+    const allowed = ["Pending", "Cleared", "Bounced"];
+    if (allowed.includes(chequeStatus)) query.chequeStatus = chequeStatus;
+  }
+  if (vendorId) {
+    const mongoose = require("mongoose");
+    if (mongoose.Types.ObjectId.isValid(vendorId)) query.vendorId = vendorId;
+  }
 
   if (startDate || endDate) {
     query.date = {};

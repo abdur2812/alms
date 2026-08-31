@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FiTrendingUp, FiDollarSign, FiShoppingBag, FiCreditCard, FiAlertCircle, FiPlus, FiX, FiCalendar, FiUsers, FiTrash2, FiHash, FiPieChart } from "react-icons/fi";
+import { FiTrendingUp, FiDollarSign, FiShoppingBag, FiCreditCard, FiAlertCircle, FiPlus, FiX, FiCalendar, FiUsers, FiTrash2, FiHash, FiPieChart, FiDownload, FiEye, FiEyeOff } from "react-icons/fi";
 import { PageHeader, Card, Badge, ConfirmDialog } from "@/components/UI";
 import DateRangePicker from "@/components/DateRangePicker";
 import { accountsAPI, expensesAPI, expenseCategoriesAPI } from "@/lib/api";
 import AccountsReportPDF from "@/components/AccountsReportPDF";
+import HsnReportPDF from "@/components/HsnReportPDF";
 import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
 
 const toDateInput = (d) => {
@@ -102,6 +103,7 @@ function HsnSection({ range }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
 
   // Load HSN data when the tab is opened (component mounts) and when the range changes.
   useEffect(() => {
@@ -127,6 +129,49 @@ function HsnSection({ range }) {
     };
   }, [range]);
 
+  const handleDownloadCSV = () => {
+    if (!data || !data.rows || data.rows.length === 0) return;
+    const headers = ["S.No", "HSN Code", "Quantity", "Price Before GST (Total Base)", "GST Amount (Total)", "Total (Incl GST)", "Unit Base", "Unit GST", "Unit Incl"];
+    const rows = data.rows.map((r, i) => {
+      const totalPrice = r.totalPrice ?? 0;
+      const totalBase = r.totalBase ?? totalPrice / 1.18;
+      const totalGst = r.totalGst ?? totalPrice - totalBase;
+      const unitBase = r.baseUnitPrice ?? (r.quantity ? totalBase / r.quantity : 0);
+      const gstPerUnit = r.gstPerUnit ?? (r.unitPrice ? r.unitPrice - unitBase : 0);
+      const unitPrice = r.unitPrice ?? (r.quantity ? totalPrice / r.quantity : 0);
+      return [
+        i + 1,
+        `"${r.hsnCode}"`,
+        r.quantity,
+        totalBase.toFixed(2),
+        totalGst.toFixed(2),
+        totalPrice.toFixed(2),
+        unitBase.toFixed(2),
+        gstPerUnit.toFixed(2),
+        unitPrice.toFixed(2),
+      ].join(",");
+    });
+    const summary = [
+      `TOTAL,,${data.total},${(data.totalBase ?? 0).toFixed(2)},${(data.totalGst ?? 0).toFixed(2)},${(data.totalValue ?? 0).toFixed(2)}`,
+    ];
+    const csv = [headers.join(","), ...rows, summary.join("\n")].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const rangeLabel =
+      range?.startDate && range?.endDate
+        ? `${toDateInput(range.startDate)}_to_${toDateInput(range.endDate)}`
+        : range?.startDate
+          ? toDateInput(range.startDate)
+          : "all_time";
+    a.href = url;
+    a.download = `ALMS-HSN-Report-${rangeLabel}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <div className="py-12 text-center">
@@ -141,49 +186,92 @@ function HsnSection({ range }) {
   }
 
   return (
-    <Section title="HSN Code Summary" subtitle="Total quantity, GST-inclusive individual & total value sold grouped by HSN code" accent="violet">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
+    <Section title="HSN Code Summary" subtitle="Quantity & GST-split value grouped by HSN (prices are GST-inclusive; base = inclusive / 1.18, GST = inclusive − base)" accent="violet">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-5 mb-5">
         <StatTile icon={FiPieChart} label="Total Items Sold" value={data?.total || 0} idx={2} format={(v) => String(v)} />
         <StatTile icon={FiHash} label="HSN Codes Used" value={data?.count || 0} idx={3} format={(v) => String(v)} />
-        <StatTile icon={FiDollarSign} label="Total Value" value={data?.totalValue || 0} idx={0} />
+        <StatTile icon={FiDollarSign} label="Value Before GST" value={data?.totalBase ?? (data?.totalValue ? Math.round((data.totalValue / 1.18) * 100) / 100 : 0)} idx={1} />
+        <StatTile icon={FiDollarSign} label="GST Amount" value={data?.totalGst ?? (data?.totalValue ? Math.round((data.totalValue - data.totalValue / 1.18) * 100) / 100 : 0)} idx={4} />
       </div>
       {!data || data.rows.length === 0 ? (
         <div className="p-8 text-center text-sm text-gray-500">No HSN data for this period.</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-100">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-left">HSN Code</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Total Quantity Sold</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Individual Price</th>
-                <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Total Price</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-50">
-              {data.rows.map((r, i) => {
-                // Fallback for older API shape without unitPrice (backward compat)
-                const unitPrice = r.unitPrice ?? (r.quantity ? Math.round((r.totalPrice / r.quantity) * 100) / 100 : 0);
-                const hasRange = r.hasMultiplePrices && r.minUnitPrice !== r.maxUnitPrice;
-                return (
-                  <tr key={r.hsnCode || i} className="hover:bg-indigo-50/30 transition-colors">
-                    <td className="px-4 py-2.5 text-sm font-bold text-indigo-600">{r.hsnCode}</td>
-                    <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">{r.quantity}</td>
-                    <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">
-                      <span>{formatINR(unitPrice || 0)}</span>
-                      {hasRange && (
-                        <span className="block text-[11px] font-medium text-gray-500">
-                          {formatINR(r.minUnitPrice)} – {formatINR(r.maxUnitPrice)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">{formatINR(r.totalPrice || 0)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="flex flex-wrap gap-2 justify-end mb-4">
+            <button
+              onClick={handleDownloadCSV}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-violet-200 text-violet-700 text-xs font-bold rounded-xl hover:bg-violet-50 shadow-sm transition-all"
+            >
+              <FiDownload className="h-3.5 w-3.5" /> Download CSV
+            </button>
+            <PDFDownloadLink
+              document={<HsnReportPDF data={data} range={range} />}
+              fileName={`ALMS-HSN-Report-${range?.startDate ? toDateInput(range.startDate) : "start"}_to_${range?.endDate ? toDateInput(range.endDate) : "end"}.pdf`}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-xs font-bold rounded-xl hover:from-violet-700 hover:to-indigo-700 shadow-md transition-all"
+            >
+              {({ loading: pdfLoading }) => (
+                <>
+                  <FiDownload className="h-3.5 w-3.5" /> {pdfLoading ? "Preparing..." : "Download PDF"}
+                </>
+              )}
+            </PDFDownloadLink>
+            <button
+              onClick={() => setShowPreview((v) => !v)}
+              className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl shadow-sm border transition-all ${showPreview ? "bg-violet-600 text-white border-violet-600" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+            >
+              {showPreview ? <FiEyeOff className="h-3.5 w-3.5" /> : <FiEye className="h-3.5 w-3.5" />} {showPreview ? "Hide Preview" : "Preview PDF"}
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-100">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-left">HSN Code</th>
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Qty</th>
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Price Before GST</th>
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">GST Amount</th>
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Total (Incl. GST)</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-50">
+                {data.rows.map((r, i) => {
+                  // Backward compat: compute split if backend hasn't yet returned new fields
+                  const totalPrice = r.totalPrice ?? 0;
+                  const totalBase = r.totalBase ?? Math.round((totalPrice / 1.18) * 100) / 100;
+                  const totalGst = r.totalGst ?? Math.round((totalPrice - totalBase) * 100) / 100;
+                  const unitBase = r.baseUnitPrice ?? (r.quantity ? Math.round((totalBase / r.quantity) * 100) / 100 : 0);
+                  const gstPerUnit = r.gstPerUnit ?? (r.unitPrice ? Math.round((r.unitPrice - unitBase) * 100) / 100 : 0);
+                  const hasRange = r.hasMultiplePrices && r.minUnitPrice !== r.maxUnitPrice;
+                  const baseRange = hasRange && r.minBaseUnit !== undefined ? `${formatINR(r.minBaseUnit)} – ${formatINR(r.maxBaseUnit)}` : null;
+                  return (
+                    <tr key={r.hsnCode || i} className="hover:bg-indigo-50/30 transition-colors">
+                      <td className="px-4 py-2.5 text-sm font-bold text-indigo-600">{r.hsnCode}</td>
+                      <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">{r.quantity}</td>
+                      <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">
+                        <span>{formatINR(totalBase)}</span>
+                        <span className="block text-[11px] font-medium text-gray-500">unit {formatINR(unitBase)}{hasRange ? ` (${baseRange})` : ""}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-sm font-bold text-amber-700 text-right">
+                        <span>{formatINR(totalGst)}</span>
+                        <span className="block text-[11px] font-medium text-gray-500">unit {formatINR(gstPerUnit)}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">{formatINR(totalPrice)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {showPreview && (
+            <div className="mt-6 border border-violet-200 rounded-xl overflow-hidden" style={{ height: "700px" }}>
+              <PDFViewer width="100%" height="100%" showToolbar={true} style={{ border: "none" }}>
+                <HsnReportPDF data={data} range={range} />
+              </PDFViewer>
+            </div>
+          )}
+        </>
       )}
     </Section>
   );

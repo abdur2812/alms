@@ -285,8 +285,14 @@ exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
   const toInsert = [];
   for (const pd of products) {
     const { name, price } = pd;
-    if (!name || price === undefined || String(name).trim() === "" || String(price).trim() === "") {
+    const priceClean = price !== undefined && price !== null ? String(price).replace(/[,₹\s]/g, "").trim() : "";
+    if (!name || price === undefined || String(name).trim() === "" || priceClean === "") {
       results.failed.push({ data: pd, error: "Missing required fields (name, price)" });
+      continue;
+    }
+    const priceNum = Number(priceClean);
+    if (isNaN(priceNum) || priceNum < 0) {
+      results.failed.push({ data: pd, error: `Invalid price: "${price}"` });
       continue;
     }
     const norm = String(name).trim();
@@ -295,7 +301,7 @@ exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
       continue;
     }
     nameSet.add(norm.toLowerCase());
-    toInsert.push({ ...pd, _norm: norm.toLowerCase(), _origName: norm });
+    toInsert.push({ ...pd, _norm: norm.toLowerCase(), _origName: norm, _priceClean: priceClean });
   }
 
   if (toInsert.length === 0) {
@@ -348,39 +354,78 @@ exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
   );
   const startSerial = counter.sequence - filtered.length + 1;
 
-  const docs = filtered.map((pd, i) => ({
-    name: pd._origName,
-    description: pd.description || "",
-    price: Number(pd.price),
-    stockQuantity: Number(pd.stockQuantity) || 0,
-    gst: Number(pd.gst) || 0,
-    hsnCode: pd.hsnCode,
-    partNo: pd.partNo,
-    serialNo: startSerial + i,
-  }));
+  const docs = filtered.map((pd, i) => {
+    const priceStr = pd._priceClean !== undefined ? pd._priceClean : String(pd.price || "").replace(/[,₹\s]/g, "");
+    const stockStr = String(pd.stockQuantity ?? "").replace(/[,]/g, "").trim();
+    const gstStr = String(pd.gst ?? "").replace(/[%]/g, "").trim();
+    return {
+      name: pd._origName,
+      description: String(pd.description || "").trim(),
+      price: Number(priceStr),
+      stockQuantity: stockStr === "" ? 0 : Number(stockStr) || 0,
+      gst: gstStr === "" ? 0 : Number(gstStr) || 0,
+      hsnCode: pd.hsnCode ? String(pd.hsnCode).trim() : "",
+      partNo: pd.partNo ? String(pd.partNo).trim() : "",
+      serialNo: startSerial + i,
+    };
+  });
 
   try {
     const inserted = await Product.insertMany(docs, { ordered: false });
     results.success = inserted;
   } catch (e) {
     // insertMany ordered:false may still throw BulkWriteError with partial success
-    if (e.insertedDocs) {
-      results.success = e.insertedDocs;
-    }
-    const writeErrors = e.writeErrors || [];
-    const failedMap = new Map(writeErrors.map((we) => [we.index, we.errmsg]));
-    for (let i = 0; i < docs.length; i++) {
-      if (!results.success.find((s) => s.name === docs[i].name)) {
-        if (!failedMap.has(i)) results.failed.push({ data: filtered[i], error: e.message });
-        else results.failed.push({ data: filtered[i], error: failedMap.get(i) });
+    // Mongoose 8 uses e.writeErrors + e.result; older uses e.insertedDocs
+    let insertedDocs = e.insertedDocs || [];
+    // Try to recover partial success from writeErrors result if available
+    const writeErrors = e.writeErrors || e.errors || [];
+    const failedIndexes = new Set();
+    const failedMap = new Map();
+    for (const we of writeErrors) {
+      const idx = we.index !== undefined ? we.index : we.index;
+      if (idx !== undefined) {
+        failedIndexes.add(idx);
+        failedMap.set(idx, we.errmsg || we.message || we.err?.message || e.message);
       }
     }
-    // Honour partial success if any inserted
-    if (results.success.length === 0 && !e.insertedDocs) {
-      // fallback: report all as failed
+    // If we have insertedDocs use them, otherwise try to fetch successfully inserted by names not in failedIndexes
+    if (insertedDocs.length === 0 && failedIndexes.size > 0) {
+      const successNames = docs.filter((_, i) => !failedIndexes.has(i)).map((d) => d.name);
+      if (successNames.length) {
+        try {
+          insertedDocs = await Product.find({ name: { $in: successNames } }).lean();
+          // Ensure order not required, but map to docs for consistency
+        } catch (_) {}
+      }
+    } else if (insertedDocs.length === 0 && writeErrors.length === 0) {
+      // Validation error for single doc or all failed - no writeErrors index
+      // Treat all as failed
       for (const d of filtered) {
         if (!results.failed.find((f) => f.data._origName === d._origName)) {
-          results.failed.push({ data: d, error: e.message });
+          results.failed.push({ data: d, error: e.message || "Insert failed" });
+        }
+      }
+    }
+    if (insertedDocs.length) results.success = insertedDocs;
+
+    for (let i = 0; i < docs.length; i++) {
+      if (failedIndexes.has(i)) {
+        results.failed.push({ data: filtered[i], error: failedMap.get(i) || e.message });
+      } else if (!results.success.find((s) => s.name === docs[i].name)) {
+        // If not in success and not in failedIndexes, it may be that whole batch failed with no index
+        // Only push if not already accounted for and success is empty
+        if (results.success.length === 0 && !failedIndexes.has(i)) {
+          if (!results.failed.find((f) => f.data._origName === filtered[i]._origName)) {
+            results.failed.push({ data: filtered[i], error: e.message || "Insert failed" });
+          }
+        }
+      }
+    }
+    // Fallback: if still no success and no failed indexed, report all filtered as failed
+    if (results.success.length === 0 && failedIndexes.size === 0 && writeErrors.length === 0) {
+      for (const d of filtered) {
+        if (!results.failed.find((f) => f.data._origName === d._origName)) {
+          results.failed.push({ data: d, error: e.message || "Bulk insert failed" });
         }
       }
     }
