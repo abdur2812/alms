@@ -393,6 +393,8 @@ const S = StyleSheet.create({
     backgroundColor: "#f3f4f6",
     borderTopWidth: 1,
     borderTopColor: "#000000",
+    borderBottomWidth: 1,
+    borderBottomColor: "#000000",
   },
   hsnTh: {
     fontFamily: "Helvetica-Bold",
