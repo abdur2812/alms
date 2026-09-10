@@ -480,7 +480,7 @@ export default function InvoicesPage() {
                         <div className="text-sm font-bold text-gray-900">
                           {invoice.customerData?.name ||
                             invoice.customerId?.name ||
-                            "Deleted Customer"}
+                            "-"}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

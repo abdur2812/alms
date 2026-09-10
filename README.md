@@ -177,3 +177,12 @@ cd app && npm run dev
 
 **Backend:** express 5, mongoose 8, bcryptjs, cors, dotenv, nodemon, qrcode
 **Frontend:** next 16, react 19, axios, react-icons, @react-pdf/renderer, qrcode, tailwindcss 4
+
+
+* check details dropdown multiple options (cheque, gpay, NEFT) with price.
+* custom stock alert based (now only 10).
+* a5 font small. fix it. a4 is compressed. it should be a5 in design from the scratch.
+* below invocie pdf, hsn wise gst separation as per pic with qty.
+* hsn code separate igst below the summary separate box. qty after gst.
+change order in accounts report.
+* in estimate, customer is optional.

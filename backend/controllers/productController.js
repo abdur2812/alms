@@ -48,10 +48,18 @@ exports.getPopularProducts = asyncHandler(async (req, res, next) => {
   const query = {};
   if (search) {
     const safe = escapeRegex(search);
-    query.$or = [
-      { name: { $regex: safe, $options: "i" } },
-      { description: { $regex: safe, $options: "i" } },
-    ];
+    // Name-only by default. Pass ?includePartNo=true to also match partNo
+    // (used by the invoice item picker; the products list page is name-only).
+    const includePartNo =
+      req.query.includePartNo === true ||
+      req.query.includePartNo === "true" ||
+      req.query.includePartNo === "1" ||
+      req.query.searchPartNo === "true" ||
+      req.query.searchPartNo === "1";
+    query.$or = [{ name: { $regex: safe, $options: "i" } }];
+    if (includePartNo) {
+      query.$or.push({ partNo: { $regex: safe, $options: "i" } });
+    }
   }
 
   const [total, data] = await Promise.all([
@@ -85,10 +93,18 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
 
   if (search) {
     const safe = escapeRegex(search);
-    query.$or = [
-      { name: { $regex: safe, $options: "i" } },
-      { description: { $regex: safe, $options: "i" } },
-    ];
+    // Name-only by default. Pass ?includePartNo=true to also match partNo
+    // (used by the invoice item picker; the products list page is name-only).
+    const includePartNo =
+      req.query.includePartNo === true ||
+      req.query.includePartNo === "true" ||
+      req.query.includePartNo === "1" ||
+      req.query.searchPartNo === "true" ||
+      req.query.searchPartNo === "1";
+    query.$or = [{ name: { $regex: safe, $options: "i" } }];
+    if (includePartNo) {
+      query.$or.push({ partNo: { $regex: safe, $options: "i" } });
+    }
   }
 
   if (inStock === "true") {
@@ -98,7 +114,15 @@ exports.getAllProducts = asyncHandler(async (req, res, next) => {
   }
 
   if (lowStock === "true") {
-    query.stockQuantity = { $gt: 0, $lt: 10 };
+    // Per-product threshold: stock > 0 AND stock <= (lowStockThreshold || 10)
+    query.$expr = {
+      $and: [
+        { $gt: ["$stockQuantity", 0] },
+        { $lte: ["$stockQuantity", { $ifNull: ["$lowStockThreshold", 10] }] },
+      ],
+    };
+    // Remove plain stockQuantity range if $expr is used (avoid conflict)
+    delete query.stockQuantity;
   }
 
   const [products, count] = await Promise.all([
@@ -131,7 +155,7 @@ exports.getProductById = asyncHandler(async (req, res, next) => {
 // @route   POST /api/products
 // @access  Public
 exports.createProduct = asyncHandler(async (req, res, next) => {
-  const { name, description, price, stockQuantity, gst, hsnCode, partNo } = req.body;
+  const { name, description, price, stockQuantity, gst, hsnCode, partNo, lowStockThreshold } = req.body;
 
   const existingProduct = await Product.findOne({ name }).lean();
   if (existingProduct) {
@@ -139,6 +163,14 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
   }
 
   const serialNo = await Product.generateSerialNo();
+
+  const parsedThreshold =
+    lowStockThreshold === undefined || lowStockThreshold === null || lowStockThreshold === ""
+      ? 10
+      : Number(lowStockThreshold);
+  if (isNaN(parsedThreshold) || parsedThreshold < 0) {
+    return next(new AppError("Low stock threshold must be a non-negative number", 400));
+  }
 
   const product = await Product.create({
     name,
@@ -149,6 +181,7 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
     hsnCode,
     partNo,
     serialNo,
+    lowStockThreshold: parsedThreshold,
   });
 
   res.status(201).json({
@@ -162,7 +195,7 @@ exports.createProduct = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/products/:id
 // @access  Public
 exports.updateProduct = asyncHandler(async (req, res, next) => {
-  const { name, description, price, stockQuantity, gst, hsnCode, partNo } = req.body;
+  const { name, description, price, stockQuantity, gst, hsnCode, partNo, lowStockThreshold } = req.body;
 
   let product = await Product.findById(req.params.id);
   if (!product) {
@@ -176,6 +209,17 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
     }
   }
 
+  if (
+    lowStockThreshold !== undefined &&
+    lowStockThreshold !== null &&
+    lowStockThreshold !== ""
+  ) {
+    const parsed = Number(lowStockThreshold);
+    if (isNaN(parsed) || parsed < 0) {
+      return next(new AppError("Low stock threshold must be a non-negative number", 400));
+    }
+  }
+
   const updateData = {
     name,
     description,
@@ -185,6 +229,9 @@ exports.updateProduct = asyncHandler(async (req, res, next) => {
     hsnCode,
     partNo,
   };
+  if (lowStockThreshold !== undefined && lowStockThreshold !== "" && lowStockThreshold !== null) {
+    updateData.lowStockThreshold = Number(lowStockThreshold);
+  }
 
   product = await Product.findByIdAndUpdate(req.params.id, updateData, {
     new: true,
@@ -243,13 +290,20 @@ exports.adjustStock = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Get low stock products
+// @desc    Get low stock products (per-product threshold)
 // @route   GET /api/products/alerts/low-stock
 // @access  Public
 exports.getLowStockProducts = asyncHandler(async (req, res, next) => {
-  const products = await Product.find({ stockQuantity: { $gt: 0, $lt: 10 } })
+  const products = await Product.find({
+    $expr: {
+      $and: [
+        { $gt: ["$stockQuantity", 0] },
+        { $lte: ["$stockQuantity", { $ifNull: ["$lowStockThreshold", 10] }] },
+      ],
+    },
+  })
     .sort({ stockQuantity: 1 })
-    .select("name price stockQuantity serialNo")
+    .select("name price stockQuantity serialNo lowStockThreshold")
     .lean();
   res.status(200).json({ success: true, count: products.length, data: products });
 });
@@ -358,6 +412,8 @@ exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
     const priceStr = pd._priceClean !== undefined ? pd._priceClean : String(pd.price || "").replace(/[,₹\s]/g, "");
     const stockStr = String(pd.stockQuantity ?? "").replace(/[,]/g, "").trim();
     const gstStr = String(pd.gst ?? "").replace(/[%]/g, "").trim();
+    const thresholdRaw = pd.lowStockThreshold;
+    const thresholdStr = thresholdRaw === undefined || thresholdRaw === null ? "" : String(thresholdRaw).trim();
     return {
       name: pd._origName,
       description: String(pd.description || "").trim(),
@@ -366,6 +422,7 @@ exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
       gst: gstStr === "" ? 0 : Number(gstStr) || 0,
       hsnCode: pd.hsnCode ? String(pd.hsnCode).trim() : "",
       partNo: pd.partNo ? String(pd.partNo).trim() : "",
+      lowStockThreshold: thresholdStr === "" ? 10 : Number(thresholdStr) || 0,
       serialNo: startSerial + i,
     };
   });
@@ -443,7 +500,7 @@ exports.bulkCreateProducts = asyncHandler(async (req, res, next) => {
 // @access  Public
 exports.getStockPDF = asyncHandler(async (req, res, next) => {
   const products = await Product.find({})
-    .select("name price gst hsnCode stockQuantity")
+    .select("name price gst hsnCode stockQuantity lowStockThreshold")
     .sort({ name: 1 })
     .lean();
   const stockData = products.map((p) => ({
@@ -452,6 +509,7 @@ exports.getStockPDF = asyncHandler(async (req, res, next) => {
     gst: p.gst,
     hsnCode: p.hsnCode || "-",
     stockQuantity: p.stockQuantity,
+    lowStockThreshold: p.lowStockThreshold ?? 10,
   }));
   res.status(200).json({ success: true, count: stockData.length, data: stockData });
 });

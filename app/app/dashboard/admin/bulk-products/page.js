@@ -20,10 +20,10 @@ export default function BulkProductsPage() {
       name: "",
       price: "",
       stockQuantity: "",
-      description: "",
       gst: "18",
       hsnCode: "",
       partNo: "",
+      lowStockThreshold: "10",
     },
   ]);
 
@@ -34,10 +34,10 @@ export default function BulkProductsPage() {
         name: "",
         price: "",
         stockQuantity: "",
-        description: "",
         gst: "18",
         hsnCode: "",
         partNo: "",
+        lowStockThreshold: "10",
       },
     ]);
   };
@@ -65,7 +65,7 @@ export default function BulkProductsPage() {
         gst: String(p.gst || "").trim().replace(/[%]/g, ""),
         hsnCode: String(p.hsnCode || "").trim(),
         partNo: String(p.partNo || "").trim(),
-        description: String(p.description || "").trim(),
+        lowStockThreshold: String(p.lowStockThreshold ?? "10").trim(),
       }))
       .filter((p) => p.name !== "" || p.price !== "");
     if (toSend.length === 0) {
@@ -94,10 +94,10 @@ export default function BulkProductsPage() {
             name: "",
             price: "",
             stockQuantity: "",
-            description: "",
             gst: "18",
             hsnCode: "",
             partNo: "",
+            lowStockThreshold: "10",
           },
         ]);
       } else if (failed.length > 0) {
@@ -109,10 +109,10 @@ export default function BulkProductsPage() {
             name: d._origName || d.name || "",
             price: d.price ?? "",
             stockQuantity: d.stockQuantity ?? "",
-            description: d.description ?? "",
             gst: d.gst ?? "18",
             hsnCode: d.hsnCode ?? "",
             partNo: d.partNo ?? "",
+            lowStockThreshold: d.lowStockThreshold ?? "10",
           };
         });
         setProducts(failedProducts.length ? failedProducts : toSend);
@@ -121,10 +121,10 @@ export default function BulkProductsPage() {
           name: f.data._origName || f.data.name || "",
           price: f.data.price ?? "",
           stockQuantity: f.data.stockQuantity ?? "",
-          description: f.data.description ?? "",
           gst: f.data.gst ?? "18",
           hsnCode: f.data.hsnCode ?? "",
           partNo: f.data.partNo ?? "",
+          lowStockThreshold: f.data.lowStockThreshold ?? "10",
         }));
         setProducts(failedProducts);
       }
@@ -183,8 +183,10 @@ export default function BulkProductsPage() {
         hsn: "hsnCode",
         partno: "partNo",
         part: "partNo",
-        description: "description",
-        desc: "description",
+        partnumber: "partNo",
+        lowstockthreshold: "lowStockThreshold",
+        threshold: "lowStockThreshold",
+        alertat: "lowStockThreshold",
       };
       return map[cleaned] || cleaned;
     };
@@ -202,7 +204,7 @@ export default function BulkProductsPage() {
           gst: "18",
           hsnCode: "",
           partNo: "",
-          description: "",
+          lowStockThreshold: "10",
         };
         headers.forEach((field, i) => {
           if (field in product) {
@@ -234,7 +236,7 @@ export default function BulkProductsPage() {
   };
 
   const downloadTemplate = () => {
-    const csv = "name,price,stockQuantity,gst,hsnCode,partNo,description\n";
+    const csv = "name,price,stockQuantity,gst,hsnCode,partNo,lowStockThreshold\n";
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -281,7 +283,7 @@ export default function BulkProductsPage() {
             <div className="p-4 rounded-2xl bg-white border border-gray-100 shadow-sm">
               <p className="text-sm text-gray-700 font-semibold">Columns</p>
               <p className="text-sm text-gray-600 mt-1">
-                name, price, gst, stockQuantity, hsnCode, partNo, description
+                name, price, gst, stockQuantity, lowStockThreshold, hsnCode, partNo
               </p>
             </div>
             <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 shadow-sm">
@@ -318,13 +320,13 @@ export default function BulkProductsPage() {
                       Stock Qty
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">
+                      Alert At
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">
                       HSN Code
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">
                       Part No
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">
-                      Description
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">
                       Action
@@ -387,6 +389,19 @@ export default function BulkProductsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <input
+                          type="number"
+                          min="0"
+                          value={product.lowStockThreshold ?? "10"}
+                          onChange={(e) =>
+                            handleChange(index, "lowStockThreshold", e.target.value)
+                          }
+                          className={inputClasses}
+                          placeholder="10"
+                          title="Warn when stock reaches this number"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <input
                           type="text"
                           value={product.hsnCode || ""}
                           onChange={(e) =>
@@ -405,17 +420,6 @@ export default function BulkProductsPage() {
                           }
                           className={inputClasses}
                           placeholder="Part No"
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <input
-                          type="text"
-                          value={product.description}
-                          onChange={(e) =>
-                            handleChange(index, "description", e.target.value)
-                          }
-                          className={inputClasses}
-                          placeholder="Description"
                         />
                       </td>
                       <td className="px-4 py-3 text-center">

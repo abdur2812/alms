@@ -17,6 +17,7 @@ export default function ViewPurchasePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,26 +196,112 @@ export default function ViewPurchasePage() {
               <div className="w-9 h-9 rounded-xl bg-linear-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-md">
                 <FiHash className="text-white h-4 w-4" />
               </div>
-              Cheque / Payment
+              Payments
+              {(() => {
+                const pays = Array.isArray(purchase.payments) && purchase.payments.length
+                  ? purchase.payments
+                  : purchase.chequeDetails || purchase.chequeAmount
+                    ? [{ method: "cheque", details: purchase.chequeDetails, amount: purchase.chequeAmount, status: purchase.chequeStatus, passedDate: purchase.passedDate }]
+                    : [];
+                return pays.length ? (
+                  <span className="text-xs font-bold text-gray-500">
+                    {pays.length} entr{pays.length === 1 ? "y" : "ies"} • {formatINR(pays.reduce((s, p) => s + (Number(p.amount) || 0), 0))}
+                  </span>
+                ) : null;
+              })()}
             </h3>
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Cheque Details</p>
-                <p className="text-sm font-semibold text-gray-900">{purchase.chequeDetails || "—"}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Cheque Amount</p>
-                <p className="text-sm font-bold text-gray-900">{formatINR(purchase.chequeAmount)}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Cheque Status</p>
-                <Badge variant={chequeStatusVariant(purchase.chequeStatus)}>{purchase.chequeStatus}</Badge>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Passed Date</p>
-                <p className="text-sm font-semibold text-gray-900">{purchase.passedDate ? new Date(purchase.passedDate).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" }) : "—"}</p>
-              </div>
-            </div>
+            {(() => {
+              const pays = Array.isArray(purchase.payments) && purchase.payments.length
+                ? purchase.payments
+                : purchase.chequeDetails || purchase.chequeAmount
+                  ? [{ method: "cheque", details: purchase.chequeDetails, amount: purchase.chequeAmount, status: purchase.chequeStatus, passedDate: purchase.passedDate }]
+                  : [];
+              if (!pays.length) {
+                return <p className="text-sm text-gray-400">No payment entries recorded.</p>;
+              }
+              const active = pays[Math.min(selectedPayment, pays.length - 1)] || pays[0];
+              return (
+                <div className="space-y-4">
+                  {/* Clickable entry list */}
+                  <div className="flex flex-wrap gap-2">
+                    {pays.map((pay, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setSelectedPayment(i)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold border transition-colors ${
+                          i === Math.min(selectedPayment, pays.length - 1)
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-indigo-50"
+                        }`}
+                        title="Click to see full details"
+                      >
+                        #{i + 1} {pay.method} • {formatINR(pay.amount || 0)}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Full details of selected entry */}
+                  <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Method</p>
+                      <span className={`text-sm font-bold px-2 py-0.5 rounded-full border ${
+                        active.method === "cheque"
+                          ? "bg-blue-50 text-blue-700 border-blue-200"
+                          : active.method === "gpay"
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : "bg-purple-50 text-purple-700 border-purple-200"
+                      }`}>
+                        {active.method}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                        {active.method === "cheque" ? "Cheque Details" : active.method === "gpay" ? "GPay Details" : "NEFT Details"}
+                      </p>
+                      <p className="text-sm font-semibold text-gray-900">{active.details || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Price</p>
+                      <p className="text-sm font-bold text-gray-900">{formatINR(active.amount || 0)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</p>
+                      <Badge variant={chequeStatusVariant(active.status)}>{active.status || "Pending"}</Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Passed Date</p>
+                      <p className="text-sm font-semibold text-gray-900">{active.passedDate ? new Date(active.passedDate).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" }) : "—"}</p>
+                    </div>
+                  </div>
+                  {/* All entries table */}
+                  <div className="rounded-xl border border-gray-100 overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-100 text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-[11px] font-bold text-gray-500 uppercase">#</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-bold text-gray-500 uppercase">Method</th>
+                          <th className="px-3 py-2 text-right text-[11px] font-bold text-gray-500 uppercase">Price</th>
+                          <th className="px-3 py-2 text-left text-[11px] font-bold text-gray-500 uppercase">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {pays.map((pay, i) => (
+                          <tr
+                            key={i}
+                            onClick={() => setSelectedPayment(i)}
+                            className={`cursor-pointer hover:bg-indigo-50/50 ${i === Math.min(selectedPayment, pays.length - 1) ? "bg-indigo-50/60" : ""}`}
+                          >
+                            <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                            <td className="px-3 py-2 font-bold text-gray-800">{pay.method}</td>
+                            <td className="px-3 py-2 text-right font-bold">{formatINR(pay.amount || 0)}</td>
+                            <td className="px-3 py-2"><Badge variant={chequeStatusVariant(pay.status)}>{pay.status || "Pending"}</Badge></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
           </CardBody>
         </Card>
       </div>

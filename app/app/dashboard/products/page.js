@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { productsAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
@@ -13,9 +14,12 @@ import {
   FiAlertCircle,
   FiPackage,
   FiUpload,
+  FiX,
 } from "react-icons/fi";
 
 export default function ProductsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -23,17 +27,32 @@ export default function ProductsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [error, setError] = useState("");
 
+  // Low-stock filter driven by URL (dashboard "View all" links here with ?lowStock=true)
+  const lowStockOnly = searchParams.get("lowStock") === "true";
+
   useEffect(() => {
     fetchProducts();
-  }, [page, search]);
+  }, [page, search, lowStockOnly]);
+
+  const setLowStockFilter = (on) => {
+    setPage(1);
+    router.replace(`/dashboard/products${on ? "?lowStock=true" : ""}`, { scroll: false });
+  };
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
       let response;
-      if (search) {
-        // When searching, use normal pagination
-        response = await productsAPI.getAll({ page, limit: 20, search });
+      if (search || lowStockOnly) {
+        // Filtered view (search and/or low-stock) uses the filterable endpoint.
+        // getPopular doesn't support the lowStock flag.
+        const params = { page, limit: 20 };
+        if (search) {
+          params.search = search;
+          params.includePartNo = true;
+        }
+        if (lowStockOnly) params.lowStock = "true";
+        response = await productsAPI.getAll(params);
         setTotalPages(response?.data?.totalPages || 1);
       } else {
         // Default: show most billed products first, paginated
@@ -62,6 +81,14 @@ export default function ProductsPage() {
     }
   };
 
+  const getThreshold = (product) =>
+    Number.isFinite(Number(product.lowStockThreshold))
+      ? Number(product.lowStockThreshold)
+      : 10;
+
+  const isLowStock = (product) =>
+    product.stockQuantity > 0 && product.stockQuantity <= getThreshold(product);
+
   const getStockBadge = (product) => {
     if (product.stockQuantity === 0) {
       return (
@@ -69,10 +96,10 @@ export default function ProductsPage() {
           Out of Stock
         </span>
       );
-    } else if (product.stockQuantity < 10) {
+    } else if (isLowStock(product)) {
       return (
         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-          Low Stock
+          Low Stock (≤ {getThreshold(product)})
         </span>
       );
     } else {
@@ -95,13 +122,14 @@ export default function ProductsPage() {
       const response = await productsAPI.getAll({ limit: 10000 });
       const allProducts = response.data.data;
 
-      // Create CSV content with order: name, price, gst, hsn, stock qty
+      // Create CSV content with order: name, price, gst, hsn, stock qty, alert threshold
       const headers = [
         "Product Name",
         "Price",
         "GST %",
         "HSN Code",
         "Stock Quantity",
+        "Low Stock Alert At",
       ];
       const csvContent = [
         headers.join(","),
@@ -112,6 +140,7 @@ export default function ProductsPage() {
             product.gst || 0,
             product.hsnCode || "-",
             product.stockQuantity,
+            product.lowStockThreshold ?? 10,
           ].join(","),
         ),
       ].join("\n");
@@ -167,7 +196,7 @@ export default function ProductsPage() {
             <input
               type="text"
               className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 text-sm"
-              placeholder="Search products by name..."
+              placeholder="Search products by name or part no..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -177,6 +206,45 @@ export default function ProductsPage() {
           </div>
         </CardBody>
       </Card>
+
+      {/* Filter */}
+      <div className="flex flex-wrap items-center gap-2 mb-6 animate-fadeIn">
+        <div className="flex bg-white p-1 rounded-xl border border-gray-100 shadow-sm">
+          <button
+            onClick={() => setLowStockFilter(false)}
+            className={`px-5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
+              !lowStockOnly
+                ? "bg-white text-indigo-600 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            All Products
+          </button>
+          <button
+            onClick={() => setLowStockFilter(true)}
+            className={`px-5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
+              lowStockOnly
+                ? "bg-white text-orange-600 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Low Stock Only
+          </button>
+        </div>
+        {lowStockOnly && (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-orange-100 text-orange-700 px-3 py-1.5 rounded-full border border-orange-200">
+            <FiAlertCircle className="h-3.5 w-3.5" />
+            Showing low-stock items
+            <button
+              onClick={() => setLowStockFilter(false)}
+              className="ml-1 hover:text-orange-900"
+              title="Clear filter"
+            >
+              <FiX className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        )}
+      </div>
 
       {error && (
         <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl animate-shake">
@@ -200,10 +268,12 @@ export default function ProductsPage() {
                 <FiPackage className="mx-auto h-12 w-12 text-gray-300" />
               </div>
               <p className="text-lg font-medium text-gray-900">
-                No products found
+                {lowStockOnly ? "All products are well stocked!" : "No products found"}
               </p>
               <p className="mt-1">
-                Try a different search term or add a new product.
+                {lowStockOnly
+                  ? "No items are at or below their alert level."
+                  : "Try a different search term or add a new product."}
               </p>
             </div>
           ) : (
@@ -246,11 +316,11 @@ export default function ProductsPage() {
                         <div className="text-sm font-bold text-gray-900">
                           {product.name}
                         </div>
-                        {product.description && (
-                          <div className="text-sm text-gray-500 truncate max-w-xs">
-                            {product.description}
+                        {product.partNo ? (
+                          <div className="text-xs text-gray-500 font-mono truncate max-w-xs">
+                            Part No: {product.partNo}
                           </div>
-                        )}
+                        ) : null}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-gray-900">
@@ -261,11 +331,14 @@ export default function ProductsPage() {
                         <div className="flex items-center gap-2">
                           <div className="text-sm text-gray-900">
                             {product.stockQuantity}
+                            <span className="text-xs text-gray-400">
+                              {" "}
+                              / alert at {getThreshold(product)}
+                            </span>
                           </div>
-                          {product.stockQuantity < 10 &&
-                            product.stockQuantity > 0 && (
-                              <FiAlertCircle className="h-4 w-4 text-yellow-500" />
-                            )}
+                          {isLowStock(product) && (
+                            <FiAlertCircle className="h-4 w-4 text-yellow-500" />
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

@@ -31,6 +31,11 @@ const invoiceItemSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    partNo: {
+      type: String,
+      trim: true,
+      default: "",
+    },
   },
   { _id: false },
 );

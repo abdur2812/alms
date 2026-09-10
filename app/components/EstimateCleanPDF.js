@@ -1,141 +1,145 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
 
-// Clean Estimate PDF — A5, no shop details, no colours, no GST
-// Only: Date, Customer, Items (S.No | Particulars | Qty | Rate | Amount), Grand Total
+// Clean Estimate PDF — designed natively for A5 portrait (148 × 210 mm).
+// Print this PDF on A5 sheets at 100% scale (not "fit to page").
+// Fonts/sizes are chosen for A5 readability — NOT a shrunk A4 layout.
 const S = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
-    fontSize: 9,
-    paddingTop: 18,
-    paddingBottom: 18,
-    paddingLeft: 18,
-    paddingRight: 18,
+    fontSize: 11,
+    paddingTop: 30,
+    paddingBottom: 28,
+    paddingLeft: 28,
+    paddingRight: 28,
     backgroundColor: "#ffffff",
   },
   outer: {
-    borderWidth: 0.7,
+    borderWidth: 1,
     borderColor: "#000000",
     flex: 1,
     width: "100%",
   },
   titleSection: {
-    paddingVertical: 8,
+    paddingVertical: 12,
     alignItems: "center",
-    borderBottomWidth: 0.7,
+    borderBottomWidth: 1,
     borderBottomColor: "#000000",
   },
   titleText: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 11,
-    letterSpacing: 1,
+    fontSize: 18,
+    letterSpacing: 3,
     textAlign: "center",
   },
   titleSub: {
-    fontSize: 7,
+    fontSize: 10,
     color: "#333333",
-    marginTop: 2,
+    marginTop: 4,
     textAlign: "center",
   },
   metaRow: {
     flexDirection: "row",
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-    borderBottomWidth: 0.7,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
     borderBottomColor: "#000000",
   },
-  metaCol: { flex: 1 },
+  metaCol: { flex: 1, paddingRight: 8 },
   metaLabel: {
-    fontSize: 7,
+    fontSize: 9,
     fontFamily: "Helvetica-Bold",
     color: "#000000",
-    marginBottom: 1,
+    marginBottom: 3,
+    letterSpacing: 0.5,
   },
   metaValue: {
-    fontSize: 8,
+    fontSize: 11,
     color: "#000000",
   },
   metaRight: {
     width: 140,
-    borderLeftWidth: 0.7,
+    borderLeftWidth: 1,
     borderLeftColor: "#000000",
-    paddingLeft: 8,
+    paddingLeft: 10,
     justifyContent: "center",
-  },
-  customerSection: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderBottomWidth: 0.7,
-    borderBottomColor: "#000000",
   },
   sectionLabel: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 7,
-    marginBottom: 2,
+    fontSize: 9,
+    marginBottom: 3,
+    letterSpacing: 0.5,
   },
   custName: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 9,
-    marginBottom: 1,
+    fontSize: 12,
+    marginBottom: 3,
   },
-  custDetail: { fontSize: 7.5, color: "#000000", marginBottom: 1 },
+  custDetail: { fontSize: 10, color: "#000000", marginBottom: 2, lineHeight: 1.3 },
   tableHeader: {
     flexDirection: "row",
-    borderBottomWidth: 0.7,
+    borderBottomWidth: 1,
     borderBottomColor: "#000000",
     backgroundColor: "#ffffff",
+    minHeight: 26,
   },
   thCell: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 7.5,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    fontSize: 10.5,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
     borderRightWidth: 0.5,
     borderRightColor: "#000000",
     textAlign: "center",
+    justifyContent: "center",
   },
   tdCell: {
-    fontSize: 7.5,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    fontSize: 10.5,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
     borderRightWidth: 0.5,
     borderRightColor: "#000000",
-    borderBottomWidth: 0.3,
+    borderBottomWidth: 0.4,
     borderBottomColor: "#999999",
+    minHeight: 27,
+    justifyContent: "center",
   },
   tdCellLast: {
-    fontSize: 7.5,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
-    borderBottomWidth: 0.3,
+    fontSize: 10.5,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    borderBottomWidth: 0.4,
     borderBottomColor: "#999999",
+    minHeight: 27,
+    justifyContent: "center",
   },
   totalRow: {
     flexDirection: "row",
-    borderTopWidth: 0.7,
+    borderTopWidth: 1,
     borderTopColor: "#000000",
-    paddingVertical: 5,
-    paddingHorizontal: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    alignItems: "center",
   },
   totalLabel: {
     flex: 1,
     fontFamily: "Helvetica-Bold",
-    fontSize: 8,
+    fontSize: 12,
     textAlign: "right",
-    paddingRight: 8,
+    paddingRight: 10,
   },
   totalValue: {
-    width: 70,
+    width: 95,
     fontFamily: "Helvetica-Bold",
-    fontSize: 9,
+    fontSize: 13,
     textAlign: "right",
   },
   footer: {
-    paddingVertical: 6,
+    paddingVertical: 8,
     alignItems: "center",
     borderTopWidth: 0.5,
     borderTopColor: "#000000",
   },
-  footerText: { fontSize: 6, color: "#666666", textAlign: "center" },
+  footerText: { fontSize: 8, color: "#666666", textAlign: "center" },
 });
 
 function fmt(n) {
@@ -167,6 +171,7 @@ export default function EstimateCleanPDF({ invoice }) {
     (s, it) => s + (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0),
     0
   );
+  const totalQty = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
 
   const custAddrStr = [
     permAddr.companyAddress,
@@ -176,14 +181,14 @@ export default function EstimateCleanPDF({ invoice }) {
     .filter(Boolean)
     .join(", ");
 
-  // Column widths for A5 — totals to 100%
-  // S.No 7% | Particulars 53% | Qty 12% | Rate 14% | Amount 14%
-  const COLS = ["7%", "53%", "12%", "14%", "14%"];
+  // Column widths for A5 portrait — totals to 100%.
+  // Give Rate/Amount extra room since fonts are now larger.
+  const COLS = ["8%", "48%", "13%", "15%", "16%"];
   const HEADERS = ["S.No", "Particulars", "Qty", "Rate", "Amount"];
   const ALIGNS = ["center", "left", "center", "right", "right"];
 
-  // Chunk for pagination — ~25 rows per A5 page
-  const chunkSize = 22;
+  // ~13 roomy rows fill one A5 page at 11pt with 27pt row height.
+  const chunkSize = 13;
   const chunks = [];
   for (let i = 0; i < items.length; i += chunkSize) {
     chunks.push(items.slice(i, i + chunkSize));
@@ -196,7 +201,7 @@ export default function EstimateCleanPDF({ invoice }) {
         const isLastPage = pageIndex === chunks.length - 1;
         const startIdx = pageIndex * chunkSize;
         return (
-          <Page key={pageIndex} size="A5" style={S.page}>
+          <Page key={pageIndex} size="A5" orientation="portrait" style={S.page}>
             <View style={S.outer}>
               {/* Title */}
               <View style={S.titleSection}>
@@ -207,7 +212,7 @@ export default function EstimateCleanPDF({ invoice }) {
               {/* Date + Customer row */}
               <View style={S.metaRow}>
                 <View style={S.metaCol}>
-                  <Text style={S.metaLabel}>Customer</Text>
+                  <Text style={S.sectionLabel}>Customer</Text>
                   <Text style={S.custName}>{customer.name || "-"}</Text>
                   {customer.phone ? (
                     <Text style={S.custDetail}>Ph: {customer.phone}</Text>
@@ -221,7 +226,7 @@ export default function EstimateCleanPDF({ invoice }) {
                   <Text style={S.metaValue}>{invoiceDate}</Text>
                   {inv.invoiceNumber ? (
                     <>
-                      <Text style={[S.metaLabel, { marginTop: 4 }]}>Estimate No</Text>
+                      <Text style={[S.metaLabel, { marginTop: 6 }]}>Estimate No</Text>
                       <Text style={S.metaValue}>{inv.invoiceNumber}</Text>
                     </>
                   ) : null}
@@ -269,30 +274,27 @@ export default function EstimateCleanPDF({ invoice }) {
                 );
               })}
 
-              {/* Fill empty rows to keep border consistent */}
-              {isLastPage && pageItems.length < chunkSize
-                ? Array.from({ length: chunkSize - pageItems.length }).map((_, i) => (
-                    <View key={`empty-${i}`} style={{ flexDirection: "row", height: 14 }}>
-                      {COLS.map((w, ci) => (
-                        <View
-                          key={ci}
-                          style={[
-                            ci === COLS.length - 1 ? S.tdCellLast : S.tdCell,
-                            { width: w, borderBottomWidth: 0.3 },
-                          ]}
-                        >
-                          <Text> </Text>
-                        </View>
-                      ))}
-                    </View>
-                  ))
-                : null}
+              {/* Fill remaining space so the total block sits at the bottom
+                  on the last page without shrinking fonts */}
+              {isLastPage && pageItems.length < chunkSize ? (
+                <View style={{ flex: 1, minHeight: (chunkSize - pageItems.length) * 12 }} />
+              ) : !isLastPage ? (
+                <View style={{ flex: 1 }} />
+              ) : null}
 
               {/* Grand total — only on last page */}
               {isLastPage ? (
-                <View style={S.totalRow}>
-                  <Text style={S.totalLabel}>Grand Total</Text>
-                  <Text style={S.totalValue}>Rs. {fmt(grandTotal)}</Text>
+                <View>
+                  <View style={{ flexDirection: "row", paddingVertical: 6, paddingHorizontal: 6 }}>
+                    <Text style={{ flex: 1, fontSize: 10.5, textAlign: "right", paddingRight: 10 }}>
+                      Total Qty: {totalQty}
+                    </Text>
+                    <Text style={{ width: 95 }} />
+                  </View>
+                  <View style={S.totalRow}>
+                    <Text style={S.totalLabel}>Grand Total</Text>
+                    <Text style={S.totalValue}>Rs. {fmt(grandTotal)}</Text>
+                  </View>
                 </View>
               ) : (
                 <View style={{ flex: 1 }} />
@@ -301,14 +303,19 @@ export default function EstimateCleanPDF({ invoice }) {
               {/* Footer */}
               <View style={S.footer}>
                 <Text style={S.footerText}>This is a computer generated estimate</Text>
+                <Text style={[S.footerText, { marginTop: 2 }]}>
+                  Print on A5 • 100% scale
+                </Text>
               </View>
 
               {/* Page number */}
-              <View style={{ paddingVertical: 2, alignItems: "center" }}>
-                <Text style={{ fontSize: 6, color: "#999999" }}>
-                  Page {pageIndex + 1} of {chunks.length}
-                </Text>
-              </View>
+              {chunks.length > 1 ? (
+                <View style={{ paddingVertical: 3, alignItems: "center" }}>
+                  <Text style={{ fontSize: 8, color: "#999999" }}>
+                    Page {pageIndex + 1} of {chunks.length}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </Page>
         );

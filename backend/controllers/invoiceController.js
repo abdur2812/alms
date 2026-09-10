@@ -66,7 +66,7 @@ exports.getAllInvoices = asyncHandler(async (req, res, next) => {
   const [invoices, count] = await Promise.all([
     Invoice.find(query)
       .populate("customerId", "name phone")
-      .populate("items.productId", "name")
+      .populate("items.productId", "name partNo")
       .sort({ numberAssignedAt: -1, createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit)
@@ -90,7 +90,7 @@ exports.getAllInvoices = asyncHandler(async (req, res, next) => {
 exports.getInvoiceById = asyncHandler(async (req, res, next) => {
   const invoice = await Invoice.findById(req.params.id)
     .populate("customerId", "name phone gstNumber permanentAddress shippingAddress address")
-    .populate("items.productId", "name description")
+    .populate("items.productId", "name partNo")
     .lean();
 
   if (!invoice) {
@@ -106,7 +106,7 @@ async function validateAndSnapshotItems(items, next) {
   const productMap = new Map();
   if (productIds.length) {
     const products = await Product.find({ _id: { $in: productIds } })
-      .select("name price gst hsnCode")
+      .select("name price gst hsnCode partNo")
       .lean();
     for (const p of products) productMap.set(String(p._id), p);
   }
@@ -125,6 +125,7 @@ async function validateAndSnapshotItems(items, next) {
         unitPrice: item.unitPrice || prod.price,
         gst: Number(item.gst) || Number(prod.gst) || 0,
         hsnCode: item.hsnCode || prod.hsnCode || "",
+        partNo: item.partNo || prod.partNo || "",
       });
     } else {
       if (!item.name || !item.quantity || item.unitPrice === undefined) {
@@ -137,6 +138,7 @@ async function validateAndSnapshotItems(items, next) {
         unitPrice: item.unitPrice,
         gst: Number(item.gst) || 0,
         hsnCode: item.hsnCode || "",
+        partNo: item.partNo || "",
       });
     }
   }
@@ -170,7 +172,11 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
   if (items.length > 100) {
     return next(new AppError("Invoice cannot have more than 100 items", 400));
   }
-  if (!customerId && !customerData) {
+  // Customer is required for GST bills but optional for estimates.
+  const estimateHint =
+    parseOptionalBoolean(isGstBill) === false ||
+    parseOptionalBoolean(isCleanEstimate) === true;
+  if (!customerId && !customerData && !estimateHint) {
     return next(new AppError("Customer information is required", 400));
   }
 
@@ -192,7 +198,7 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
       };
     }
   } else {
-    snapshotCustomerData = customerData;
+    snapshotCustomerData = customerData || {};
   }
 
   let validatedItems;
@@ -291,7 +297,7 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
 
   const populatedInvoice = await Invoice.findById(invoice._id)
     .populate("customerId", "name phone")
-    .populate("items.productId", "name")
+    .populate("items.productId", "name partNo")
     .lean();
 
   res.status(201).json({ success: true, message: "Invoice created successfully", data: populatedInvoice });
@@ -351,7 +357,7 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
 
   const updatedInvoice = await Invoice.findById(invoice._id)
     .populate("customerId", "name phone")
-    .populate("items.productId", "name")
+    .populate("items.productId", "name partNo")
     .lean();
 
   res.status(200).json({ success: true, message: "Invoice updated successfully", data: updatedInvoice });
@@ -462,7 +468,7 @@ exports.getInvoicesByDateRange = asyncHandler(async (req, res, next) => {
 
   const invoices = await Invoice.find({ createdAt: { $gte: new Date(startDate), $lte: e } })
     .populate("customerId", "name")
-    .populate("items.productId", "name")
+    .populate("items.productId", "name partNo")
     .sort({ createdAt: -1 })
     .lean();
 

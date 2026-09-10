@@ -1,7 +1,37 @@
 const mongoose = require("mongoose");
 
 // A purchase invoice — money going out to a vendor.
-// Includes optional cheque/payment tracking.
+// Includes multiple payment entries (cheque / gpay / NEFT). Duplicates allowed.
+const paymentEntrySchema = new mongoose.Schema(
+  {
+    method: {
+      type: String,
+      enum: ["cheque", "gpay", "NEFT"],
+      required: [true, "Payment method is required"],
+    },
+    details: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    amount: {
+      type: Number,
+      default: 0,
+      min: [0, "Payment amount cannot be negative"],
+    },
+    status: {
+      type: String,
+      enum: ["Pending", "Cleared", "Bounced"],
+      default: "Pending",
+    },
+    passedDate: {
+      type: Date,
+      default: null,
+    },
+  },
+  { _id: true },
+);
+
 const purchaseSchema = new mongoose.Schema(
   {
     // Auto-generated sequential number for this purchase entry (e.g. PUR-0001).
@@ -31,6 +61,13 @@ const purchaseSchema = new mongoose.Schema(
       required: [true, "Amount is required"],
       min: [0, "Amount cannot be negative"],
     },
+    // Multiple payment entries — each with method dropdown (cheque/gpay/NEFT) + amount.
+    // Duplicates (same method twice) are allowed; click an entry to see full details.
+    payments: {
+      type: [paymentEntrySchema],
+      default: [],
+    },
+    // Legacy single-payment fields (kept for backward compat with old records/reports).
     chequeDetails: {
       type: String,
       trim: true,
@@ -61,6 +98,13 @@ purchaseSchema.index({ vendorId: 1, date: -1 });
 purchaseSchema.index({ invoiceNumber: 1 });
 // purchaseNumber already unique via unique:true
 purchaseSchema.index({ chequeStatus: 1, date: -1 });
+purchaseSchema.index({ "payments.method": 1 });
+
+// Total paid across all payment entries (for display)
+purchaseSchema.virtual("paymentsTotal").get(function () {
+  if (!this.payments || !Array.isArray(this.payments)) return 0;
+  return this.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+});
 
 purchaseSchema.set("toJSON", { virtuals: true });
 purchaseSchema.set("toObject", { virtuals: true });

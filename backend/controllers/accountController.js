@@ -125,9 +125,48 @@ exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
     ]),
     Purchase.aggregate([
       { $match: purchaseQuery },
+      // "Has payment = paid": purchases backed by a real payment (a payment
+      // entry with amount > 0 that isn't bounced; or, for docs with no
+      // payment entries at all, a legacy cheque amount) count as Cleared
+      // regardless of stored status.
+      {
+        $addFields: {
+          _effectiveStatus: {
+            $cond: [
+              {
+                $or: [
+                  {
+                    $gt: [
+                      {
+                        $size: {
+                          $filter: {
+                            input: { $ifNull: ["$payments", []] },
+                            as: "p",
+                            cond: { $and: [{ $gt: ["$$p.amount", 0] }, { $ne: ["$$p.status", "Bounced"] }] },
+                          },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                  {
+                    $and: [
+                      { $eq: [{ $size: { $ifNull: ["$payments", []] } }, 0] },
+                      { $gt: [{ $ifNull: ["$chequeAmount", 0] }, 0] },
+                      { $ne: ["$chequeStatus", "Bounced"] },
+                    ],
+                  },
+                ],
+              },
+              "Cleared",
+              "$chequeStatus",
+            ],
+          },
+        },
+      },
       {
         $group: {
-          _id: "$chequeStatus",
+          _id: "$_effectiveStatus",
           total: { $sum: "$amount" },
           chequeTotal: { $sum: { $ifNull: ["$chequeAmount", "$amount"] } },
           count: { $sum: 1 },
@@ -149,7 +188,7 @@ exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
   // If billType missing (all one type), ensure paid/credit derived correctly
   if (salesPaid === 0 && salesCredit !== totalSales) salesPaid = totalSales - salesCredit;
 
-  // Purchases: need total, paid (Cleared), credit (Pending)
+  // Purchases: need total, paid (Cleared status OR backed by a real payment), credit (Pending, no payment)
   let totalPurchases = 0, purchasesPaid = 0, purchasesCredit = 0, purchasesCount = 0;
   for (const r of purchaseAgg) {
     totalPurchases += r.total || 0;
@@ -166,7 +205,7 @@ exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
   // Fetch lists lean with projection + limit 500 to avoid OOM on unbounded range
   const LIST_LIMIT = 500;
   const [purchasesListRaw, expensesList, dailyPaymentsRaw] = await Promise.all([
-    Purchase.find(purchaseQuery).populate("vendorId", "name phone").sort({ date: -1, createdAt: -1 }).limit(LIST_LIMIT).select("invoiceNumber vendorId date amount chequeDetails chequeAmount chequeStatus passedDate").lean(),
+    Purchase.find(purchaseQuery).populate("vendorId", "name phone").sort({ date: -1, createdAt: -1 }).limit(LIST_LIMIT).select("invoiceNumber vendorId date amount payments chequeDetails chequeAmount chequeStatus passedDate").lean(),
     Expense.find(expenseQuery).sort({ date: -1, createdAt: -1 }).limit(LIST_LIMIT).lean(),
     StaffDailyPayment.find(paymentQuery).populate("staffId", "name role dailyWage").sort({ paidAt: -1 }).limit(LIST_LIMIT).lean(),
   ]);
@@ -177,6 +216,7 @@ exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
     vendor: p.vendorId?.name || null,
     date: p.date,
     amount: p.amount,
+    payments: p.payments || [],
     chequeDetails: p.chequeDetails,
     chequeAmount: p.chequeAmount,
     chequeStatus: p.chequeStatus,
@@ -203,84 +243,103 @@ exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Get total quantity sold per HSN code for a date range
+// @desc    Get total quantity sold per HSN code for a date range (+ IGST-only summary)
 // @route   GET /api/accounts/hsn?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
 // @access  Public
 exports.getHsnSummary = asyncHandler(async (req, res, next) => {
   const { startDate, endDate } = req.query;
+  const dateFilter = startDate || endDate ? { createdAt: buildRange(startDate, endDate) } : {};
 
-  const hsnAgg = await Invoice.aggregate([
+  const hsnGroupStage = {
+    $group: {
+      _id: { $toUpper: { $trim: { input: "$items.hsnCode" } } },
+      quantity: { $sum: "$items.quantity" },
+      totalPrice: { $sum: { $multiply: ["$items.quantity", { $ifNull: ["$items.unitPrice", 0] }] } },
+      totalBase: {
+        $sum: {
+          $divide: [
+            { $multiply: ["$items.quantity", { $ifNull: ["$items.unitPrice", 0] }] },
+            { $add: [1, { $divide: [{ $ifNull: ["$items.gst", 18] }, 100] }] },
+          ],
+        },
+      },
+      minUnitPrice: { $min: { $ifNull: ["$items.unitPrice", 0] } },
+      maxUnitPrice: { $max: { $ifNull: ["$items.unitPrice", 0] } },
+      minGst: { $min: { $ifNull: ["$items.gst", 18] } },
+      maxGst: { $max: { $ifNull: ["$items.gst", 18] } },
+    },
+  };
+
+  const buildHsnAgg = (extraMatch) => [
     {
       $match: {
         "items.hsnCode": { $exists: true, $ne: "" },
-        ...(startDate || endDate ? { createdAt: buildRange(startDate, endDate) } : {}),
+        ...dateFilter,
+        ...extraMatch,
       },
     },
     { $unwind: "$items" },
     { $match: { "items.hsnCode": { $exists: true, $nin: ["", null] } } },
-    {
-      $group: {
-        _id: { $toUpper: { $trim: { input: "$items.hsnCode" } } },
-        quantity: { $sum: "$items.quantity" },
-        totalPrice: { $sum: { $multiply: ["$items.quantity", { $ifNull: ["$items.unitPrice", 0] }] } },
-        totalBase: {
-          $sum: {
-            $divide: [
-              { $multiply: ["$items.quantity", { $ifNull: ["$items.unitPrice", 0] }] },
-              { $add: [1, { $divide: [{ $ifNull: ["$items.gst", 18] }, 100] }] },
-            ],
-          },
-        },
-        minUnitPrice: { $min: { $ifNull: ["$items.unitPrice", 0] } },
-        maxUnitPrice: { $max: { $ifNull: ["$items.unitPrice", 0] } },
-        minGst: { $min: { $ifNull: ["$items.gst", 18] } },
-        maxGst: { $max: { $ifNull: ["$items.gst", 18] } },
-      },
-    },
+    hsnGroupStage,
     { $sort: { quantity: -1, _id: 1 } },
+  ];
+
+  const mapRows = (hsnAgg) =>
+    hsnAgg.map((r) => {
+      const totalPrice = Math.round(r.totalPrice * 100) / 100;
+      const totalBaseRaw = r.totalBase || 0;
+      const totalBase = Math.round(totalBaseRaw * 100) / 100;
+      const totalGst = Math.round((totalPrice - totalBase) * 100) / 100;
+      const quantity = r.quantity;
+      const unitPrice = quantity ? Math.round((r.totalPrice / quantity) * 100) / 100 : 0;
+      const baseUnitPrice = quantity ? Math.round((totalBase / quantity) * 100) / 100 : 0;
+      const gstPerUnit = Math.round((unitPrice - baseUnitPrice) * 100) / 100;
+      const minUnitPrice = r.minUnitPrice != null ? Math.round(r.minUnitPrice * 100) / 100 : 0;
+      const maxUnitPrice = r.maxUnitPrice != null ? Math.round(r.maxUnitPrice * 100) / 100 : 0;
+      // For range display, also compute base for min/max assuming same GST (approx)
+      const avgGst = r.minGst === r.maxGst ? r.minGst : 18;
+      const minBaseUnit = minUnitPrice ? Math.round((minUnitPrice / (1 + avgGst / 100)) * 100) / 100 : 0;
+      const maxBaseUnit = maxUnitPrice ? Math.round((maxUnitPrice / (1 + avgGst / 100)) * 100) / 100 : 0;
+      return {
+        hsnCode: r._id,
+        quantity,
+        totalPrice,
+        totalBase,
+        totalGst,
+        unitPrice,
+        baseUnitPrice,
+        gstPerUnit,
+        minUnitPrice,
+        maxUnitPrice,
+        minBaseUnit,
+        maxBaseUnit,
+        hasMultiplePrices: minUnitPrice !== maxUnitPrice,
+      };
+    });
+
+  const summarize = (rows) => ({
+    total: sum(rows, (r) => r.quantity),
+    totalValue: Math.round(sum(rows, (r) => r.totalPrice) * 100) / 100,
+    totalBase: Math.round(sum(rows, (r) => r.totalBase) * 100) / 100,
+    totalGst: Math.round(sum(rows, (r) => r.totalGst) * 100) / 100,
+    count: rows.length,
+    rows,
+  });
+
+  const [hsnAgg, igstAgg] = await Promise.all([
+    Invoice.aggregate(buildHsnAgg({})),
+    // IGST-only: invoices flagged as inter-state IGST bills
+    Invoice.aggregate(buildHsnAgg({ isIgst: true })),
   ]);
 
-  const rows = hsnAgg.map((r) => {
-    const totalPrice = Math.round(r.totalPrice * 100) / 100;
-    const totalBaseRaw = r.totalBase || 0;
-    const totalBase = Math.round(totalBaseRaw * 100) / 100;
-    const totalGst = Math.round((totalPrice - totalBase) * 100) / 100;
-    const quantity = r.quantity;
-    const unitPrice = quantity ? Math.round((r.totalPrice / quantity) * 100) / 100 : 0;
-    const baseUnitPrice = quantity ? Math.round((totalBase / quantity) * 100) / 100 : 0;
-    const gstPerUnit = Math.round((unitPrice - baseUnitPrice) * 100) / 100;
-    const minUnitPrice = r.minUnitPrice != null ? Math.round(r.minUnitPrice * 100) / 100 : 0;
-    const maxUnitPrice = r.maxUnitPrice != null ? Math.round(r.maxUnitPrice * 100) / 100 : 0;
-    // For range display, also compute base for min/max assuming same GST (approx)
-    const avgGst = r.minGst === r.maxGst ? r.minGst : 18;
-    const minBaseUnit = minUnitPrice ? Math.round((minUnitPrice / (1 + avgGst / 100)) * 100) / 100 : 0;
-    const maxBaseUnit = maxUnitPrice ? Math.round((maxUnitPrice / (1 + avgGst / 100)) * 100) / 100 : 0;
-    return {
-      hsnCode: r._id,
-      quantity,
-      totalPrice,
-      totalBase,
-      totalGst,
-      unitPrice,
-      baseUnitPrice,
-      gstPerUnit,
-      minUnitPrice,
-      maxUnitPrice,
-      minBaseUnit,
-      maxBaseUnit,
-      hasMultiplePrices: minUnitPrice !== maxUnitPrice,
-    };
-  });
+  const rows = mapRows(hsnAgg);
+  const igstRows = mapRows(igstAgg);
 
   res.status(200).json({
     success: true,
     data: {
-      total: sum(rows, (r) => r.quantity),
-      totalValue: Math.round(sum(rows, (r) => r.totalPrice) * 100) / 100,
-      totalBase: Math.round(sum(rows, (r) => r.totalBase) * 100) / 100,
-      totalGst: Math.round(sum(rows, (r) => r.totalGst) * 100) / 100,
-      count: rows.length,
-      rows,
+      ...summarize(rows),
+      igst: summarize(igstRows),
     },
   });
 });

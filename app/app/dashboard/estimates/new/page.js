@@ -86,10 +86,10 @@ export default function NewCleanEstimatePage() {
     }
   };
   const searchProducts = async (searchTerm) => {
-    const res = await productsAPI.getAll({ limit: 50, search: searchTerm });
+    const res = await productsAPI.getAll({ limit: 50, search: searchTerm, includePartNo: true });
     return res.data.data.map((p) => ({
       value: p._id,
-      label: `${p.name} (${formatINR(p.price)})`,
+      label: `${p.name}${p.partNo ? ` [${p.partNo}]` : ""} (${formatINR(p.price)})`,
     }));
   };
 
@@ -243,7 +243,7 @@ export default function NewCleanEstimatePage() {
     setLoading(true);
     setError("");
     try {
-      if (!customerDetails.name) throw new Error("Please enter customer name");
+      // Customer is optional for estimates
       if (items.length === 0) throw new Error("Please add at least one item");
       const validItems = items.filter((it) => it.name && it.quantity > 0 && it.unitPrice >= 0);
       if (validItems.length === 0) throw new Error("Please add at least one valid item");
@@ -309,13 +309,12 @@ export default function NewCleanEstimatePage() {
               </div>
               <div className="p-5 space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Customer Name *</label>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Customer Name (optional)</label>
                   <input
                     type="text"
                     value={customerDetails.name}
                     onChange={(e) => handleCustomerInputChange("name", e.target.value)}
                     placeholder="Enter customer name"
-                    required
                     className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white"
                   />
                   {customers.filter((c) => c.name.toLowerCase().includes(customerDetails.name.toLowerCase())).length > 0 && customerDetails.name && (
@@ -382,7 +381,7 @@ export default function NewCleanEstimatePage() {
                         onKeyDown={handleProductKeyDown}
                         onFocus={() => setShowProductDropdown(true)}
                         onBlur={() => setTimeout(() => setShowProductDropdown(false), 150)}
-                        placeholder="Search or enter product name"
+                        placeholder="Search by name or part no, or enter product name"
                         className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white"
                       />
                       {showProductDropdown && (

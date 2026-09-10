@@ -271,6 +271,66 @@ function HsnSection({ range }) {
               </PDFViewer>
             </div>
           )}
+
+          {/* IGST-only summary (IGST invoices in this period) */}
+          <div className="mt-6 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
+            <h4 className="text-sm font-bold text-indigo-900 uppercase tracking-wider mb-1">
+              IGST Summary
+            </h4>
+            <p className="text-xs text-indigo-700/70 mb-4">
+              HSN split from IGST (inter-state) invoices only
+            </p>
+            {!data?.igst || data.igst.rows.length === 0 ? (
+              <div className="p-6 text-center text-sm text-gray-500 bg-white rounded-xl border border-gray-100">
+                No IGST invoice present.
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                  <div className="bg-white rounded-xl border border-indigo-100 p-3">
+                    <p className="text-[11px] font-bold text-gray-500 uppercase">IGST Qty</p>
+                    <p className="text-lg font-bold text-gray-900">{data.igst.total}</p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-indigo-100 p-3">
+                    <p className="text-[11px] font-bold text-gray-500 uppercase">Taxable</p>
+                    <p className="text-lg font-bold text-gray-900">{formatINR(data.igst.totalBase)}</p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-indigo-100 p-3">
+                    <p className="text-[11px] font-bold text-gray-500 uppercase">IGST Amt</p>
+                    <p className="text-lg font-bold text-amber-700">{formatINR(data.igst.totalGst)}</p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-indigo-100 p-3">
+                    <p className="text-[11px] font-bold text-gray-500 uppercase">Total</p>
+                    <p className="text-lg font-bold text-gray-900">{formatINR(data.igst.totalValue)}</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto bg-white rounded-xl border border-gray-100">
+                  <table className="min-w-full divide-y divide-gray-100">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-left">HSN Code</th>
+                        <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Qty</th>
+                        <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Taxable</th>
+                        <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">IGST Amount</th>
+                        <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Total (Incl. GST)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-50">
+                      {data.igst.rows.map((r, i) => (
+                        <tr key={r.hsnCode || i} className="hover:bg-indigo-50/30 transition-colors">
+                          <td className="px-4 py-2.5 text-sm font-bold text-indigo-600">{r.hsnCode}</td>
+                          <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">{r.quantity}</td>
+                          <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">{formatINR(r.totalBase ?? 0)}</td>
+                          <td className="px-4 py-2.5 text-sm font-bold text-amber-700 text-right">{formatINR(r.totalGst ?? 0)}</td>
+                          <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">{formatINR(r.totalPrice ?? 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
         </>
       )}
     </Section>

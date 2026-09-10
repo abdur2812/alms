@@ -2,10 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { FiShoppingBag, FiSave, FiX, FiCheck } from "react-icons/fi";
+import { FiShoppingBag, FiSave, FiX, FiCheck, FiPlus, FiTrash2 } from "react-icons/fi";
 import Link from "next/link";
 import { PageHeader, Card, CardBody, Input, Select, Dropdown, Button, LoadingSpinner } from "@/components/UI";
 import { purchasesAPI, vendorsAPI } from "@/lib/api";
+
+const PAYMENT_METHODS = ["cheque", "gpay", "NEFT"];
+const PAYMENT_STATUSES = ["Pending", "Cleared", "Bounced"];
+
+const emptyPayment = () => ({
+  method: "cheque",
+  details: "",
+  amount: "",
+  status: "Pending",
+  passedDate: "",
+});
 
 const toDateInput = (d) => {
   const y = d.getFullYear();
@@ -18,6 +29,7 @@ export default function EditPurchasePage() {
   const router = useRouter();
   const params = useParams();
   const [form, setForm] = useState(null);
+  const [payments, setPayments] = useState([emptyPayment()]);
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,11 +52,29 @@ export default function EditPurchasePage() {
           invoiceNumber: p.invoiceNumber,
           date: toDateInput(new Date(p.date)),
           amount: p.amount,
-          chequeDetails: p.chequeDetails || "",
-          chequeAmount: p.chequeAmount || "",
-          chequeStatus: p.chequeStatus || "Pending",
-          passedDate: p.passedDate ? toDateInput(new Date(p.passedDate)) : "",
         });
+        if (Array.isArray(p.payments) && p.payments.length) {
+          setPayments(
+            p.payments.map((pay) => ({
+              method: PAYMENT_METHODS.includes(pay.method) ? pay.method : "cheque",
+              details: pay.details || "",
+              amount: pay.amount ?? "",
+              status: pay.status || "Pending",
+              passedDate: pay.passedDate ? toDateInput(new Date(pay.passedDate)) : "",
+            })),
+          );
+        } else {
+          // Migrate legacy single-payment fields into one entry
+          setPayments([
+            {
+              method: "cheque",
+              details: p.chequeDetails || "",
+              amount: p.chequeAmount || "",
+              status: p.chequeStatus || "Pending",
+              passedDate: p.passedDate ? toDateInput(new Date(p.passedDate)) : "",
+            },
+          ]);
+        }
         setVendors(vendorsRes.data.data || []);
       } catch (e) {
         if (!cancelled) setError(e.response?.data?.message || "Failed to load purchase");
@@ -60,6 +90,12 @@ export default function EditPurchasePage() {
 
   const setField = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
+  const updatePayment = (idx, field, value) =>
+    setPayments((prev) => prev.map((p, i) => (i === idx ? { ...p, [field]: value } : p)));
+  const addPayment = () => setPayments((prev) => [...prev, emptyPayment()]);
+  const removePayment = (idx) =>
+    setPayments((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
+
   const searchVendors = async (searchTerm) => {
     const response = await vendorsAPI.getAll({ limit: 50, search: searchTerm });
     const results = response.data.data.map((v) => ({
@@ -74,12 +110,23 @@ export default function EditPurchasePage() {
     setError("");
     try {
       setSaving(true);
+      const cleanPayments = payments.map((p) => ({
+        method: p.method,
+        details: (p.details || "").trim(),
+        amount: p.amount === "" ? 0 : parseFloat(p.amount) || 0,
+        status: p.status || "Pending",
+        passedDate: p.passedDate || null,
+      }));
+      const first = cleanPayments[0];
       const payload = {
         ...form,
         vendorId: form.vendorId || null,
         amount: parseFloat(form.amount) || 0,
-        chequeAmount: form.chequeAmount === "" ? 0 : parseFloat(form.chequeAmount) || 0,
-        passedDate: form.passedDate || null,
+        payments: cleanPayments,
+        chequeDetails: first?.details || "",
+        chequeAmount: first?.amount || 0,
+        chequeStatus: first?.status || "Pending",
+        passedDate: first?.passedDate || null,
       };
       await purchasesAPI.update(params.id, payload);
       setSaved(true);
@@ -165,29 +212,104 @@ export default function EditPurchasePage() {
                 </div>
 
                 <div className="sm:col-span-2">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-2">Cheque / Payment Details</h3>
+                  <div className="flex items-center justify-between mb-2 mt-2">
+                    <h3 className="text-lg font-semibold text-gray-900">Payment Details</h3>
+                    <Button type="button" variant="secondary" onClick={addPayment}>
+                      <FiPlus className="mr-2 h-4 w-4" />Add Payment
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Choose method per entry (cheque / gpay / NEFT) with its price. Same method can be added multiple times.
+                  </p>
                 </div>
 
-                <div>
-                  <label className={labelClass}>Cheque Details</label>
-                  <input type="text" name="chequeDetails" value={form.chequeDetails} onChange={setField("chequeDetails")} className={inputClass} placeholder="Cheque number, bank, etc." />
-                </div>
-                <div>
-                  <label className={labelClass}>Cheque Amount (₹)</label>
-                  <input type="number" name="chequeAmount" min="0" step="0.01" value={form.chequeAmount} onChange={setField("chequeAmount")} className={inputClass} placeholder="0.00" />
-                </div>
-                <div>
-                  <label className={labelClass}>Cheque Status</label>
-                  <select name="chequeStatus" value={form.chequeStatus} onChange={setField("chequeStatus")} className={selectClass}>
-                    <option value="Pending">Pending</option>
-                    <option value="Cleared">Cleared</option>
-                    <option value="Bounced">Bounced</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Passed Date</label>
-                  <input type="date" name="passedDate" value={form.passedDate} onChange={setField("passedDate")} className={inputClass} />
-                </div>
+                {payments.map((p, idx) => (
+                  <div key={idx} className="sm:col-span-2 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-bold text-gray-700">
+                        Payment #{idx + 1}
+                        <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                          {p.method}
+                        </span>
+                      </span>
+                      {payments.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removePayment(idx)}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
+                          title="Remove this payment"
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={labelClass}>Method *</label>
+                        <select
+                          value={p.method}
+                          onChange={(e) => updatePayment(idx, "method", e.target.value)}
+                          className={selectClass}
+                        >
+                          {PAYMENT_METHODS.map((m) => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Price (₹) *</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={p.amount}
+                          onChange={(e) => updatePayment(idx, "amount", e.target.value)}
+                          className={inputClass}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className={labelClass}>
+                          {p.method === "cheque" ? "Cheque Details (no, bank, etc.)" : p.method === "gpay" ? "GPay Details (UTR / mobile)" : "NEFT Details (UTR / ref)"}
+                        </label>
+                        <input
+                          type="text"
+                          value={p.details}
+                          onChange={(e) => updatePayment(idx, "details", e.target.value)}
+                          className={inputClass}
+                          placeholder={
+                            p.method === "cheque"
+                              ? "Cheque number, bank, etc."
+                              : p.method === "gpay"
+                                ? "GPay UTR / transaction id"
+                                : "NEFT UTR / reference"
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Status</label>
+                        <select
+                          value={p.status}
+                          onChange={(e) => updatePayment(idx, "status", e.target.value)}
+                          className={selectClass}
+                        >
+                          {PAYMENT_STATUSES.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Passed Date</label>
+                        <input
+                          type="date"
+                          value={p.passedDate}
+                          onChange={(e) => updatePayment(idx, "passedDate", e.target.value)}
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div className="mt-8 flex justify-end space-x-3">

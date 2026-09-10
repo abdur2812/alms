@@ -22,12 +22,12 @@ export default function EditProductPage({ params }) {
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     name: "",
-    description: "",
     hsnCode: "",
     partNo: "",
     gst: "18",
     price: "",
     stockQuantity: "",
+    lowStockThreshold: "10",
   });
 
   useEffect(() => {
@@ -40,12 +40,12 @@ export default function EditProductPage({ params }) {
       const product = response.data.data;
       setFormData({
         name: product.name,
-        description: product.description || "",
         hsnCode: product.hsnCode || "",
         partNo: product.partNo || "",
         gst: product.gst || 18,
         price: product.price,
         stockQuantity: product.stockQuantity,
+        lowStockThreshold: product.lowStockThreshold ?? 10,
       });
       setLoading(false);
     } catch (err) {
@@ -69,6 +69,8 @@ export default function EditProductPage({ params }) {
       price: parseFloat(formData.price),
       gst: parseFloat(formData.gst),
       stockQuantity: parseInt(formData.stockQuantity),
+      lowStockThreshold:
+        formData.lowStockThreshold === "" ? 10 : parseInt(formData.lowStockThreshold),
     };
 
     try {
@@ -139,20 +141,6 @@ export default function EditProductPage({ params }) {
                 required
               />
 
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <textarea
-                  name="description"
-                  rows={3}
-                  value={formData.description}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900"
-                  placeholder="Enter product description"
-                />
-              </div>
-
               <Input
                 label="HSN Code"
                 name="hsnCode"
@@ -188,6 +176,18 @@ export default function EditProductPage({ params }) {
                 onChange={handleChange}
                 required
               />
+
+              <NumberInput
+                label="Low Stock Alert At"
+                name="lowStockThreshold"
+                min="0"
+                value={formData.lowStockThreshold}
+                onChange={handleChange}
+                required
+              />
+              <p className="sm:col-span-2 -mt-4 text-xs text-gray-500">
+                Warning shows when stock reaches this number (e.g. 10 warns at 10 or below).
+              </p>
             </div>
 
             <div className="mt-8 flex justify-end space-x-3">

@@ -218,7 +218,7 @@ const S = StyleSheet.create({
   },
   tdCell: {
     fontSize: 8.5,
-    paddingVertical: 5,
+    paddingVertical: 2.5,
     paddingHorizontal: 3,
     borderRightWidth: 1,
     borderRightColor: "#000000",
@@ -228,7 +228,7 @@ const S = StyleSheet.create({
   },
   tdLast: {
     fontSize: 8.5,
-    paddingVertical: 5,
+    paddingVertical: 2.5,
     paddingHorizontal: 3,
     borderBottomWidth: 1,
     borderBottomColor: "#000000",
@@ -365,6 +365,57 @@ const S = StyleSheet.create({
     textAlign: "center",
     marginTop: 3,
     color: "#111827",
+  },
+
+  // ── HSN-wise tax summary (half-width, right-aligned table below totals) ─────────
+  hsnTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 7.5,
+    color: "#000000",
+    textAlign: "center",
+    paddingVertical: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: "#000000",
+  },
+  hsnHeaderRow: {
+    flexDirection: "row",
+    backgroundColor: "#f3f4f6",
+    borderBottomWidth: 1,
+    borderBottomColor: "#000000",
+  },
+  hsnRow: {
+    flexDirection: "row",
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#9ca3af",
+  },
+  hsnTotalRow: {
+    flexDirection: "row",
+    backgroundColor: "#f3f4f6",
+    borderTopWidth: 1,
+    borderTopColor: "#000000",
+  },
+  hsnTh: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 6.5,
+    paddingVertical: 3,
+    paddingHorizontal: 2,
+    borderRightWidth: 0.5,
+    borderRightColor: "#000000",
+    color: "#000000",
+  },
+  hsnTd: {
+    fontSize: 7,
+    paddingVertical: 3,
+    paddingHorizontal: 2,
+    borderRightWidth: 0.5,
+    borderRightColor: "#000000",
+    color: "#000000",
+  },
+  hsnTdLast: {
+    fontSize: 7,
+    paddingVertical: 3,
+    paddingHorizontal: 2,
+    color: "#000000",
   },
 
   // ── Footer ────────────────────────────────────────────────────────────────
@@ -677,6 +728,42 @@ export default function InvoiceDocument({
       });
   }
 
+  // ── HSN-wise summary (grouped by HSN + GST rate, GST-inclusive math) ───────
+  const hsnGroups = [];
+  if (invoice.isGstBill) {
+    const hsnMap = new Map();
+    items.forEach((item) => {
+      const rate = Number(item.gst) || 0;
+      const hsn = String(item.hsnCode || "-").toUpperCase();
+      const key = `${hsn}__${rate}`;
+      const ls = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+      const gstAmt = rate > 0 ? (ls * rate) / (100 + rate) : 0;
+      const taxable = ls - gstAmt;
+      if (!hsnMap.has(key)) {
+        hsnMap.set(key, { hsn, rate, qty: 0, taxable: 0, gstAmt: 0, total: 0 });
+      }
+      const g = hsnMap.get(key);
+      g.qty += Number(item.quantity) || 0;
+      g.taxable += taxable;
+      g.gstAmt += gstAmt;
+      g.total += ls;
+    });
+    [...hsnMap.values()]
+      .sort((a, b) => (a.hsn < b.hsn ? -1 : a.hsn > b.hsn ? 1 : a.rate - b.rate))
+      .forEach((g) => hsnGroups.push(g));
+  }
+  const hsnTotals = hsnGroups.reduce(
+    (s, g) => ({
+      qty: s.qty + g.qty,
+      taxable: s.taxable + g.taxable,
+      gstAmt: s.gstAmt + g.gstAmt,
+      total: s.total + g.total,
+    }),
+    { qty: 0, taxable: 0, gstAmt: 0, total: 0 }
+  );
+  // HSN table columns: HSN | GST% | Qty | Taxable | CGST | SGST | IGST | Total
+  const HSN_COLS = ["17%", "10%", "9%", "15%", "11.5%", "11.5%", "11.5%", "14.5%"];
+
   const HEADER_LABELS = [
     "S.No",
     "Particulars",
@@ -906,6 +993,66 @@ export default function InvoiceDocument({
                       </View>
                     </View>
                   </View>
+
+                  {/* ⑤b HSN-WISE SUMMARY — half-width table below totals, right side */}
+                  {invoice.isGstBill && hsnGroups.length > 0 && (
+                    <View style={[S.divider, { flexDirection: "row" }]}>
+                      <View style={{ flex: 1 }} />
+                      <View style={{ width: "50%", borderLeftWidth: 1, borderLeftColor: "#000000" }}>
+                        <Text style={S.hsnTitle}>HSN-wise Tax Summary</Text>
+                        <View style={S.hsnHeaderRow}>
+                          {["HSN", "GST%", "Qty", "Taxable", "CGST", "SGST", "IGST", "Total"].map((h, i, arr) => (
+                            <View key={h} style={[{ width: HSN_COLS[i] }, S.hsnTh, i === arr.length - 1 ? { borderRightWidth: 0 } : {}]}>
+                              <Text style={{ textAlign: i === 0 ? "left" : i <= 2 ? "center" : "right" }}>{h}</Text>
+                            </View>
+                          ))}
+                        </View>
+                        {hsnGroups.map((g, gi) => {
+                          const cgst = invoice.isIgst ? 0 : g.gstAmt / 2;
+                          const sgst = invoice.isIgst ? 0 : g.gstAmt / 2;
+                          const igst = invoice.isIgst ? g.gstAmt : 0;
+                          const cells = [
+                            g.hsn,
+                            `${g.rate}%`,
+                            String(g.qty),
+                            fmt(g.taxable),
+                            fmt(cgst),
+                            fmt(sgst),
+                            fmt(igst),
+                            fmt(g.total),
+                          ];
+                          return (
+                            <View key={`${g.hsn}-${g.rate}-${gi}`} style={S.hsnRow}>
+                              {cells.map((c, i) => (
+                                <View
+                                  key={i}
+                                  style={[{ width: HSN_COLS[i] }, i === cells.length - 1 ? S.hsnTdLast : S.hsnTd]}
+                                >
+                                  <Text style={{ textAlign: i === 0 ? "left" : i <= 2 ? "center" : "right" }}>{c}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          );
+                        })}
+                        <View style={S.hsnTotalRow}>
+                          {[
+                            "Total",
+                            "",
+                            String(hsnTotals.qty),
+                            fmt(hsnTotals.taxable),
+                            fmt(invoice.isIgst ? 0 : hsnTotals.gstAmt / 2),
+                            fmt(invoice.isIgst ? 0 : hsnTotals.gstAmt / 2),
+                            fmt(invoice.isIgst ? hsnTotals.gstAmt : 0),
+                            fmt(hsnTotals.total),
+                          ].map((c, i, arr) => (
+                            <View key={i} style={[{ width: HSN_COLS[i] }, S.hsnTh, i === arr.length - 1 ? { borderRightWidth: 0 } : {}]}>
+                              <Text style={{ textAlign: i === 0 ? "left" : i <= 2 ? "center" : "right" }}>{c}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    </View>
+                  )}
 
                   <View style={S.spacer} />
 

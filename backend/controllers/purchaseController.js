@@ -5,6 +5,50 @@ const { parsePagination } = require("../utils/queryHelpers");
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const PAYMENT_METHODS = ["cheque", "gpay", "NEFT"];
+const PAYMENT_STATUSES = ["Pending", "Cleared", "Bounced"];
+
+// Validate + sanitize the multi-payment entries array.
+// Duplicates (same method twice) are explicitly allowed.
+const sanitizePayments = (payments) => {
+  if (payments === undefined) return undefined;
+  if (!Array.isArray(payments)) {
+    throw new AppError("payments must be an array", 400);
+  }
+  return payments.map((p, i) => {
+    if (!p || typeof p !== "object") {
+      throw new AppError(`payments[${i}] must be an object`, 400);
+    }
+    if (!PAYMENT_METHODS.includes(p.method)) {
+      throw new AppError(
+        `payments[${i}].method must be one of: ${PAYMENT_METHODS.join(", ")}`,
+        400,
+      );
+    }
+    const amount =
+      p.amount === "" || p.amount === null || p.amount === undefined
+        ? 0
+        : Number(p.amount);
+    if (isNaN(amount) || amount < 0) {
+      throw new AppError(`payments[${i}].amount must be a non-negative number`, 400);
+    }
+    const status = p.status || "Pending";
+    if (!PAYMENT_STATUSES.includes(status)) {
+      throw new AppError(
+        `payments[${i}].status must be one of: ${PAYMENT_STATUSES.join(", ")}`,
+        400,
+      );
+    }
+    return {
+      method: p.method,
+      details: (p.details || "").toString().trim(),
+      amount,
+      status,
+      passedDate: p.passedDate || null,
+    };
+  });
+};
+
 // @desc    Preview next purchase number
 // @route   GET /api/purchases/preview-number
 // @access  Public
@@ -82,14 +126,44 @@ exports.getMonthlyReport = asyncHandler(async (req, res, next) => {
     query.vendorId = vendorId;
   }
 
-  // Lean + aggregation for sums to avoid loading giant docs twice
+  // Lean + aggregation for sums to avoid loading giant docs twice.
+  // "Has payment = paid": purchases backed by a real payment (a payment
+  // entry with amount > 0 that isn't bounced; or, for docs with no payment
+  // entries at all, a legacy cheque amount) count as Cleared in the summary
+  // tiles regardless of stored status. Row-level status is untouched.
+  const hasRealPaymentCond = {
+    $or: [
+      {
+        $gt: [
+          {
+            $size: {
+              $filter: {
+                input: { $ifNull: ["$payments", []] },
+                as: "p",
+                cond: { $and: [{ $gt: ["$$p.amount", 0] }, { $ne: ["$$p.status", "Bounced"] }] },
+              },
+            },
+          },
+          0,
+        ],
+      },
+      {
+        $and: [
+          { $eq: [{ $size: { $ifNull: ["$payments", []] } }, 0] },
+          { $gt: [{ $ifNull: ["$chequeAmount", 0] }, 0] },
+          { $ne: ["$chequeStatus", "Bounced"] },
+        ],
+      },
+    ],
+  };
   const [purchases, sums] = await Promise.all([
     Purchase.find(query).populate("vendorId", "name phone gstNumber address bankDetails").sort({ date: 1, createdAt: 1 }).lean(),
     Purchase.aggregate([
       { $match: query },
+      { $addFields: { _effectiveStatus: { $cond: [hasRealPaymentCond, "Cleared", "$chequeStatus"] } } },
       {
         $group: {
-          _id: "$chequeStatus",
+          _id: "$_effectiveStatus",
           count: { $sum: 1 },
           amount: { $sum: "$amount" },
         },
@@ -107,6 +181,7 @@ exports.getMonthlyReport = asyncHandler(async (req, res, next) => {
     date: p.date,
     vendor: p.vendorId?.name || null,
     amount: p.amount,
+    payments: p.payments || [],
     chequeDetails: p.chequeDetails,
     chequeAmount: p.chequeAmount,
     chequeStatus: p.chequeStatus,
@@ -158,6 +233,26 @@ exports.getAllPurchases = asyncHandler(async (req, res, next) => {
   if (chequeStatus) {
     const allowed = ["Pending", "Cleared", "Bounced"];
     if (allowed.includes(chequeStatus)) query.chequeStatus = chequeStatus;
+    if (chequeStatus === "Pending") {
+      // "Has payment = paid": dues = Pending status AND no real payment behind
+      // it — i.e. no payment entry with amount > 0 (bounced entries don't
+      // count), and for docs with no payment entries at all, no legacy
+      // cheque amount. Zero-amount placeholder entries don't count, so
+      // purchases recorded without payment details stay due as before.
+      query.$and = (query.$and || []).concat([
+        {
+          $nor: [
+            { payments: { $elemMatch: { amount: { $gt: 0 }, status: { $ne: "Bounced" } } } },
+            {
+              $and: [
+                { $or: [{ payments: { $exists: false } }, { payments: { $size: 0 } }] },
+                { chequeAmount: { $gt: 0 } },
+              ],
+            },
+          ],
+        },
+      ]);
+    }
   }
   if (vendorId) {
     const mongoose = require("mongoose");
@@ -179,6 +274,8 @@ exports.getAllPurchases = asyncHandler(async (req, res, next) => {
     query.$or = [
       { invoiceNumber: { $regex: safe, $options: "i" } },
       { purchaseNumber: { $regex: safe, $options: "i" } },
+      { chequeDetails: { $regex: safe, $options: "i" } },
+      { "payments.details": { $regex: safe, $options: "i" } },
     ];
   }
 
@@ -215,6 +312,7 @@ exports.createPurchase = asyncHandler(async (req, res, next) => {
     vendorId,
     date,
     amount,
+    payments,
     chequeDetails,
     chequeAmount,
     chequeStatus,
@@ -241,12 +339,21 @@ exports.createPurchase = asyncHandler(async (req, res, next) => {
 
   const purchaseNumber = await Purchase.generatePurchaseNumber();
 
+  let sanitizedPayments = [];
+  try {
+    const parsed = sanitizePayments(payments ?? []);
+    if (parsed !== undefined) sanitizedPayments = parsed;
+  } catch (e) {
+    return next(e);
+  }
+
   const purchase = await Purchase.create({
     purchaseNumber,
     invoiceNumber: invoiceNumber.trim(),
     vendorId: vendorId || null,
     date: date || Date.now(),
     amount: parsedAmount,
+    payments: sanitizedPayments,
     chequeDetails: chequeDetails || "",
     chequeAmount:
       chequeAmount !== undefined && chequeAmount !== null && chequeAmount !== ""
@@ -307,6 +414,13 @@ exports.updatePurchase = asyncHandler(async (req, res, next) => {
   }
   if (req.body.chequeStatus !== undefined) update.chequeStatus = req.body.chequeStatus;
   if (req.body.passedDate !== undefined) update.passedDate = req.body.passedDate || null;
+  if (req.body.payments !== undefined) {
+    try {
+      update.payments = sanitizePayments(req.body.payments);
+    } catch (e) {
+      return next(e);
+    }
+  }
 
   purchase = await Purchase.findByIdAndUpdate(req.params.id, update, {
     new: true,

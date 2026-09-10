@@ -39,6 +39,11 @@ const productSchema = new mongoose.Schema(
       min: [0, "Stock quantity cannot be negative"],
       default: 0,
     },
+    lowStockThreshold: {
+      type: Number,
+      default: 10,
+      min: [0, "Low stock threshold cannot be negative"],
+    },
     serialNo: {
       type: Number,
       unique: true,
@@ -55,9 +60,12 @@ productSchema.virtual("inStock").get(function () {
   return this.stockQuantity > 0;
 });
 
-// Virtual to check if stock is low (less than 10)
+// Virtual to check if stock is low (at or below per-product threshold, default 10)
 productSchema.virtual("lowStock").get(function () {
-  return this.stockQuantity > 0 && this.stockQuantity < 10;
+  const threshold = Number.isFinite(this.lowStockThreshold)
+    ? this.lowStockThreshold
+    : 10;
+  return this.stockQuantity > 0 && this.stockQuantity <= threshold;
 });
 
 // Method to decrease stock
@@ -119,6 +127,7 @@ productSchema.statics.syncCounterAfterDelete = async function () {
 // Indexes for 3k products: search + low-stock alerts + serial ordering
 // name already has unique index via `unique:true` above — don't duplicate
 productSchema.index({ name: "text", description: "text" });
+productSchema.index({ partNo: 1 });
 productSchema.index({ stockQuantity: 1 });
 productSchema.index({ createdAt: -1 });
 productSchema.index({ price: 1 });

@@ -22,12 +22,12 @@ export default function NewProductPage() {
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     name: "",
-    description: "",
     hsnCode: "",
     partNo: "",
     gst: "18",
     price: "",
     stockQuantity: "",
+    lowStockThreshold: "10",
   });
 
   const handleChange = (e) => {
@@ -45,6 +45,8 @@ export default function NewProductPage() {
       price: parseFloat(formData.price),
       gst: parseFloat(formData.gst),
       stockQuantity: parseInt(formData.stockQuantity),
+      lowStockThreshold:
+        formData.lowStockThreshold === "" ? 10 : parseInt(formData.lowStockThreshold),
     };
 
     try {
@@ -127,21 +129,6 @@ export default function NewProductPage() {
                 required
               />
 
-              {/* Description */}
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <textarea
-                  name="description"
-                  rows={3}
-                  value={formData.description}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900"
-                  placeholder="Enter product description"
-                />
-              </div>
-
               {/* HSN Code */}
               <Input
                 label="HSN Code"
@@ -183,6 +170,20 @@ export default function NewProductPage() {
                 placeholder="0"
                 required
               />
+
+              {/* Custom low-stock alert threshold */}
+              <NumberInput
+                label="Low Stock Alert At"
+                name="lowStockThreshold"
+                min="0"
+                value={formData.lowStockThreshold}
+                onChange={handleChange}
+                placeholder="10"
+                required
+              />
+              <p className="sm:col-span-2 -mt-4 text-xs text-gray-500">
+                Warning shows when stock reaches this number (e.g. 10 warns at 10 or below).
+              </p>
             </div>
 
             {/* Action Buttons */}

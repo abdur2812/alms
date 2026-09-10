@@ -219,6 +219,44 @@ export default function HsnReportPDF({ data, range }) {
             </View>
           </View>
 
+          {/* IGST-only summary (IGST invoices in this period) */}
+          <View style={S.summarySection}>
+            <Text style={S.summaryTitle}>IGST Summary (IGST invoices only)</Text>
+            {(() => {
+              const igst = data?.igst || { total: 0, totalBase: 0, totalGst: 0, totalValue: 0, count: 0, rows: [] };
+              const igstRows = igst.rows || [];
+              if (igstRows.length === 0) {
+                return <Text style={[S.summaryLabel, { textAlign: "center", paddingVertical: 4 }]}>No IGST invoice present.</Text>;
+              }
+              return (
+                <View>
+                  <View style={S.summaryRow}>
+                    <Text style={S.summaryLabel}>IGST Quantity</Text>
+                    <Text style={S.summaryValue}>{fmtInt(igst.total)}</Text>
+                  </View>
+                  <View style={S.summaryRow}>
+                    <Text style={S.summaryLabel}>IGST Taxable (Base)</Text>
+                    <Text style={S.summaryValue}>Rs. {fmt(igst.totalBase)}</Text>
+                  </View>
+                  <View style={S.summaryRow}>
+                    <Text style={S.summaryLabel}>IGST Amount</Text>
+                    <Text style={S.summaryValue}>Rs. {fmt(igst.totalGst)}</Text>
+                  </View>
+                  <View style={S.summaryRow}>
+                    <Text style={S.summaryLabel}>IGST Total (Incl. GST)</Text>
+                    <Text style={S.summaryValue}>Rs. {fmt(igst.totalValue)}</Text>
+                  </View>
+                  {igstRows.map((r, i) => (
+                    <View key={r.hsnCode || i} style={[S.summaryRow, { marginTop: 1 }]}>
+                      <Text style={S.summaryLabel}>{r.hsnCode} • Qty {fmtInt(r.quantity)}</Text>
+                      <Text style={S.summaryValue}>Rs. {fmt(r.totalGst ?? 0)} / Rs. {fmt(r.totalPrice ?? 0)}</Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
+          </View>
+
           <View style={S.tableHeader}>
             <Text style={[S.th, { width: 30, textAlign: "center" }]}>S.No</Text>
             <Text style={[S.th, { flex: 1, textAlign: "left" }]}>HSN Code</Text>

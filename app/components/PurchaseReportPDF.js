@@ -264,15 +264,43 @@ function PurchaseRow({ purchase, idx }) {
         year: "2-digit",
       })
     : "-";
+  // Prefer multi-payment entries; fall back to legacy single fields
+  const pays = Array.isArray(purchase.payments) && purchase.payments.length
+    ? purchase.payments
+    : purchase.chequeDetails || purchase.chequeAmount
+      ? [{
+          method: "cheque",
+          details: purchase.chequeDetails,
+          amount: purchase.chequeAmount,
+          status: purchase.chequeStatus,
+          passedDate: purchase.passedDate,
+        }]
+      : [];
+  const payDetails = pays.length
+    ? pays.map((p) => `${p.method}: ${p.details || "-"}`).join(" | ")
+    : "-";
+  const payAmount = pays.length
+    ? pays.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    : purchase.chequeAmount != null ? purchase.chequeAmount : "-";
+  const payStatus = pays.length
+    ? [...new Set(pays.map((p) => p.status || "-"))].join("/")
+    : purchase.chequeStatus || "-";
+  const payPassed = pays.length === 1
+    ? (pays[0].passedDate
+        ? new Date(pays[0].passedDate).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "2-digit" })
+        : passed)
+    : pays.length > 1
+      ? `${pays.length} entries`
+      : passed;
   const cells = [
     [String(idx + 1), "center"],
     [date, "center"],
     [purchase.invoiceNumber || "-", "center"],
     [fmt(purchase.amount), "right"],
-    [purchase.chequeDetails || "-", "left"],
-    [purchase.chequeAmount != null ? fmt(purchase.chequeAmount) : "-", "right"],
-    [purchase.chequeStatus || "-", "center"],
-    [passed, "center"],
+    [payDetails || "-", "left"],
+    [typeof payAmount === "number" ? fmt(payAmount) : payAmount, "right"],
+    [payStatus || "-", "center"],
+    [payPassed, "center"],
   ];
   return (
     <View style={idx % 2 === 1 ? S.tableRowAlt : S.tableRow}>
@@ -324,7 +352,7 @@ export default function PurchaseReportDocument({ report }) {
 
   const rowChunks = chunkRows(rows, 20);
 
-  const HEADER_LABELS = ["S.No", "Date", "Invoice No", "Amount", "Cheque Details", "Cheque Amt", "Status", "Passed Date"];
+  const HEADER_LABELS = ["S.No", "Date", "Invoice No", "Amount", "Payment Details", "Pay Amt", "Status", "Passed Date"];
   const HEADER_ALIGNS = ["center", "center", "center", "right", "left", "right", "center", "center"];
 
   return (

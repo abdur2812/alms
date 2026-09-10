@@ -665,7 +665,7 @@ export default function DashboardPage() {
                 </h2>
               </div>
               <Link
-                href="/dashboard/products"
+                href="/dashboard/products?lowStock=true"
                 className="text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center"
               >
                 View all
@@ -704,6 +704,9 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
                         {product.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Alert at {product.lowStockThreshold ?? 10}
                       </p>
                     </div>
                     <div className="ml-4 flex-shrink-0">

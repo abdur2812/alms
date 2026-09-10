@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import Link from "next/link";
-import { FiPlus, FiEdit, FiTrash2, FiEye, FiSearch, FiShoppingBag, FiTruck, FiEdit2, FiX, FiCheck, FiFileText } from "react-icons/fi";
+import { FiPlus, FiEdit, FiTrash2, FiEye, FiSearch, FiShoppingBag, FiTruck, FiEdit2, FiX, FiCheck, FiFileText, FiChevronDown } from "react-icons/fi";
 import { PageHeader, Card, Button, Badge, LoadingSpinner, EmptyState } from "@/components/UI";
 import { purchasesAPI, vendorsAPI } from "@/lib/api";
 
@@ -144,8 +144,28 @@ export default function PurchasesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [vendorSearch, setVendorSearch] = useState("");
   const [deletingPurchaseId, setDeletingPurchaseId] = useState(null);
+  const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
   const PURCHASES_PER_PAGE = 5;
   const [purchasePage, setPurchasePage] = useState(1);
+
+  // Normalise payments: prefer multi-entry array, fall back to legacy single fields
+  const getPayments = (p) => {
+    if (Array.isArray(p.payments) && p.payments.length) return p.payments;
+    if (p.chequeDetails || p.chequeAmount) {
+      return [
+        {
+          method: "cheque",
+          details: p.chequeDetails || "",
+          amount: p.chequeAmount || 0,
+          status: p.chequeStatus || "Pending",
+          passedDate: p.passedDate || null,
+        },
+      ];
+    }
+    return [];
+  };
+  const paymentsTotal = (p) =>
+    getPayments(p).reduce((s, pay) => s + (Number(pay.amount) || 0), 0);
 
   const loadPurchases = async () => {
     try {
@@ -225,11 +245,21 @@ export default function PurchasesPage() {
   };
 
   const filteredPurchases = useMemo(() => {
-    const filtered = purchases.filter(
-      (p) =>
-        (p.purchaseNumber || "")?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
+    const q = searchTerm.toLowerCase();
+    const filtered = purchases.filter((p) => {
+      const pays = Array.isArray(p.payments) ? p.payments : [];
+      return (
+        (p.purchaseNumber || "")?.toLowerCase().includes(q) ||
+        p.invoiceNumber?.toLowerCase().includes(q) ||
+        (p.vendorId?.name || "").toLowerCase().includes(q) ||
+        (p.chequeDetails || "").toLowerCase().includes(q) ||
+        pays.some(
+          (pay) =>
+            (pay.details || "").toLowerCase().includes(q) ||
+            (pay.method || "").toLowerCase().includes(q),
+        )
+      );
+    });
     // Sort descending like purchaseNo (PUR-0005 before PUR-0004)
     filtered.sort((a, b) => {
       const numA = parseInt((a.purchaseNumber || "").replace(/\D/g, ""), 10) || 0;
@@ -274,8 +304,42 @@ export default function PurchasesPage() {
   const vendorName = (p) =>
     p.vendorId?.name || "—";
 
+  const payMethodStyle = (method) => {
+    const m = String(method || "").toLowerCase();
+    if (m === "cheque")
+      return {
+        pill: "bg-blue-50 text-blue-700 border-blue-200",
+        dot: "bg-blue-500",
+        card: "from-blue-500 to-sky-500",
+      };
+    if (m === "gpay")
+      return {
+        pill: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        dot: "bg-emerald-500",
+        card: "from-emerald-500 to-teal-500",
+      };
+    // NEFT + anything else
+    return {
+      pill: "bg-violet-50 text-violet-700 border-violet-200",
+      dot: "bg-violet-500",
+      card: "from-violet-500 to-purple-500",
+    };
+  };
+
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+      <style>{`
+        @keyframes payDropIn {
+          from { opacity: 0; transform: translateY(-10px) scaleY(0.96); transform-origin: top; }
+          to { opacity: 1; transform: translateY(0) scaleY(1); transform-origin: top; }
+        }
+        @keyframes payItemIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .pay-drop-panel { animation: payDropIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; transform-origin: top; }
+        .pay-drop-item { animation: payItemIn 0.3s ease-out both; }
+      `}</style>
       <PageHeader
         title="Purchases"
         subtitle="Purchase invoices and vendor management"
@@ -327,7 +391,7 @@ export default function PurchasesPage() {
             <div className="px-6 py-4">
               <div className="relative">
                 <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-10 pr-3 py-3 border-2 border-gray-100 rounded-xl bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Search by purchase or vendor invoice number..." />
+                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-10 pr-3 py-3 border-2 border-gray-100 rounded-xl bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Search by purchase, vendor invoice, vendor, or payment details/method..." />
               </div>
             </div>
           </Card>
@@ -358,10 +422,7 @@ export default function PurchasesPage() {
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Vendor Invoice No.</th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Vendor</th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Amount</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cheque Details</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cheque Amount</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Cheque Status</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Passed Date</th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Payments</th>
                         <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
@@ -369,7 +430,10 @@ export default function PurchasesPage() {
                       {paginatedPurchases.map((purchase, index) => {
                         const globalIndex = (purchasePage - 1) * PURCHASES_PER_PAGE + index;
                         const sNo = filteredPurchases.length - globalIndex;
+                        const pays = getPayments(purchase);
+                        const isExpanded = expandedPurchaseId === purchase._id;
                         return (
+                          <Fragment key={purchase._id}>
                           <tr key={purchase._id} className="hover:bg-indigo-50/30 transition-colors duration-150">
                             <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-500 font-medium">{sNo}</div></td>
                             <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-600 font-medium">{new Date(purchase.date).toLocaleDateString()}</div></td>
@@ -381,10 +445,45 @@ export default function PurchasesPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-600 font-medium">{vendorName(purchase)}</div></td>
                         <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-bold text-gray-900">{formatINR(purchase.amount)}</div></td>
-                        <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-600 font-medium max-w-[140px] truncate">{purchase.chequeDetails || "—"}</div></td>
-                        <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-bold text-gray-900">{formatINR(purchase.chequeAmount)}</div></td>
-                        <td className="px-6 py-4 whitespace-nowrap">{chequeStatusBadge(purchase.chequeStatus)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-600 font-medium">{purchase.passedDate ? new Date(purchase.passedDate).toLocaleDateString() : "—"}</div></td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {pays.length === 0 ? (
+                            <span className="text-sm text-gray-400">—</span>
+                          ) : (
+                            <button
+                              onClick={() => setExpandedPurchaseId(isExpanded ? null : purchase._id)}
+                              aria-expanded={isExpanded}
+                              title="Click to see full payment details"
+                              className={`group inline-flex items-center gap-2.5 rounded-2xl border px-3 py-2 text-left shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-1 ${
+                                isExpanded
+                                  ? "border-indigo-300 bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-200"
+                                  : "border-indigo-200 bg-gradient-to-r from-indigo-50/80 to-violet-50/80 hover:border-indigo-300 hover:from-indigo-50 hover:to-violet-100"
+                              }`}
+                            >
+                              <span className={`flex -space-x-1.5`}>
+                                {pays.slice(0, 3).map((pay, pi) => (
+                                  <span
+                                    key={pi}
+                                    className={`h-2.5 w-2.5 rounded-full ring-2 ${isExpanded ? "ring-white/80" : "ring-white"} ${payMethodStyle(pay.method).dot}`}
+                                  />
+                                ))}
+                              </span>
+                              <span className="flex flex-col leading-tight">
+                                <span className={`text-[13px] font-extrabold tabular-nums ${isExpanded ? "text-white" : "text-gray-900"}`}>
+                                  {formatINR(paymentsTotal(purchase))}
+                                </span>
+                                <span className={`flex items-center gap-1.5 text-[11px] font-semibold ${isExpanded ? "text-indigo-100" : "text-gray-500"}`}>
+                                  {pays.length} payment{pays.length === 1 ? "" : "s"}
+                                  <span className={`hidden sm:inline-flex items-center gap-1 ${isExpanded ? "text-indigo-100" : "text-gray-400"}`}>
+                                    • {[...new Set(pays.map((p) => String(p.method || "").toLowerCase()))].slice(0, 3).join(" · ")}
+                                  </span>
+                                </span>
+                              </span>
+                              <span className={`ml-1 flex h-6 w-6 items-center justify-center rounded-full transition-colors ${isExpanded ? "bg-white/20 text-white" : "bg-white text-indigo-600 border border-indigo-100 shadow-sm group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600"}`}>
+                                <FiChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                              </span>
+                            </button>
+                          )}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                           <div className="flex justify-end space-x-2">
                             <Link href={`/dashboard/purchases/${purchase._id}/view`} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg" title="View"><FiEye className="h-4 w-4" /></Link>
@@ -400,6 +499,57 @@ export default function PurchasesPage() {
                           </div>
                         </td>
                       </tr>
+                      {isExpanded && pays.length > 0 && (
+                        <tr key={`${purchase._id}-details`} className="bg-gradient-to-r from-indigo-50/60 via-violet-50/40 to-transparent">
+                          <td colSpan={8} className="px-6 pb-5 pt-1">
+                            <div className="pay-drop-panel overflow-hidden rounded-2xl border border-indigo-200/70 bg-white shadow-xl shadow-indigo-100/60">
+                              <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5">
+                                <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-widest text-white">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                                  Payments • {purchase.purchaseNumber}
+                                </div>
+                                <div className="rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-extrabold text-white tabular-nums">
+                                  Total {formatINR(paymentsTotal(purchase))}
+                                </div>
+                              </div>
+                              <table className="min-w-full divide-y divide-gray-100">
+                                <thead className="bg-gray-50/80">
+                                  <tr>
+                                    <th className="px-4 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">#</th>
+                                    <th className="px-4 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">Method</th>
+                                    <th className="px-4 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">Details</th>
+                                    <th className="px-4 py-2.5 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">Price</th>
+                                    <th className="px-4 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th className="px-4 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">Passed Date</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                  {pays.map((pay, pi) => (
+                                    <tr key={pi} className="pay-drop-item hover:bg-indigo-50/50 transition-colors" style={{ animationDelay: `${pi * 60}ms` }}>
+                                      <td className="px-4 py-2.5">
+                                        <span className={`inline-flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br text-[11px] font-extrabold text-white shadow-sm ${payMethodStyle(pay.method).card}`}>
+                                          {pi + 1}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2.5">
+                                        <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-1 rounded-full border ${payMethodStyle(pay.method).pill}`}>
+                                          <span className={`h-1.5 w-1.5 rounded-full ${payMethodStyle(pay.method).dot}`} />
+                                          {pay.method}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2.5 text-sm font-medium text-gray-700 max-w-[220px] truncate" title={pay.details || ""}>{pay.details || "—"}</td>
+                                      <td className="px-4 py-2.5 text-sm font-extrabold text-gray-900 text-right tabular-nums whitespace-nowrap">{formatINR(pay.amount || 0)}</td>
+                                      <td className="px-4 py-2.5">{chequeStatusBadge(pay.status || "Pending")}</td>
+                                      <td className="px-4 py-2.5 text-sm text-gray-600 whitespace-nowrap">{pay.passedDate ? new Date(pay.passedDate).toLocaleDateString() : "—"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                          </Fragment>
                         );
                       })}
                   </tbody>

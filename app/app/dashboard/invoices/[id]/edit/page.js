@@ -115,6 +115,7 @@ export default function FullEditInvoicePage({ params }) {
           unitPrice: item.unitPrice,
           gst: item.gst,
           hsnCode: item.hsnCode || "",
+          partNo: item.partNo || item.productId?.partNo || "",
         })),
         isGstBill: invoice.isGstBill !== undefined ? invoice.isGstBill : true,
         isIgst: invoice.isIgst || false,
@@ -151,10 +152,11 @@ export default function FullEditInvoicePage({ params }) {
     const response = await productsAPI.getAll({
       limit: 50,
       search: searchTerm,
+      includePartNo: true,
     });
     return response.data.data.map((product) => ({
       value: product._id,
-      label: `${product.name} (${formatINR(product.price)})`,
+      label: `${product.name}${product.partNo ? ` [${product.partNo}]` : ""} (${formatINR(product.price)})`,
     }));
   };
 
@@ -196,6 +198,7 @@ export default function FullEditInvoicePage({ params }) {
         newItems[index].unitPrice = product.price;
         newItems[index].gst = product.gst;
         newItems[index].hsnCode = product.hsnCode || "";
+        newItems[index].partNo = product.partNo || "";
       } catch (err) {
         console.error("Failed to fetch product details", err);
       }
@@ -216,6 +219,7 @@ export default function FullEditInvoicePage({ params }) {
           unitPrice: 0,
           gst: 0,
           hsnCode: "",
+          partNo: "",
         },
       ],
     });
@@ -275,8 +279,8 @@ export default function FullEditInvoicePage({ params }) {
     setError("");
 
     try {
-      // Validate
-      if (!formData.customerData.name) {
+      // Validate (customer required for GST bills, optional for estimates)
+      if (!formData.customerData.name && formData.isGstBill) {
         setError("Customer name is required");
         setSaving(false);
         return;
@@ -318,6 +322,7 @@ export default function FullEditInvoicePage({ params }) {
           unitPrice: parseFloat(item.unitPrice),
           gst: parseFloat(item.gst),
           hsnCode: item.hsnCode,
+          partNo: item.partNo || "",
         })),
         isGstBill: formData.isGstBill,
         isIgst: formData.isIgst,
@@ -392,7 +397,7 @@ export default function FullEditInvoicePage({ params }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-indigo-500/80 uppercase tracking-widest mb-1.5">
-                      Customer Name *
+                      Customer Name {formData.isGstBill ? "*" : "(optional for estimate)"}
                     </label>
                     <input
                       type="text"
@@ -400,7 +405,7 @@ export default function FullEditInvoicePage({ params }) {
                       value={formData.customerData.name}
                       onChange={handleCustomerDataChange}
                       placeholder="Enter customer name"
-                      required
+                      required={formData.isGstBill}
                       className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 bg-gray-50/50 text-gray-900 placeholder-gray-400 transition-all duration-200"
                     />
                   </div>
@@ -537,10 +542,10 @@ export default function FullEditInvoicePage({ params }) {
                                 e.target.value,
                               )
                             }
-                            placeholder="Select product"
+                            placeholder="Select product (name or part no)"
                             options={products.map((p) => ({
                               value: p._id,
-                              label: `${p.name} (${formatINR(p.price)})`,
+                              label: `${p.name}${p.partNo ? ` [${p.partNo}]` : ""} (${formatINR(p.price)})`,
                             }))}
                             onSearch={searchProducts}
                           />

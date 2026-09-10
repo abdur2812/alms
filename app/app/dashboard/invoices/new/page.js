@@ -268,10 +268,11 @@ export default function NewInvoicePage() {
     const response = await productsAPI.getAll({
       limit: 50,
       search: searchTerm,
+      includePartNo: true,
     });
     return response.data.data.map((product) => ({
       value: product._id,
-      label: `${product.name} (${formatINR(product.price)})`,
+      label: `${product.name}${product.partNo ? ` [${product.partNo}]` : ""} (${formatINR(product.price)})`,
     }));
   };
 
@@ -637,8 +638,8 @@ export default function NewInvoicePage() {
     setError("");
 
     try {
-      // Validate
-      if (!customerDetails.name) {
+      // Validate (customer required for GST bills, optional for estimates)
+      if (!customerDetails.name && formData.isGstBill) {
         throw new Error("Please enter customer name");
       }
 
@@ -767,7 +768,7 @@ export default function NewInvoicePage() {
                 <div className="relative">
                   <div className="relative">
                     <label className="block text-xs font-bold text-indigo-500/80 uppercase tracking-widest mb-1.5">
-                      Customer Name *
+                      Customer Name {formData.isGstBill ? "*" : "(optional for estimate)"}
                     </label>
                     <input
                       type="text"
@@ -784,7 +785,7 @@ export default function NewInvoicePage() {
                       }
                       placeholder="Search or enter customer name..."
                       autoComplete="off"
-                      required
+                      required={formData.isGstBill}
                       className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 bg-gray-50/50 text-gray-900 placeholder-gray-400 transition-all duration-200"
                     />
                     {/* Inline preview removed to avoid visual misalignment */}
@@ -1059,7 +1060,7 @@ export default function NewInvoicePage() {
                           onBlur={() =>
                             setTimeout(() => setShowProductDropdown(false), 150)
                           }
-                          placeholder="Search or enter product name..."
+                          placeholder="Search by name or part no, or enter product name..."
                           autoComplete="off"
                           className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 bg-white text-gray-900 placeholder-gray-400 transition-all duration-200"
                         />
