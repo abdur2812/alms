@@ -277,6 +277,20 @@ exports.getAllPurchases = asyncHandler(async (req, res, next) => {
       { chequeDetails: { $regex: safe, $options: "i" } },
       { "payments.details": { $regex: safe, $options: "i" } },
     ];
+    // Vendor-name search: resolve matching vendor ids first (small lookup),
+    // so the paginated purchase query stays indexed and bounded.
+    try {
+      const Vendor = require("../models/Vendor");
+      const matchingVendors = await Vendor.find({ name: { $regex: safe, $options: "i" } })
+        .select("_id")
+        .limit(20)
+        .lean();
+      if (matchingVendors.length) {
+        query.$or.push({ vendorId: { $in: matchingVendors.map((v) => v._id) } });
+      }
+    } catch (e) {
+      // Non-fatal: purchase field search still applies.
+    }
   }
 
   const [purchases, total] = await Promise.all([

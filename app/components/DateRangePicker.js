@@ -113,6 +113,7 @@ export default function DateRangePicker({
   endDate,
   onChange,
   presetOptions = true,
+  compact = false,
 }) {
   const [open, setOpen] = useState(false);
   const base = endDate || startDate || new Date();
@@ -203,37 +204,43 @@ export default function DateRangePicker({
 
   const label =
     draftStart && draftEnd
-      ? `${toInputValue(draftStart)} → ${toInputValue(draftEnd)}`
+      ? compact
+        ? `${draftStart.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} → ${draftEnd.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+        : `${toInputValue(draftStart)} → ${toInputValue(draftEnd)}`
       : draftStart
       ? `${toInputValue(draftStart)} → …`
       : "Select date range";
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className={`relative ${compact ? "w-full" : ""}`} ref={containerRef}>
       <button
         type="button"
         onClick={toggleOpen}
-        className="w-full flex items-center justify-between px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-sm font-medium text-gray-900 hover:border-indigo-400 hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        className={
+          compact
+            ? "w-full flex items-center justify-between gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-900 hover:border-indigo-400 hover:shadow transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            : "w-full flex items-center justify-between px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-sm font-medium text-gray-900 hover:border-indigo-400 hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        }
       >
-        <span className="flex items-center">
-          <FiCalendar className="mr-2 h-5 w-5 text-indigo-500" />
-          <span className={draftStart ? "text-gray-900" : "text-gray-500"}>
+        <span className="flex items-center min-w-0">
+          <FiCalendar className={compact ? "mr-1.5 h-3.5 w-3.5 shrink-0 text-indigo-500" : "mr-2 h-5 w-5 text-indigo-500"} />
+          <span className={`${draftStart ? "text-gray-900" : "text-gray-500"} truncate`}>
             {label}
           </span>
         </span>
-        {draftStart && (
+        {draftStart ? (
           <FiX
-            className="h-4 w-4 text-gray-400 hover:text-red-500 transition-colors"
+            className="h-3.5 w-3.5 shrink-0 text-gray-400 hover:text-red-500 transition-colors"
             onClick={(e) => {
               e.stopPropagation();
               clear();
             }}
           />
-        )}
+        ) : null}
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-3 w-full max-w-xl bg-white border-2 border-indigo-200 rounded-2xl shadow-2xl p-5 animate-in fade-in zoom-in duration-200">
+        <div className={compact ? "absolute right-0 z-50 mt-2 w-[520px] max-w-[90vw] bg-white border-2 border-indigo-200 rounded-2xl shadow-2xl p-5 animate-in fade-in zoom-in duration-200" : "absolute z-50 mt-3 w-full max-w-xl bg-white border-2 border-indigo-200 rounded-2xl shadow-2xl p-5 animate-in fade-in zoom-in duration-200"}>
           {presetOptions && (
             <div className="flex flex-wrap gap-2 mb-4">
               {[

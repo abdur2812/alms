@@ -45,7 +45,7 @@ export default function PurchaseReportPage() {
 
   const [vendorId, setVendorId] = useState(initialVendorId);
   const [vendors, setVendors] = useState([]);
-  const [vendorsLoading, setVendorsLoading] = useState(true);
+  const [vendorsLoading, setVendorsLoading] = useState(false);
   const [vendorDetails, setVendorDetails] = useState(null);
   const [month, setMonth] = useState(currentMonth());
   const [startDate, setStartDate] = useState("");
@@ -57,12 +57,14 @@ export default function PurchaseReportPage() {
   const [hasGenerated, setHasGenerated] = useState(false);
   const pdfRef = useRef(null);
 
-  // Load vendors for dropdown
+  // Vendor options for the dropdown: small background preload (non-blocking)
+  // + server search on demand + getById for the deep-linked vendor.
+  // Previously preloaded 500 vendors on mount.
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await vendorsAPI.getAll({ limit: 500 });
+        const res = await vendorsAPI.getAll({ limit: 20 });
         if (!cancelled) setVendors(res.data.data || []);
       } catch (e) {
         // ignore
@@ -204,7 +206,7 @@ export default function PurchaseReportPage() {
   };
 
   const searchVendors = async (searchTerm) => {
-    const response = await vendorsAPI.getAll({ limit: 50, search: searchTerm });
+    const response = await vendorsAPI.getAll({ limit: 20, search: searchTerm });
     const results = response.data.data.map((v) => ({
       value: v._id,
       label: `${v.name}${v.gstNumber ? ` • ${v.gstNumber}` : ""}`,

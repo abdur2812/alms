@@ -270,7 +270,8 @@ exports.createInvoice = asyncHandler(async (req, res, next) => {
   }
 
   // Bulk decrement stock: aggregate quantities per productId (O(n) hash)
-  if (billType === "pay" || billType === "credit") {
+  // Estimates never touch stock — only GST bills deduct.
+  if (resolvedIsGstBill && (billType === "pay" || billType === "credit")) {
     const qtyById = new Map();
     for (const it of validatedItems) {
       if (!it.productId) continue;
@@ -351,6 +352,26 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
     invoice.invoiceNumber = await Invoice.generateInvoiceNumber();
     invoice.numberAssignedAt = new Date();
     invoice.pendingInvoiceNumber = null;
+    // Converting an estimate into a GST bill is a real sale — deduct stock now.
+    const qtyById = new Map();
+    for (const it of invoice.items) {
+      if (!it.productId) continue;
+      const k = String(it.productId);
+      qtyById.set(k, (qtyById.get(k) || 0) + Number(it.quantity));
+    }
+    if (qtyById.size) {
+      const bulkOps = [];
+      for (const [id, qty] of qtyById) {
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: id },
+            update: { $inc: { stockQuantity: -qty } },
+          },
+        });
+      }
+      await Product.bulkWrite(bulkOps, { ordered: false });
+      await Product.updateMany({ _id: { $in: [...qtyById.keys()] }, stockQuantity: { $lt: 0 } }, { $set: { stockQuantity: 0 } });
+    }
   }
 
   await invoice.save();

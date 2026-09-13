@@ -192,9 +192,12 @@ export default function NewInvoicePage() {
     }
   };
 
+  // Small recent-item preloads for empty-state suggestions only (server search
+  // handles typing). Never preload 1000 docs — backend clamps to 50 anyway and
+  // client-side filtering over a truncated list hides most records.
   const fetchCustomers = async () => {
     try {
-      const response = await customersAPI.getAll({ limit: 1000 });
+      const response = await customersAPI.getAll({ limit: 10 });
       setCustomers(response.data.data);
     } catch (err) {
       console.error("Failed to fetch customers", err);
@@ -203,7 +206,7 @@ export default function NewInvoicePage() {
 
   const fetchProducts = async () => {
     try {
-      const response = await productsAPI.getPopular({ limit: 1000 });
+      const response = await productsAPI.getPopular({ limit: 10 });
       setProducts(response.data.data);
     } catch (err) {
       console.error("Failed to fetch products", err);
@@ -212,7 +215,7 @@ export default function NewInvoicePage() {
 
   const searchCustomers = async (searchTerm) => {
     const response = await customersAPI.getAll({
-      limit: 50,
+      limit: 20,
       search: searchTerm,
     });
     return response.data.data.map((customer) => {
@@ -266,7 +269,7 @@ export default function NewInvoicePage() {
 
   const searchProducts = async (searchTerm) => {
     const response = await productsAPI.getAll({
-      limit: 50,
+      limit: 20,
       search: searchTerm,
       includePartNo: true,
     });
@@ -657,7 +660,8 @@ export default function NewInvoicePage() {
       }
 
       let invoiceData = {
-        billType: formData.billType,
+        // Estimates are just estimates — no paid/credit.
+        billType: formData.isGstBill ? formData.billType : "pay",
         isGstBill: formData.isGstBill,
         isIgst: formData.isIgst,
         vehicleNumber: formData.vehicleNumber || "",
@@ -673,6 +677,7 @@ export default function NewInvoicePage() {
       };
 
       // Handle customer data - always use the editable customer details
+      // (estimates also keep full customer selection so it can be chosen)
       if (formData.customerId && selectedCustomer) {
         // Use existing customer ID but with updated details from form
         invoiceData.customerId = formData.customerId;
@@ -838,9 +843,14 @@ export default function NewInvoicePage() {
                       )}
                     </div>
                   </div>
+                  {selectedCustomer ? (
+                    <p className="mt-1.5 text-xs font-semibold text-green-700">
+                      Selected: {selectedCustomer.name}
+                    </p>
+                  ) : null}
                 </div>
 
-                {/* Phone + GST */}
+                {/* Phone + GST — always visible so customer can be chosen in estimates too */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-indigo-500/80 uppercase tracking-widest mb-1.5">
@@ -875,7 +885,7 @@ export default function NewInvoicePage() {
                   </div>
                 </div>
 
-                {/* Billing Address */}
+                {/* Billing Address — always visible */}
                 <div className="rounded-xl border border-blue-100 bg-blue-50/30 p-3.5 space-y-2.5">
                   <div className="text-xs font-bold text-blue-600 uppercase tracking-widest">
                     Billing Address
@@ -932,7 +942,7 @@ export default function NewInvoicePage() {
                   </div>
                 </div>
 
-                {/* Shipping Address */}
+                {/* Shipping Address — always visible */}
                 <div className="rounded-xl border border-violet-100 bg-violet-50/30 p-3.5 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div className="text-xs font-bold text-violet-600 uppercase tracking-widest">
@@ -1456,7 +1466,7 @@ export default function NewInvoicePage() {
                     <button
                       type="button"
                       onClick={() =>
-                        setFormData((prev) => ({ ...prev, isGstBill: false }))
+                        setFormData((prev) => ({ ...prev, isGstBill: false, billType: "pay" }))
                       }
                       className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${!formData.isGstBill ? "bg-linear-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-200 -translate-y-0.5" : "text-gray-500 hover:text-gray-700"}`}
                     >
@@ -1473,7 +1483,8 @@ export default function NewInvoicePage() {
                   </div>
                 </div>
 
-                {/* IGST toggle */}
+                {/* IGST toggle — GST bills only; estimates need name + products only */}
+                {formData.isGstBill && (
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
                     Tax Mode
@@ -1515,8 +1526,10 @@ export default function NewInvoicePage() {
                     )}
                   </div>
                 </div>
+                )}
 
-                {/* Payment method */}
+                {/* Payment method — GST bills only */}
+                {formData.isGstBill && (
                 <Dropdown
                   label="Payment Method"
                   name="billType"
@@ -1530,8 +1543,10 @@ export default function NewInvoicePage() {
                     { value: "credit", label: "🏦 Credit Bill" },
                   ]}
                 />
+                )}
 
-                {/* Vehicle number */}
+                {/* Vehicle number — GST bills only */}
+                {formData.isGstBill && (
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
                     Vehicle Number
@@ -1549,6 +1564,7 @@ export default function NewInvoicePage() {
                     className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 bg-gray-50/50 text-gray-900 placeholder-gray-400 transition-all duration-200 uppercase tracking-widest font-medium"
                   />
                 </div>
+                )}
 
                 {/* Original / Duplicate toggle */}
                 {formData.isGstBill && (
@@ -1592,14 +1608,14 @@ export default function NewInvoicePage() {
               <div className="p-4 pt-0 space-y-2.5">
                 <div className="relative group">
                   <div
-                    className={`absolute -inset-0.5 bg-linear-to-r from-indigo-500 to-violet-600 rounded-2xl blur-sm transition-all duration-300 ${loading || formData.items.length === 0 || !customerDetails.name ? "opacity-20" : "opacity-60 group-hover:opacity-90"}`}
+                    className={`absolute -inset-0.5 bg-linear-to-r from-indigo-500 to-violet-600 rounded-2xl blur-sm transition-all duration-300 ${loading || formData.items.length === 0 || (formData.isGstBill && !customerDetails.name) ? "opacity-20" : "opacity-60 group-hover:opacity-90"}`}
                   />
                   <button
                     type="submit"
                     disabled={
                       loading ||
                       formData.items.length === 0 ||
-                      !customerDetails.name
+                      (formData.isGstBill && !customerDetails.name)
                     }
                     className="relative w-full flex items-center justify-center gap-2 py-3 px-4 bg-linear-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-sm font-bold rounded-xl shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0"
                   >

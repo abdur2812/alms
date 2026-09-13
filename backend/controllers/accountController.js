@@ -102,7 +102,7 @@ const generateSnapshotForMonth = async (monthKey) => {
 exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
   const { startDate, endDate } = req.query;
 
-  const invoiceQuery = {};
+  const invoiceQuery = { isGstBill: true };
   const purchaseQuery = {};
   const expenseQuery = {};
   const paymentQuery = {};
@@ -327,9 +327,9 @@ exports.getHsnSummary = asyncHandler(async (req, res, next) => {
   });
 
   const [hsnAgg, igstAgg] = await Promise.all([
-    Invoice.aggregate(buildHsnAgg({})),
+    Invoice.aggregate(buildHsnAgg({ isGstBill: true })),
     // IGST-only: invoices flagged as inter-state IGST bills
-    Invoice.aggregate(buildHsnAgg({ isIgst: true })),
+    Invoice.aggregate(buildHsnAgg({ isGstBill: true, isIgst: true })),
   ]);
 
   const rows = mapRows(hsnAgg);
@@ -384,9 +384,10 @@ exports.getAccountsReport = asyncHandler(async (req, res, next) => {
   const nowUTC = new Date();
 
   // Parallelize independent aggregates
+  // Sales = GST bills only — estimates are excluded.
   const [purchasesAgg, salesAgg, dailySalaries, expensesByCategoryAgg] = await Promise.all([
     Purchase.aggregate([{ $match: { date: { $gte: monthStart, $lte: monthEnd } } }, { $group: { _id: null, total: { $sum: "$amount" } } }]),
-    Invoice.aggregate([{ $match: { createdAt: { $gte: monthStart, $lte: monthEnd } } }, { $group: { _id: null, total: { $sum: "$totalAmount" } } }]),
+    Invoice.aggregate([{ $match: { isGstBill: true, createdAt: { $gte: monthStart, $lte: monthEnd } } }, { $group: { _id: null, total: { $sum: "$totalAmount" } } }]),
     StaffDailyPayment.find({ paidAt: { $gte: monthStart, $lte: monthEnd } }).select("amount paidAt").lean(),
     Expense.aggregate([{ $match: { date: { $gte: monthStart, $lte: monthEnd } } }, { $group: { _id: "$category", total: { $sum: "$amount" }, count: { $sum: 1 } } }, { $sort: { total: -1, _id: 1 } }]),
   ]);
@@ -431,7 +432,7 @@ exports.getAccountsReport = asyncHandler(async (req, res, next) => {
   } else {
     const products = await Product.find({}).select("name price stockQuantity createdAt").lean();
     const soldInRangeAgg = await Invoice.aggregate([
-      { $match: { createdAt: { $gte: monthStart, $lte: monthEnd } } },
+      { $match: { isGstBill: true, createdAt: { $gte: monthStart, $lte: monthEnd } } },
       { $unwind: "$items" },
       { $match: { "items.productId": { $ne: null } } },
       { $group: { _id: "$items.productId", qty: { $sum: "$items.quantity" } } },
@@ -441,7 +442,7 @@ exports.getAccountsReport = asyncHandler(async (req, res, next) => {
     let soldAfterMap = new Map();
     if (dayAfterEnd < nowUTC) {
       const soldAfterAgg = await Invoice.aggregate([
-        { $match: { createdAt: { $gte: dayAfterEnd, $lte: nowUTC } } },
+        { $match: { isGstBill: true, createdAt: { $gte: dayAfterEnd, $lte: nowUTC } } },
         { $unwind: "$items" },
         { $match: { "items.productId": { $ne: null } } },
         { $group: { _id: "$items.productId", qty: { $sum: "$items.quantity" } } },
@@ -482,7 +483,7 @@ exports.getAccountsReport = asyncHandler(async (req, res, next) => {
   // Count queries in parallel where possible
   const [pCount, sCount] = await Promise.all([
     Purchase.countDocuments({ date: { $gte: monthStart, $lte: monthEnd } }),
-    Invoice.countDocuments({ createdAt: { $gte: monthStart, $lte: monthEnd } }),
+    Invoice.countDocuments({ isGstBill: true, createdAt: { $gte: monthStart, $lte: monthEnd } }),
   ]);
 
   res.status(200).json({

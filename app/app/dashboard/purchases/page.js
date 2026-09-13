@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, Fragment } from "react";
+import { useState, useEffect, Fragment } from "react";
 import Link from "next/link";
 import { FiPlus, FiEdit, FiTrash2, FiEye, FiSearch, FiShoppingBag, FiTruck, FiEdit2, FiX, FiCheck, FiFileText, FiChevronDown } from "react-icons/fi";
 import { PageHeader, Card, Button, Badge, LoadingSpinner, EmptyState } from "@/components/UI";
@@ -135,7 +135,11 @@ function VendorForm({ onSave, onCancel, initial }) {
 export default function PurchasesPage() {
   const [tab, setTab] = useState("invoices");
   const [purchases, setPurchases] = useState([]);
+  const [purchaseTotal, setPurchaseTotal] = useState(0);
+  const [purchaseTotalPages, setPurchaseTotalPages] = useState(1);
   const [vendors, setVendors] = useState([]);
+  const [vendorTotal, setVendorTotal] = useState(0);
+  const [vendorTotalPages, setVendorTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [vendorsLoading, setVendorsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -143,10 +147,15 @@ export default function PurchasesPage() {
   const [editingVendor, setEditingVendor] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [vendorSearch, setVendorSearch] = useState("");
+  // Debounced search terms — server is hit only after the user pauses typing.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedVendorSearch, setDebouncedVendorSearch] = useState("");
   const [deletingPurchaseId, setDeletingPurchaseId] = useState(null);
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
-  const PURCHASES_PER_PAGE = 5;
+  const PURCHASES_PER_PAGE = 10;
+  const VENDORS_PER_PAGE = 10;
   const [purchasePage, setPurchasePage] = useState(1);
+  const [vendorPage, setVendorPage] = useState(1);
 
   // Normalise payments: prefer multi-entry array, fall back to legacy single fields
   const getPayments = (p) => {
@@ -167,11 +176,18 @@ export default function PurchasesPage() {
   const paymentsTotal = (p) =>
     getPayments(p).reduce((s, pay) => s + (Number(pay.amount) || 0), 0);
 
-  const loadPurchases = async () => {
+  // Server-side pagination + search. Previously this page preloaded 500
+  // purchases + 500 vendors and filtered in memory — slow, and silently
+  // incomplete once the backend clamps limit to 50.
+  const loadPurchases = async (page, search) => {
     try {
       setLoading(true);
-      const res = await purchasesAPI.getAll({ limit: 500 });
+      const params = { page, limit: PURCHASES_PER_PAGE };
+      if (search.trim()) params.search = search.trim();
+      const res = await purchasesAPI.getAll(params);
       setPurchases(res.data.data || []);
+      setPurchaseTotal(res.data.total || 0);
+      setPurchaseTotalPages(res.data.totalPages || 1);
     } catch (e) {
       setError(e.response?.data?.message || "Failed to load purchases");
     } finally {
@@ -179,11 +195,15 @@ export default function PurchasesPage() {
     }
   };
 
-  const loadVendors = async () => {
+  const loadVendors = async (page, search) => {
     try {
       setVendorsLoading(true);
-      const res = await vendorsAPI.getAll({ limit: 500 });
+      const params = { page, limit: VENDORS_PER_PAGE };
+      if (search.trim()) params.search = search.trim();
+      const res = await vendorsAPI.getAll(params);
       setVendors(res.data.data || []);
+      setVendorTotal(res.data.total || 0);
+      setVendorTotalPages(res.data.totalPages || 1);
     } catch (e) {
       setError(e.response?.data?.message || "Failed to load vendors");
     } finally {
@@ -191,21 +211,51 @@ export default function PurchasesPage() {
     }
   };
 
+  // Debounce search inputs so each keystroke isn't a server round-trip.
   useEffect(() => {
-    loadPurchases();
-    loadVendors();
-  }, []);
-
-  // Reset purchase pagination when search changes
-  useEffect(() => {
-    setPurchasePage(1);
+    const t = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPurchasePage(1);
+    }, 400);
+    return () => clearTimeout(t);
   }, [searchTerm]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedVendorSearch(vendorSearch);
+      setVendorPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [vendorSearch]);
+
+  // Fetch only the active tab. Purchases and vendors load independently.
+  useEffect(() => {
+    if (tab === "invoices") loadPurchases(purchasePage, debouncedSearch);
+  }, [tab, purchasePage, debouncedSearch]);
+
+  useEffect(() => {
+    if (tab === "vendors") loadVendors(vendorPage, debouncedVendorSearch);
+  }, [tab, vendorPage, debouncedVendorSearch]);
+
+  // Clamp page when totals shrink (e.g., after delete/search)
+  useEffect(() => {
+    if (purchasePage > purchaseTotalPages) {
+      setPurchasePage(purchaseTotalPages);
+    }
+  }, [purchasePage, purchaseTotalPages]);
+
+  useEffect(() => {
+    if (vendorPage > vendorTotalPages) {
+      setVendorPage(vendorTotalPages);
+    }
+  }, [vendorPage, vendorTotalPages]);
 
   const handleAddVendor = async (data) => {
     try {
-      const res = await vendorsAPI.create(data);
-      setVendors((prev) => [res.data.data, ...prev]);
+      await vendorsAPI.create(data);
       setShowVendorForm(false);
+      loadVendors(1, debouncedVendorSearch);
+      setVendorPage(1);
     } catch (e) {
       setError(e.response?.data?.message || "Failed to add vendor");
     }
@@ -225,7 +275,7 @@ export default function PurchasesPage() {
     if (!confirm("Delete this vendor?")) return;
     try {
       await vendorsAPI.delete(id);
-      setVendors((prev) => prev.filter((v) => v._id !== id));
+      loadVendors(vendorPage, debouncedVendorSearch);
     } catch (e) {
       setError(e.response?.data?.message || "Failed to delete vendor");
     }
@@ -236,7 +286,7 @@ export default function PurchasesPage() {
     try {
       setDeletingPurchaseId(id);
       await purchasesAPI.delete(id);
-      setPurchases((prev) => prev.filter((p) => p._id !== id));
+      loadPurchases(purchasePage, debouncedSearch);
     } catch (e) {
       setError(e.response?.data?.message || "Failed to delete purchase");
     } finally {
@@ -244,62 +294,10 @@ export default function PurchasesPage() {
     }
   };
 
-  const filteredPurchases = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    const filtered = purchases.filter((p) => {
-      const pays = Array.isArray(p.payments) ? p.payments : [];
-      return (
-        (p.purchaseNumber || "")?.toLowerCase().includes(q) ||
-        p.invoiceNumber?.toLowerCase().includes(q) ||
-        (p.vendorId?.name || "").toLowerCase().includes(q) ||
-        (p.chequeDetails || "").toLowerCase().includes(q) ||
-        pays.some(
-          (pay) =>
-            (pay.details || "").toLowerCase().includes(q) ||
-            (pay.method || "").toLowerCase().includes(q),
-        )
-      );
-    });
-    // Sort descending like purchaseNo (PUR-0005 before PUR-0004)
-    filtered.sort((a, b) => {
-      const numA = parseInt((a.purchaseNumber || "").replace(/\D/g, ""), 10) || 0;
-      const numB = parseInt((b.purchaseNumber || "").replace(/\D/g, ""), 10) || 0;
-      if (numB !== numA) return numB - numA;
-      return new Date(b.date) - new Date(a.date);
-    });
-    return filtered;
-  }, [purchases, searchTerm]);
-
-  const purchaseTotalPages = Math.ceil(filteredPurchases.length / PURCHASES_PER_PAGE) || 1;
-  const paginatedPurchases = useMemo(() => {
-    const start = (purchasePage - 1) * PURCHASES_PER_PAGE;
-    return filteredPurchases.slice(start, start + PURCHASES_PER_PAGE);
-  }, [filteredPurchases, purchasePage]);
-
-  // Clamp page when filtered results shrink (e.g., after delete/search)
-  useEffect(() => {
-    if (purchasePage > purchaseTotalPages) {
-      setPurchasePage(purchaseTotalPages);
-    }
-  }, [purchasePage, purchaseTotalPages]);
-
-  const filteredVendors = useMemo(
-    () =>
-      vendors.filter((v) => {
-        const q = vendorSearch.toLowerCase();
-        return (
-          v.name?.toLowerCase().includes(q) ||
-          (v.phone || "").toLowerCase().includes(q) ||
-          (v.gstNumber || "").toLowerCase().includes(q) ||
-          (v.address || "").toLowerCase().includes(q) ||
-          (v.bankDetails?.bankName || "").toLowerCase().includes(q) ||
-          (v.bankDetails?.accountNumber || "").toLowerCase().includes(q) ||
-          (v.bankDetails?.ifscCode || "").toLowerCase().includes(q) ||
-          (v.bankDetails?.accountHolder || "").toLowerCase().includes(q)
-        );
-      }),
-    [vendors, vendorSearch],
-  );
+  // Server drives filtering/sorting/pagination now (see loadPurchases /
+  // loadVendors above). S.No stays descending like purchaseNumber:
+  // S.No = total - (page-1)*limit - index.
+  const paginatedPurchases = purchases;
 
   const vendorName = (p) =>
     p.vendorId?.name || "—";
@@ -381,7 +379,7 @@ export default function PurchasesPage() {
             tab === "vendors" ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-md" : "text-gray-600 hover:text-gray-900"
           }`}
         >
-          <FiTruck className="h-4 w-4" /> Vendors ({vendors.length})
+            <FiTruck className="h-4 w-4" /> Vendors ({vendorTotal})
         </button>
       </div>
 
@@ -399,11 +397,11 @@ export default function PurchasesPage() {
           <Card className="animate-fadeIn">
             {loading ? (
               <LoadingSpinner />
-            ) : filteredPurchases.length === 0 ? (
+            ) : purchaseTotal === 0 ? (
               <EmptyState
                 icon={FiShoppingBag}
                 title="No purchases found"
-                description={purchases.length === 0 ? "Record your first purchase to get started." : "Try a different search."}
+                description={debouncedSearch ? "Try a different search." : "Record your first purchase to get started."}
                 action={
                   <Link href="/dashboard/purchases/new">
                     <Button variant="primary"><FiPlus className="mr-2" />Add Purchase</Button>
@@ -429,7 +427,7 @@ export default function PurchasesPage() {
                     <tbody className="bg-white divide-y divide-gray-50">
                       {paginatedPurchases.map((purchase, index) => {
                         const globalIndex = (purchasePage - 1) * PURCHASES_PER_PAGE + index;
-                        const sNo = filteredPurchases.length - globalIndex;
+                        const sNo = purchaseTotal - globalIndex;
                         const pays = getPayments(purchase);
                         const isExpanded = expandedPurchaseId === purchase._id;
                         return (
@@ -576,7 +574,7 @@ export default function PurchasesPage() {
                     <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm text-gray-700">
-                          Page <span className="font-medium">{purchasePage}</span> of <span className="font-medium">{purchaseTotalPages}</span> • {filteredPurchases.length} total
+                          Page <span className="font-medium">{purchasePage}</span> of <span className="font-medium">{purchaseTotalPages}</span> • {purchaseTotal} total
                         </p>
                       </div>
                       <div>
@@ -630,11 +628,11 @@ export default function PurchasesPage() {
           <Card className="animate-fadeIn">
             {vendorsLoading ? (
               <LoadingSpinner />
-            ) : filteredVendors.length === 0 ? (
+            ) : vendorTotal === 0 ? (
               <EmptyState
                 icon={FiTruck}
                 title="No vendors found"
-                description={vendors.length === 0 ? "Add your first vendor to get started." : "Try a different search."}
+                description={debouncedVendorSearch ? "Try a different search." : "Add your first vendor to get started."}
                 action={
                   <Button onClick={() => { setShowVendorForm(true); setEditingVendor(null); }} variant="primary">
                     <FiPlus className="mr-2" />Add Vendor
@@ -642,6 +640,7 @@ export default function PurchasesPage() {
                 }
               />
             ) : (
+              <>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-100">
                   <thead className="bg-gray-50">
@@ -655,7 +654,7 @@ export default function PurchasesPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-50">
-                    {filteredVendors.map((vendor) => (
+                    {vendors.map((vendor) => (
                       <tr key={vendor._id} className="hover:bg-amber-50/30 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
@@ -716,6 +715,30 @@ export default function PurchasesPage() {
                   </tbody>
                 </table>
               </div>
+              {vendorTotalPages > 1 && (
+                <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                  <p className="text-sm text-gray-700">
+                    Page <span className="font-medium">{vendorPage}</span> of <span className="font-medium">{vendorTotalPages}</span> • {vendorTotal} total
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setVendorPage(Math.max(1, vendorPage - 1))}
+                      disabled={vendorPage === 1}
+                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => setVendorPage(Math.min(vendorTotalPages, vendorPage + 1))}
+                      disabled={vendorPage === vendorTotalPages}
+                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+              </>
             )}
           </Card>
         </>

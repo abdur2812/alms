@@ -763,8 +763,8 @@ export default function InvoiceDocument({
     }),
     { qty: 0, taxable: 0, gstAmt: 0, total: 0 }
   );
-  // HSN table columns: HSN | GST% | Qty | Taxable | CGST | SGST | IGST | Total
-  const HSN_COLS = ["17%", "10%", "9%", "15%", "11.5%", "11.5%", "11.5%", "14.5%"];
+  // HSN table columns: HSN Code | Qty | Price Before GST | CGST | SGST | GST Amount | Total Amount
+  const HSN_COLS = ["18%", "9%", "16%", "13%", "13%", "14%", "17%"];
 
   const HEADER_LABELS = [
     "S.No",
@@ -876,18 +876,18 @@ export default function InvoiceDocument({
                 </View>
               </View>
 
-              {/* ③ CUSTOMER + META */}
+              {/* ③ CUSTOMER + META — estimates show name only */}
               <View style={[S.splitRow, S.divider]}>
                 <View style={S.splitLeft60}>
                   <Text style={S.sectionLabel}>Bill To</Text>
                   <Text style={S.custName}>{customer.name || "-"}</Text>
-                  {customer.phone && (
+                  {invoice.isGstBill && customer.phone && (
                     <Text style={S.custDetail}>Ph: {customer.phone}</Text>
                   )}
-                  {customer.gstNumber && (
+                  {invoice.isGstBill && customer.gstNumber && (
                     <Text style={S.custDetail}>GST: {customer.gstNumber}</Text>
                   )}
-                  {custAddrStr ? (
+                  {invoice.isGstBill && custAddrStr ? (
                     <Text
                       style={[S.custDetail, { color: "#555555", marginTop: 2 }]}
                     >
@@ -897,20 +897,24 @@ export default function InvoiceDocument({
                 </View>
                 <View style={S.splitRight40}>
                   <MetaRow
-                    label="Invoice No"
+                    label={invoice.isGstBill ? "Invoice No" : "Estimate No"}
                     value={invoice.invoiceNumber || "-"}
                     bold
                   />
                   <MetaRow label="Date" value={invoiceDate} bold />
-                  <MetaRow label="Bill Type" value={billLabel} />
-                  <MetaRow
-                    label="GST Bill"
-                    value={invoice.isGstBill ? "Yes" : "No"}
-                  />
-                  <MetaRow
-                    label="Vehicle No"
-                    value={invoice.vehicleNumber || "-"}
-                  />
+                  {invoice.isGstBill && (
+                    <>
+                      <MetaRow label="Bill Type" value={billLabel} />
+                      <MetaRow
+                        label="GST Bill"
+                        value={invoice.isGstBill ? "Yes" : "No"}
+                      />
+                      <MetaRow
+                        label="Vehicle No"
+                        value={invoice.vehicleNumber || "-"}
+                      />
+                    </>
+                  )}
                 </View>
               </View>
 
@@ -996,31 +1000,29 @@ export default function InvoiceDocument({
                     </View>
                   </View>
 
-                  {/* ⑤b HSN-WISE SUMMARY — half-width table below totals, right side */}
+                  {/* ⑤b HSN-WISE SUMMARY — same columns as Accounts HSN table */}
                   {invoice.isGstBill && hsnGroups.length > 0 && (
                     <View style={[S.divider, { flexDirection: "row" }]}>
                       <View style={{ flex: 1 }} />
-                      <View style={{ width: "50%", borderLeftWidth: 1, borderLeftColor: "#000000" }}>
+                      <View style={{ width: "70%", borderLeftWidth: 1, borderLeftColor: "#000000" }}>
                         <Text style={S.hsnTitle}>HSN-wise Tax Summary</Text>
                         <View style={S.hsnHeaderRow}>
-                          {["HSN", "GST%", "Qty", "Taxable", "CGST", "SGST", "IGST", "Total"].map((h, i, arr) => (
+                          {["HSN Code", "Qty", "Price Before GST", "CGST", "SGST", "GST Amount", "Total Amount"].map((h, i, arr) => (
                             <View key={h} style={[{ width: HSN_COLS[i] }, S.hsnTh, i === arr.length - 1 ? { borderRightWidth: 0 } : {}]}>
-                              <Text style={{ textAlign: i === 0 ? "left" : i <= 2 ? "center" : "right" }}>{h}</Text>
+                              <Text style={{ textAlign: i === 0 ? "left" : i === 1 ? "center" : "right" }}>{h}</Text>
                             </View>
                           ))}
                         </View>
                         {hsnGroups.map((g, gi) => {
                           const cgst = invoice.isIgst ? 0 : g.gstAmt / 2;
                           const sgst = invoice.isIgst ? 0 : g.gstAmt / 2;
-                          const igst = invoice.isIgst ? g.gstAmt : 0;
                           const cells = [
                             g.hsn,
-                            `${g.rate}%`,
                             String(g.qty),
                             fmt(g.taxable),
                             fmt(cgst),
                             fmt(sgst),
-                            fmt(igst),
+                            fmt(g.gstAmt),
                             fmt(g.total),
                           ];
                           return (
@@ -1030,7 +1032,7 @@ export default function InvoiceDocument({
                                   key={i}
                                   style={[{ width: HSN_COLS[i] }, i === cells.length - 1 ? S.hsnTdLast : S.hsnTd]}
                                 >
-                                  <Text style={{ textAlign: i === 0 ? "left" : i <= 2 ? "center" : "right" }}>{c}</Text>
+                                  <Text style={{ textAlign: i === 0 ? "left" : i === 1 ? "center" : "right" }}>{c}</Text>
                                 </View>
                               ))}
                             </View>
@@ -1039,16 +1041,15 @@ export default function InvoiceDocument({
                         <View style={S.hsnTotalRow}>
                           {[
                             "Total",
-                            "",
                             String(hsnTotals.qty),
                             fmt(hsnTotals.taxable),
                             fmt(invoice.isIgst ? 0 : hsnTotals.gstAmt / 2),
                             fmt(invoice.isIgst ? 0 : hsnTotals.gstAmt / 2),
-                            fmt(invoice.isIgst ? hsnTotals.gstAmt : 0),
+                            fmt(hsnTotals.gstAmt),
                             fmt(hsnTotals.total),
                           ].map((c, i, arr) => (
                             <View key={i} style={[{ width: HSN_COLS[i] }, S.hsnTh, i === arr.length - 1 ? { borderRightWidth: 0 } : {}]}>
-                              <Text style={{ textAlign: i === 0 ? "left" : i <= 2 ? "center" : "right" }}>{c}</Text>
+                              <Text style={{ textAlign: i === 0 ? "left" : i === 1 ? "center" : "right" }}>{c}</Text>
                             </View>
                           ))}
                         </View>
@@ -1178,7 +1179,7 @@ export default function InvoiceDocument({
                     justifyContent: "flex-start",
                   }}
                 >
-                  {invoice.billType === "credit" && (
+                  {invoice.isGstBill && invoice.billType === "credit" && (
                     <Text
                       style={{
                         fontSize: 7,

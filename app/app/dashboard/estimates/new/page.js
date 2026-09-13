@@ -69,9 +69,11 @@ export default function NewCleanEstimatePage() {
     fetchProducts();
   }, []);
 
+  // Small recent-item preloads for empty-state suggestions only (server search
+  // handles typing). Never preload 1000 docs.
   const fetchCustomers = async () => {
     try {
-      const res = await customersAPI.getAll({ limit: 1000 });
+      const res = await customersAPI.getAll({ limit: 10 });
       setCustomers(res.data.data);
     } catch (e) {
       console.error(e);
@@ -79,14 +81,14 @@ export default function NewCleanEstimatePage() {
   };
   const fetchProducts = async () => {
     try {
-      const res = await productsAPI.getPopular({ limit: 1000 });
+      const res = await productsAPI.getPopular({ limit: 10 });
       setProducts(res.data.data);
     } catch (e) {
       console.error(e);
     }
   };
   const searchProducts = async (searchTerm) => {
-    const res = await productsAPI.getAll({ limit: 50, search: searchTerm, includePartNo: true });
+    const res = await productsAPI.getAll({ limit: 20, search: searchTerm, includePartNo: true });
     return res.data.data.map((p) => ({
       value: p._id,
       label: `${p.name}${p.partNo ? ` [${p.partNo}]` : ""} (${formatINR(p.price)})`,
@@ -264,12 +266,11 @@ export default function NewCleanEstimatePage() {
           hsnCode: "",
         })),
         customerData: {
-          name: customerDetails.name,
-          phone: customerDetails.phone,
-          gstNumber: undefined,
+          name: customerDetails.name || "",
+          phone: customerDetails.phone || "",
           permanentAddress: customerDetails.permanentAddress,
-          shippingAddress: usePermanentAddress ? customerDetails.permanentAddress : customerDetails.shippingAddress,
-          sameAsPermanent: usePermanentAddress,
+          shippingAddress: customerDetails.permanentAddress,
+          sameAsPermanent: true,
         },
       };
       if (selectedCustomer) invoiceData.customerId = selectedCustomer._id;
@@ -309,12 +310,13 @@ export default function NewCleanEstimatePage() {
               </div>
               <div className="p-5 space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Customer Name (optional)</label>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Customer Name (optional — select existing or type new)</label>
                   <input
                     type="text"
                     value={customerDetails.name}
                     onChange={(e) => handleCustomerInputChange("name", e.target.value)}
-                    placeholder="Enter customer name"
+                    placeholder="Search customers or enter name..."
+                    autoComplete="off"
                     className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white"
                   />
                   {customers.filter((c) => c.name.toLowerCase().includes(customerDetails.name.toLowerCase())).length > 0 && customerDetails.name && (
@@ -329,6 +331,11 @@ export default function NewCleanEstimatePage() {
                           </button>
                         ))}
                     </div>
+                  )}
+                  {selectedCustomer && (
+                    <p className="mt-1.5 text-xs text-green-700 font-medium">
+                      Selected: {selectedCustomer.name}
+                    </p>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">

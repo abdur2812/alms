@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FiTrendingUp, FiDollarSign, FiShoppingBag, FiCreditCard, FiAlertCircle, FiPlus, FiX, FiCalendar, FiUsers, FiTrash2, FiHash, FiPieChart, FiDownload, FiEye, FiEyeOff } from "react-icons/fi";
-import { PageHeader, Card, Badge, ConfirmDialog } from "@/components/UI";
+import { Card, Badge, ConfirmDialog } from "@/components/UI";
 import DateRangePicker from "@/components/DateRangePicker";
 import { accountsAPI, expensesAPI, expenseCategoriesAPI } from "@/lib/api";
 import AccountsReportPDF from "@/components/AccountsReportPDF";
@@ -131,28 +131,26 @@ function HsnSection({ range }) {
 
   const handleDownloadCSV = () => {
     if (!data || !data.rows || data.rows.length === 0) return;
-    const headers = ["S.No", "HSN Code", "Quantity", "Price Before GST (Total Base)", "GST Amount (Total)", "Total (Incl GST)", "Unit Base", "Unit GST", "Unit Incl"];
+    const headers = ["S.No", "HSN Code", "Quantity", "Price Before GST", "CGST", "SGST", "GST Amount", "Total (Incl GST)"];
     const rows = data.rows.map((r, i) => {
       const totalPrice = r.totalPrice ?? 0;
       const totalBase = r.totalBase ?? totalPrice / 1.18;
       const totalGst = r.totalGst ?? totalPrice - totalBase;
-      const unitBase = r.baseUnitPrice ?? (r.quantity ? totalBase / r.quantity : 0);
-      const gstPerUnit = r.gstPerUnit ?? (r.unitPrice ? r.unitPrice - unitBase : 0);
-      const unitPrice = r.unitPrice ?? (r.quantity ? totalPrice / r.quantity : 0);
+      const cgst = totalGst / 2;
+      const sgst = totalGst / 2;
       return [
         i + 1,
         `"${r.hsnCode}"`,
         r.quantity,
         totalBase.toFixed(2),
+        cgst.toFixed(2),
+        sgst.toFixed(2),
         totalGst.toFixed(2),
         totalPrice.toFixed(2),
-        unitBase.toFixed(2),
-        gstPerUnit.toFixed(2),
-        unitPrice.toFixed(2),
       ].join(",");
     });
     const summary = [
-      `TOTAL,,${data.total},${(data.totalBase ?? 0).toFixed(2)},${(data.totalGst ?? 0).toFixed(2)},${(data.totalValue ?? 0).toFixed(2)}`,
+      `TOTAL,,${data.total},${(data.totalBase ?? 0).toFixed(2)},${((data.totalGst ?? 0) / 2).toFixed(2)},${((data.totalGst ?? 0) / 2).toFixed(2)},${(data.totalGst ?? 0).toFixed(2)},${(data.totalValue ?? 0).toFixed(2)}`,
     ];
     const csv = [headers.join(","), ...rows, summary.join("\n")].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -230,8 +228,10 @@ function HsnSection({ range }) {
                   <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-left">HSN Code</th>
                   <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Qty</th>
                   <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Price Before GST</th>
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">CGST</th>
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">SGST</th>
                   <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">GST Amount</th>
-                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Total (Incl. GST)</th>
+                  <th className="px-4 py-2.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Total Amount</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-50">
@@ -240,8 +240,12 @@ function HsnSection({ range }) {
                   const totalPrice = r.totalPrice ?? 0;
                   const totalBase = r.totalBase ?? Math.round((totalPrice / 1.18) * 100) / 100;
                   const totalGst = r.totalGst ?? Math.round((totalPrice - totalBase) * 100) / 100;
+                  const cgst = Math.round((totalGst / 2) * 100) / 100;
+                  const sgst = Math.round((totalGst / 2) * 100) / 100;
                   const unitBase = r.baseUnitPrice ?? (r.quantity ? Math.round((totalBase / r.quantity) * 100) / 100 : 0);
                   const gstPerUnit = r.gstPerUnit ?? (r.unitPrice ? Math.round((r.unitPrice - unitBase) * 100) / 100 : 0);
+                  const unitCgst = Math.round((gstPerUnit / 2) * 100) / 100;
+                  const unitSgst = Math.round((gstPerUnit / 2) * 100) / 100;
                   const hasRange = r.hasMultiplePrices && r.minUnitPrice !== r.maxUnitPrice;
                   const baseRange = hasRange && r.minBaseUnit !== undefined ? `${formatINR(r.minBaseUnit)} – ${formatINR(r.maxBaseUnit)}` : null;
                   return (
@@ -251,6 +255,14 @@ function HsnSection({ range }) {
                       <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">
                         <span>{formatINR(totalBase)}</span>
                         <span className="block text-[11px] font-medium text-gray-500">unit {formatINR(unitBase)}{hasRange ? ` (${baseRange})` : ""}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">
+                        <span>{formatINR(cgst)}</span>
+                        <span className="block text-[11px] font-medium text-gray-500">unit {formatINR(unitCgst)}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">
+                        <span>{formatINR(sgst)}</span>
+                        <span className="block text-[11px] font-medium text-gray-500">unit {formatINR(unitSgst)}</span>
                       </td>
                       <td className="px-4 py-2.5 text-sm font-bold text-amber-700 text-right">
                         <span>{formatINR(totalGst)}</span>
@@ -631,8 +643,22 @@ export default function AccountsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6 space-y-6">
-      <PageHeader title="Accounts" subtitle="Financial overview and summaries" />
+    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6 space-y-4">
+      {/* Header row: title left, small date filter top-right */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold bg-linear-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+            Accounts
+          </h1>
+          <p className="mt-1 text-xs text-gray-600">Financial overview and summaries</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-[220px]">
+            <DateRangePicker startDate={range.startDate} endDate={range.endDate} onChange={setRange} compact />
+          </div>
+          {loading && <span className="animate-spin h-4 w-4 border-b-2 border-indigo-500 rounded-full inline-block" />}
+        </div>
+      </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
@@ -640,26 +666,7 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {/* Date Range Filter */}
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-5 animate-fadeIn">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Date Range</label>
-            <DateRangePicker startDate={range.startDate} endDate={range.endDate} onChange={setRange} />
-          </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-4 py-3 rounded-xl">
-            <FiCalendar className="h-4 w-4 text-indigo-500" />
-            <span>
-              {range.startDate?.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) || "—"}
-              {" — "}
-              {range.endDate?.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) || "—"}
-            </span>
-            {loading && <span className="ml-1 animate-spin h-4 w-4 border-b-2 border-indigo-500 rounded-full inline-block" />}
-          </div>
-        </div>
-      </div>
-
-      {/* Tab Bar */}
+      {/* Accounts nav at the top */}
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-1.5 flex flex-wrap gap-1">
         {TABS.map((t) => {
           const Icon = t.icon;

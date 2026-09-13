@@ -40,10 +40,10 @@ export default function EditPurchasePage() {
     let cancelled = false;
     const load = async () => {
       try {
-        const [purchaseRes, vendorsRes] = await Promise.all([
-          purchasesAPI.getById(params.id),
-          vendorsAPI.getAll({ limit: 500 }),
-        ]);
+        // Vendor options resolve via searchVendors on demand; only the
+        // purchase's current vendor is seeded so the selected label renders.
+        // (Previously this also preloaded 500 vendors in parallel.)
+        const purchaseRes = await purchasesAPI.getById(params.id);
         if (cancelled) return;
         const p = purchaseRes.data.data;
         setForm({
@@ -75,7 +75,11 @@ export default function EditPurchasePage() {
             },
           ]);
         }
-        setVendors(vendorsRes.data.data || []);
+        // Seed options with just the current vendor so the selected label
+        // renders; everything else resolves via searchVendors.
+        if (p.vendorId && p.vendorId._id) {
+          setVendors([{ _id: p.vendorId._id, name: p.vendorId.name || "Vendor" }]);
+        }
       } catch (e) {
         if (!cancelled) setError(e.response?.data?.message || "Failed to load purchase");
       } finally {
@@ -97,7 +101,7 @@ export default function EditPurchasePage() {
     setPayments((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
 
   const searchVendors = async (searchTerm) => {
-    const response = await vendorsAPI.getAll({ limit: 50, search: searchTerm });
+    const response = await vendorsAPI.getAll({ limit: 20, search: searchTerm });
     const results = response.data.data.map((v) => ({
       value: v._id,
       label: v.name,

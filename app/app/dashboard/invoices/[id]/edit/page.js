@@ -2,7 +2,7 @@
 
 import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { invoicesAPI, customersAPI, productsAPI } from "@/lib/api";
+import { invoicesAPI, productsAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
 import {
   FiPlus,
@@ -21,7 +21,6 @@ export default function FullEditInvoicePage({ params }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({
     customerData: {
@@ -61,7 +60,6 @@ export default function FullEditInvoicePage({ params }) {
 
   useEffect(() => {
     fetchInvoice();
-    fetchCustomers();
     fetchProducts();
   }, []);
 
@@ -130,18 +128,13 @@ export default function FullEditInvoicePage({ params }) {
     }
   };
 
-  const fetchCustomers = async () => {
-    try {
-      const response = await customersAPI.getAll({ limit: 100 });
-      setCustomers(response.data.data);
-    } catch (err) {
-      console.error("Failed to fetch customers", err);
-    }
-  };
+  // `customers` preload removed: this form has no customer picker (name is typed
+  // directly), so fetching 100 customer docs was pure overhead.
 
   const fetchProducts = async () => {
     try {
-      const response = await productsAPI.getAll({ limit: 100 });
+      // Small initial options only — the Dropdown searches the server on demand.
+      const response = await productsAPI.getAll({ limit: 20 });
       setProducts(response.data.data);
     } catch (err) {
       console.error("Failed to fetch products", err);
@@ -150,7 +143,7 @@ export default function FullEditInvoicePage({ params }) {
 
   const searchProducts = async (searchTerm) => {
     const response = await productsAPI.getAll({
-      limit: 50,
+      limit: 20,
       search: searchTerm,
       includePartNo: true,
     });
@@ -326,7 +319,8 @@ export default function FullEditInvoicePage({ params }) {
         })),
         isGstBill: formData.isGstBill,
         isIgst: formData.isIgst,
-        billType: formData.billType,
+        // Estimates are just estimates — no paid/credit.
+        billType: formData.isGstBill ? formData.billType : "pay",
         vehicleNumber: formData.vehicleNumber || "",
         copyType: formData.copyType || "original",
       };
@@ -394,7 +388,7 @@ export default function FullEditInvoicePage({ params }) {
                 </h3>
               </div>
               <div className="p-5 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3 grid-cols-2">
                   <div>
                     <label className="block text-xs font-bold text-indigo-500/80 uppercase tracking-widest mb-1.5">
                       Customer Name {formData.isGstBill ? "*" : "(optional for estimate)"}
@@ -713,7 +707,7 @@ export default function FullEditInvoicePage({ params }) {
                     <button
                       type="button"
                       onClick={() =>
-                        setFormData({ ...formData, isGstBill: false })
+                        setFormData({ ...formData, isGstBill: false, billType: "pay" })
                       }
                       className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-300 ${
                         !formData.isGstBill
@@ -734,7 +728,8 @@ export default function FullEditInvoicePage({ params }) {
                   </div>
                 </div>
 
-                {/* IGST toggle */}
+                {/* IGST toggle — GST bills only */}
+                {formData.isGstBill && (
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
                     Tax Mode
@@ -780,8 +775,10 @@ export default function FullEditInvoicePage({ params }) {
                     )}
                   </div>
                 </div>
+                )}
 
-                {/* Payment method */}
+                {/* Payment method — GST bills only */}
+                {formData.isGstBill && (
                 <Dropdown
                   label="Payment Method"
                   name="billType"
@@ -795,8 +792,10 @@ export default function FullEditInvoicePage({ params }) {
                     { value: "credit", label: "🏦 Credit Bill" },
                   ]}
                 />
+                )}
 
-                {/* Vehicle number */}
+                {/* Vehicle number — GST bills only */}
+                {formData.isGstBill && (
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
                     Vehicle Number
@@ -814,6 +813,7 @@ export default function FullEditInvoicePage({ params }) {
                     className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 bg-gray-50/50 text-gray-900 placeholder-gray-400 transition-all duration-200 uppercase tracking-widest font-medium"
                   />
                 </div>
+                )}
 
                 {/* Original / Duplicate toggle */}
                 {formData.isGstBill && (

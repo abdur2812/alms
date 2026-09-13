@@ -28,7 +28,7 @@ const toDateInput = (d) => {
 export default function NewPurchasePage() {
   const router = useRouter();
   const [vendors, setVendors] = useState([]);
-  const [vendorsLoading, setVendorsLoading] = useState(true);
+  const [vendorsLoading, setVendorsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -43,19 +43,17 @@ export default function NewPurchasePage() {
   // Multiple payment entries — duplicates (same method twice) allowed.
   const [payments, setPayments] = useState([emptyPayment()]);
 
+  // No blocking vendor preload: the Dropdown below searches the server on
+  // demand (searchVendors). A small background preload seeds initial options
+  // without holding the form behind a spinner.
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
-      try {
-        const res = await vendorsAPI.getAll({ limit: 500 });
+    vendorsAPI
+      .getAll({ limit: 20 })
+      .then((res) => {
         if (!cancelled) setVendors(res.data.data || []);
-      } catch (e) {
-        if (!cancelled) setError(e.response?.data?.message || "Failed to load vendors");
-      } finally {
-        if (!cancelled) setVendorsLoading(false);
-      }
-    };
-    load();
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -86,7 +84,7 @@ export default function NewPurchasePage() {
     setPayments((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
 
   const searchVendors = async (searchTerm) => {
-    const response = await vendorsAPI.getAll({ limit: 50, search: searchTerm });
+    const response = await vendorsAPI.getAll({ limit: 20, search: searchTerm });
     const results = response.data.data.map((v) => ({
       value: v._id,
       label: v.name,

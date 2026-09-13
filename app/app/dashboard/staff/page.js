@@ -105,7 +105,9 @@ export default function StaffPage() {
   const loadStaff = useCallback(async () => {
     setStaffLoading(true);
     try {
-      const res = await staffAPI.getAll({ limit: 500 });
+      // Shop staff fits one small page; 50 covers any realistic roster without
+      // pulling 500 docs.
+      const res = await staffAPI.getAll({ limit: 50 });
       setStaff(res.data.data);
     } catch (e) {
       setError(e.response?.data?.message || "Failed to load staff");

@@ -210,6 +210,14 @@ export default function HsnReportPDF({ data, range }) {
               <Text style={S.summaryValue}>Rs. {fmt(totalBase)}</Text>
             </View>
             <View style={S.summaryRow}>
+              <Text style={S.summaryLabel}>CGST</Text>
+              <Text style={S.summaryValue}>Rs. {fmt(totalGst / 2)}</Text>
+            </View>
+            <View style={S.summaryRow}>
+              <Text style={S.summaryLabel}>SGST</Text>
+              <Text style={S.summaryValue}>Rs. {fmt(totalGst / 2)}</Text>
+            </View>
+            <View style={S.summaryRow}>
               <Text style={S.summaryLabel}>Total GST Amount</Text>
               <Text style={S.summaryValue}>Rs. {fmt(totalGst)}</Text>
             </View>
@@ -258,12 +266,14 @@ export default function HsnReportPDF({ data, range }) {
           </View>
 
           <View style={S.tableHeader}>
-            <Text style={[S.th, { width: 30, textAlign: "center" }]}>S.No</Text>
+            <Text style={[S.th, { width: 26, textAlign: "center" }]}>S.No</Text>
             <Text style={[S.th, { flex: 1, textAlign: "left" }]}>HSN Code</Text>
-            <Text style={[S.th, { width: 60, textAlign: "right" }]}>Qty</Text>
-            <Text style={[S.th, { width: 90, textAlign: "right" }]}>Before GST</Text>
-            <Text style={[S.th, { width: 90, textAlign: "right" }]}>GST Amt</Text>
-            <Text style={[S.th, { width: 95, textAlign: "right" }]}>Total (Incl)</Text>
+            <Text style={[S.th, { width: 42, textAlign: "right" }]}>Qty</Text>
+            <Text style={[S.th, { width: 72, textAlign: "right" }]}>Price Before GST</Text>
+            <Text style={[S.th, { width: 62, textAlign: "right" }]}>CGST</Text>
+            <Text style={[S.th, { width: 62, textAlign: "right" }]}>SGST</Text>
+            <Text style={[S.th, { width: 70, textAlign: "right" }]}>GST Amount</Text>
+            <Text style={[S.th, { width: 78, textAlign: "right" }]}>Total Amount</Text>
           </View>
 
           {rows.length === 0 ? (
@@ -275,25 +285,32 @@ export default function HsnReportPDF({ data, range }) {
               const totalPrice = r.totalPrice ?? 0;
               const totalBaseRow = r.totalBase ?? totalPrice / 1.18;
               const totalGstRow = r.totalGst ?? totalPrice - totalBaseRow;
+              const cgstRow = totalGstRow / 2;
+              const sgstRow = totalGstRow / 2;
               return (
                 <View key={r.hsnCode || i} style={{ flexDirection: "row" }}>
-                  <Text style={[S.tdCenter, { width: 30 }]}>{i + 1}</Text>
+                  <Text style={[S.tdCenter, { width: 26 }]}>{i + 1}</Text>
                   <Text style={[S.tdLeft, { flex: 1, fontFamily: "Helvetica-Bold" }]}>{r.hsnCode}</Text>
-                  <Text style={[S.td, { width: 60 }]}>{fmtInt(r.quantity)}</Text>
-                  <Text style={[S.td, { width: 90 }]}>{fmt(totalBaseRow)}</Text>
-                  <Text style={[S.td, { width: 90 }]}>{fmt(totalGstRow)}</Text>
-                  <Text style={[S.td, { width: 95, fontFamily: "Helvetica-Bold" }]}>{fmt(totalPrice)}</Text>
+                  <Text style={[S.td, { width: 42 }]}>{fmtInt(r.quantity)}</Text>
+                  <Text style={[S.td, { width: 72 }]}>{fmt(totalBaseRow)}</Text>
+                  <Text style={[S.td, { width: 62 }]}>{fmt(cgstRow)}</Text>
+                  <Text style={[S.td, { width: 62 }]}>{fmt(sgstRow)}</Text>
+                  <Text style={[S.td, { width: 70 }]}>{fmt(totalGstRow)}</Text>
+                  <Text style={[S.td, { width: 78, fontFamily: "Helvetica-Bold" }]}>{fmt(totalPrice)}</Text>
                 </View>
               );
             })
           )}
 
           <View style={S.totalRow}>
+            <Text style={[S.th, { width: 26, textAlign: "center", paddingHorizontal: 3 }]}></Text>
             <Text style={[S.th, { flex: 1, textAlign: "left", paddingHorizontal: 3 }]}>TOTAL</Text>
-            <Text style={[S.th, { width: 60, textAlign: "right", paddingHorizontal: 3 }]}>{fmtInt(totalQty)}</Text>
-            <Text style={[S.th, { width: 90, textAlign: "right", paddingHorizontal: 3 }]}>{fmt(totalBase)}</Text>
-            <Text style={[S.th, { width: 90, textAlign: "right", paddingHorizontal: 3 }]}>{fmt(totalGst)}</Text>
-            <Text style={[S.th, { width: 95, textAlign: "right", paddingHorizontal: 3 }]}>{fmt(totalValue)}</Text>
+            <Text style={[S.th, { width: 42, textAlign: "right", paddingHorizontal: 3 }]}>{fmtInt(totalQty)}</Text>
+            <Text style={[S.th, { width: 72, textAlign: "right", paddingHorizontal: 3 }]}>{fmt(totalBase)}</Text>
+            <Text style={[S.th, { width: 62, textAlign: "right", paddingHorizontal: 3 }]}>{fmt(totalGst / 2)}</Text>
+            <Text style={[S.th, { width: 62, textAlign: "right", paddingHorizontal: 3 }]}>{fmt(totalGst / 2)}</Text>
+            <Text style={[S.th, { width: 70, textAlign: "right", paddingHorizontal: 3 }]}>{fmt(totalGst)}</Text>
+            <Text style={[S.th, { width: 78, textAlign: "right", paddingHorizontal: 3 }]}>{fmt(totalValue)}</Text>
           </View>
 
           <View style={{ flex: 1 }} />
