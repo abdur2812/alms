@@ -27,7 +27,7 @@ const sanitizeGstNumber = (val) => {
 // @access  Public
 exports.getAllVendors = asyncHandler(async (req, res, next) => {
   const { search } = req.query;
-  const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 10 });
+  const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 10, allowLarge: true });
 
   const query = {};
   if (search) {

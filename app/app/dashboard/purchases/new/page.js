@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { FiShoppingBag, FiSave, FiCheck, FiPlus, FiTrash2 } from "react-icons/fi";
 import Link from "next/link";
@@ -49,7 +49,7 @@ export default function NewPurchasePage() {
   useEffect(() => {
     let cancelled = false;
     vendorsAPI
-      .getAll({ limit: 20 })
+      .getAll({ limit: 500 })
       .then((res) => {
         if (!cancelled) setVendors(res.data.data || []);
       })
@@ -83,14 +83,19 @@ export default function NewPurchasePage() {
   const removePayment = (idx) =>
     setPayments((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
 
-  const searchVendors = async (searchTerm) => {
-    const response = await vendorsAPI.getAll({ limit: 20, search: searchTerm });
-    const results = response.data.data.map((v) => ({
-      value: v._id,
-      label: v.name,
-    }));
+  // Search results are also merged into `vendors`, so a vendor picked from
+  // search is always present in the Dropdown's options (label + value).
+  const searchVendors = useCallback(async (searchTerm) => {
+    const response = await vendorsAPI.getAll({ limit: 100, search: searchTerm });
+    const found = response.data.data || [];
+    setVendors((prev) => {
+      const known = new Set(prev.map((v) => v._id));
+      const added = found.filter((v) => !known.has(v._id));
+      return added.length ? [...prev, ...added] : prev;
+    });
+    const results = found.map((v) => ({ value: v._id, label: v.name }));
     return [{ value: "", label: "— None / Walk-in —" }, ...results];
-  };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -177,6 +182,7 @@ export default function NewPurchasePage() {
                       ...vendors.map((v) => ({ value: v._id, label: v.name })),
                     ]}
                     onSearch={searchVendors}
+                    initialLimit={500}
                   />
                 </div>
 

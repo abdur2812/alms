@@ -1,7 +1,6 @@
 const Invoice = require("../models/Invoice");
 const Purchase = require("../models/Purchase");
 const Expense = require("../models/Expense");
-const StaffDailyPayment = require("../models/StaffDailyPayment");
 const Product = require("../models/Product");
 const StockSnapshot = require("../models/StockSnapshot");
 const { AppError, asyncHandler } = require("../middleware/errorHandler");
@@ -105,7 +104,6 @@ exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
   const invoiceQuery = { isGstBill: true };
   const purchaseQuery = {};
   const expenseQuery = {};
-  const paymentQuery = {};
 
   if (startDate || endDate) {
     const range = buildRange(startDate, endDate);
@@ -113,12 +111,11 @@ exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
       invoiceQuery.createdAt = range;
       purchaseQuery.date = range;
       expenseQuery.date = range;
-      paymentQuery.paidAt = range;
     }
   }
 
   // Totals via aggregation (O(1) memory, no full doc hydration)
-  const [salesAgg, purchaseAgg, expenseAgg, salaryAgg] = await Promise.all([
+  const [salesAgg, purchaseAgg, expenseAgg] = await Promise.all([
     Invoice.aggregate([
       { $match: invoiceQuery },
       { $group: { _id: "$billType", total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
@@ -174,7 +171,6 @@ exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
       },
     ]),
     Expense.aggregate([{ $match: expenseQuery }, { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }]),
-    StaffDailyPayment.aggregate([{ $match: paymentQuery }, { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }]),
   ]);
 
   // Parse sales aggregates
@@ -199,15 +195,12 @@ exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
 
   const totalExpenses = expenseAgg[0]?.total || 0;
   const expensesCount = expenseAgg[0]?.count || 0;
-  const totalSalaryPaid = salaryAgg[0]?.total || 0;
-  const salaryCount = salaryAgg[0]?.count || 0;
 
   // Fetch lists lean with projection + limit 500 to avoid OOM on unbounded range
   const LIST_LIMIT = 500;
-  const [purchasesListRaw, expensesList, dailyPaymentsRaw] = await Promise.all([
+  const [purchasesListRaw, expensesList] = await Promise.all([
     Purchase.find(purchaseQuery).populate("vendorId", "name phone").sort({ date: -1, createdAt: -1 }).limit(LIST_LIMIT).select("invoiceNumber vendorId date amount payments chequeDetails chequeAmount chequeStatus passedDate").lean(),
     Expense.find(expenseQuery).sort({ date: -1, createdAt: -1 }).limit(LIST_LIMIT).lean(),
-    StaffDailyPayment.find(paymentQuery).populate("staffId", "name role dailyWage").sort({ paidAt: -1 }).limit(LIST_LIMIT).lean(),
   ]);
 
   const purchaseRows = purchasesListRaw.map((p) => ({
@@ -223,7 +216,7 @@ exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
     passedDate: p.passedDate,
   }));
 
-  const netBalance = totalSales - totalPurchases - totalExpenses - totalSalaryPaid;
+  const netBalance = totalSales - totalPurchases - totalExpenses;
 
   res.status(200).json({
     success: true,
@@ -237,7 +230,6 @@ exports.getAccountsSummary = asyncHandler(async (req, res, next) => {
         purchases: purchaseRows,
       },
       expenses: { total: Math.round(totalExpenses * 100) / 100, count: expensesCount, list: expensesList },
-      staff: { totalPaid: Math.round(totalSalaryPaid * 100) / 100, count: salaryCount, dailyCount: salaryCount, dailyPayments: dailyPaymentsRaw },
       netBalance: Math.round(netBalance * 100) / 100,
     },
   });
@@ -344,7 +336,7 @@ exports.getHsnSummary = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Get monthly accounts report: opening/closing stock, purchases, sales, salaries, expenses by category
+// @desc    Get monthly accounts report: opening/closing stock, purchases, sales, expenses by category
 // @route   GET /api/accounts/report?month=YYYY-MM or ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
 // @access  Public
 exports.getAccountsReport = asyncHandler(async (req, res, next) => {
@@ -385,17 +377,14 @@ exports.getAccountsReport = asyncHandler(async (req, res, next) => {
 
   // Parallelize independent aggregates
   // Sales = GST bills only — estimates are excluded.
-  const [purchasesAgg, salesAgg, dailySalaries, expensesByCategoryAgg] = await Promise.all([
+  const [purchasesAgg, salesAgg, expensesByCategoryAgg] = await Promise.all([
     Purchase.aggregate([{ $match: { date: { $gte: monthStart, $lte: monthEnd } } }, { $group: { _id: null, total: { $sum: "$amount" } } }]),
     Invoice.aggregate([{ $match: { isGstBill: true, createdAt: { $gte: monthStart, $lte: monthEnd } } }, { $group: { _id: null, total: { $sum: "$totalAmount" } } }]),
-    StaffDailyPayment.find({ paidAt: { $gte: monthStart, $lte: monthEnd } }).select("amount paidAt").lean(),
     Expense.aggregate([{ $match: { date: { $gte: monthStart, $lte: monthEnd } } }, { $group: { _id: "$category", total: { $sum: "$amount" }, count: { $sum: 1 } } }, { $sort: { total: -1, _id: 1 } }]),
   ]);
 
   const purchasesTotal = Math.round((purchasesAgg[0]?.total || 0) * 100) / 100;
   const salesTotal = Math.round((salesAgg[0]?.total || 0) * 100) / 100;
-  const salariesTotal = Math.round(sum(dailySalaries, (p) => p.amount) * 100) / 100;
-  const salariesCount = dailySalaries.length;
 
   const expensesByCategory = expensesByCategoryAgg.map((r) => ({ category: r._id || "Uncategorized", total: Math.round(r.total * 100) / 100, count: r.count }));
   const expensesTotal = Math.round(sum(expensesByCategory, (c) => c.total) * 100) / 100;
@@ -495,7 +484,6 @@ exports.getAccountsReport = asyncHandler(async (req, res, next) => {
       closingStock: { qty: closingStockQty, value: closingStockValue },
       purchases: { total: purchasesTotal, count: pCount },
       sales: { total: salesTotal, count: sCount },
-      salaries: { total: salariesTotal, count: salariesCount, dailyCount: dailySalaries.length },
       expenses: { total: expensesTotal, count: expensesByCategory.reduce((s, c) => s + c.count, 0), byCategory: expensesByCategory },
     },
   });

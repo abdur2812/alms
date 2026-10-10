@@ -438,6 +438,7 @@ export function Dropdown({
   disabled = false,
   className = "",
   onSearch = null, // Function to fetch more data when searching
+  initialLimit = 3, // How many preloaded options to show before the user types (onSearch only)
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -456,9 +457,10 @@ export function Dropdown({
 
   // Always look in full options for selected label, so it doesn't
   // disappear while the user is searching.
-  const selectedLabel = options.find(
-    (opt) => opt.value === value,
-  )?.label;
+  const [picked, setPicked] = useState(null);
+  const selectedLabel =
+    options.find((opt) => opt.value === value)?.label ??
+    (picked?.value === value ? picked.label : undefined);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -499,6 +501,11 @@ export function Dropdown({
   }, [searchTerm, onSearch]);
 
   const handleSelect = (optionValue) => {
+    setPicked(
+      searchOptions.find((o) => o.value === optionValue) ||
+      options.find((o) => o.value === optionValue) ||
+      null,
+    );
     onChange({ target: { name, value: optionValue } });
     setIsOpen(false);
     setSearchTerm("");
@@ -674,6 +681,10 @@ export function Dropdown({
                     }
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Enter in the search box must not submit the surrounding form
+                      if (e.key === "Enter") e.preventDefault();
+                    }}
                     className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border-2 border-indigo-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition-all duration-400 placeholder-gray-400 hover:border-indigo-300"
                     autoFocus={isOpen}
                   />

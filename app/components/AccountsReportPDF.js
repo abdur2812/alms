@@ -188,15 +188,6 @@ export default function AccountsReportPDF({ report }) {
             </View>
           </View>
 
-          {/* Salaries - single line — daily only */}
-          <View style={S.section}>
-            <Text style={S.sectionTitle}>Salaries & Staff Expenses</Text>
-            <View style={S.row}>
-              <Text style={S.rowLabel}>Staff Salaries ({data.salaries?.count || 0} daily settlements)</Text>
-              <Text style={S.rowValue}>Rs. {fmt(data.salaries?.total)}</Text>
-            </View>
-          </View>
-
           {/* Administrative Expenses - by category */}
           <View style={S.section}>
             <Text style={S.sectionTitle}>Administrative Expenses</Text>

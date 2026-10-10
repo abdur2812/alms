@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { invoicesAPI, hsnsAPI } from "@/lib/api";
 import { formatINR } from "@/lib/formatters";
+import { fetchInvoicesInRange, downloadInvoicesZip } from "@/lib/invoiceZip";
 import { PageHeader, Card, CardBody, Button, Modal } from "@/components/UI";
 import {
   FiPlus,
@@ -15,6 +16,7 @@ import {
   FiSearch,
   FiFileText,
   FiDownload,
+  FiArchive,
   FiCopy,
   FiHash,
   FiX,
@@ -35,6 +37,17 @@ export default function InvoicesPage() {
   const [converting, setConverting] = useState(null);
   const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(null);
   const [search, setSearch] = useState("");
+
+  // Export-as-ZIP state
+  const [showZipModal, setShowZipModal] = useState(false);
+  const [zipStart, setZipStart] = useState("");
+  const [zipEnd, setZipEnd] = useState("");
+  const [zipType, setZipType] = useState("");
+  const [zipCount, setZipCount] = useState(null);
+  const [zipCounting, setZipCounting] = useState(false);
+  const [zipBusy, setZipBusy] = useState(false);
+  const [zipProgress, setZipProgress] = useState("");
+  const [zipError, setZipError] = useState("");
 
   // HSN management
   const [showHsnModal, setShowHsnModal] = useState(false);
@@ -185,6 +198,54 @@ export default function InvoicesPage() {
     router.push("/dashboard/invoices/new");
   };
 
+  // Live count of invoices inside the chosen date range
+  useEffect(() => {
+    if (!showZipModal || !zipStart || !zipEnd || zipStart > zipEnd) {
+      setZipCount(null);
+      return;
+    }
+    let cancelled = false;
+    setZipCounting(true);
+    const params = { page: 1, limit: 1, startDate: zipStart, endDate: zipEnd };
+    if (zipType) params.isGstBill = zipType;
+    invoicesAPI
+      .getAll(params)
+      .then((res) => !cancelled && setZipCount(res.data.total ?? 0))
+      .catch(() => !cancelled && setZipCount(null))
+      .finally(() => !cancelled && setZipCounting(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [showZipModal, zipStart, zipEnd, zipType]);
+
+  const handleZipExport = async () => {
+    setZipError("");
+    setZipBusy(true);
+    try {
+      setZipProgress("Fetching invoices...");
+      const list = await fetchInvoicesInRange({ startDate: zipStart, endDate: zipEnd, isGstBill: zipType });
+      if (!list.length) {
+        setZipError("No invoices found in this range.");
+        return;
+      }
+      const { count, failed } = await downloadInvoicesZip(list, { startDate: zipStart, endDate: zipEnd }, (p) => {
+        if (p.phase === "pdf") setZipProgress(`Generating PDF ${p.done + 1} of ${p.total}...`);
+        else if (p.phase === "zip") setZipProgress("Creating ZIP...");
+      });
+      if (failed.length) {
+        setZipError(`ZIP downloaded with ${count} PDFs. Failed: ${failed.join(", ")}`);
+      } else {
+        setShowZipModal(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setZipError("Export failed. Please try again.");
+    } finally {
+      setZipBusy(false);
+      setZipProgress("");
+    }
+  };
+
   const downloadBulkInvoiceCSV = async () => {
     try {
       const response = await invoicesAPI.bulkExport();
@@ -256,6 +317,10 @@ export default function InvoicesPage() {
             <Button onClick={downloadBulkInvoiceCSV} variant="secondary">
               <FiDownload className="mr-2" />
               Download CSV
+            </Button>
+            <Button onClick={() => setShowZipModal(true)} variant="secondary">
+              <FiArchive className="mr-2" />
+              Export PDFs (ZIP)
             </Button>
             <Button onClick={openHsnModal} variant="secondary">
               <FiHash className="mr-2" />
@@ -770,6 +835,81 @@ export default function InvoicesPage() {
               className="w-full"
             >
               Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showZipModal}
+        onClose={() => !zipBusy && setShowZipModal(false)}
+        title="Export Invoices as ZIP"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Choose a date range. All invoice PDFs in that range are generated in your browser and saved as one ZIP on this computer.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-sm font-medium text-gray-700">
+              Start date
+              <input
+                type="date"
+                value={zipStart}
+                max={zipEnd || undefined}
+                onChange={(e) => setZipStart(e.target.value)}
+                disabled={zipBusy}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              End date
+              <input
+                type="date"
+                value={zipEnd}
+                min={zipStart || undefined}
+                onChange={(e) => setZipEnd(e.target.value)}
+                disabled={zipBusy}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </label>
+          </div>
+          <label className="block text-sm font-medium text-gray-700">
+            Type
+            <select
+              value={zipType}
+              onChange={(e) => setZipType(e.target.value)}
+              disabled={zipBusy}
+              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="">All (GST invoices + estimates)</option>
+              <option value="true">GST invoices only</option>
+              <option value="false">Estimates only</option>
+            </select>
+          </label>
+          <div className="rounded-lg bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+            {!zipStart || !zipEnd
+              ? "Select both dates to see how many invoices match."
+              : zipStart > zipEnd
+                ? "Start date must be before end date."
+                : zipCounting
+                  ? "Counting..."
+                  : zipCount === null
+                    ? "Could not count invoices."
+                    : `${zipCount} invoice${zipCount === 1 ? "" : "s"} in this range`}
+          </div>
+          {zipProgress && <p className="text-sm text-gray-600">{zipProgress}</p>}
+          {zipError && <p className="text-sm text-red-600">{zipError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setShowZipModal(false)} disabled={zipBusy}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleZipExport}
+              disabled={zipBusy || !zipCount || zipStart > zipEnd}
+            >
+              <FiDownload className="mr-2" />
+              {zipBusy ? "Working..." : "Generate ZIP"}
             </Button>
           </div>
         </div>

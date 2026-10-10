@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FiTrendingUp, FiDollarSign, FiShoppingBag, FiCreditCard, FiAlertCircle, FiPlus, FiX, FiCalendar, FiUsers, FiTrash2, FiHash, FiPieChart, FiDownload, FiEye, FiEyeOff } from "react-icons/fi";
+import { FiTrendingUp, FiDollarSign, FiShoppingBag, FiCreditCard, FiAlertCircle, FiPlus, FiX, FiTrash2, FiHash, FiPieChart, FiDownload, FiEye, FiEyeOff } from "react-icons/fi";
 import { Card, Badge, ConfirmDialog } from "@/components/UI";
 import DateRangePicker from "@/components/DateRangePicker";
 import { accountsAPI, expensesAPI, expenseCategoriesAPI } from "@/lib/api";
@@ -31,7 +31,6 @@ const TABS = [
   { id: "hsn", label: "HSN Codes", icon: FiHash },
   { id: "purchases", label: "Purchases", icon: FiShoppingBag },
   { id: "expenses", label: "Expenses", icon: FiPlus },
-  { id: "salaries", label: "Salaries", icon: FiUsers },
 ];
 
 function StatTile({ icon: Icon, label, value, idx, format = formatINR }) {
@@ -531,7 +530,6 @@ export default function AccountsPage() {
   const sales = summary?.sales || { total: 0, paid: 0, credit: 0, count: 0 };
   const purchases = summary?.purchases || { total: 0, paid: 0, credit: 0, count: 0, purchases: [] };
   const expenses = summary?.expenses || { total: 0, count: 0, list: [] };
-  const staff = summary?.staff || { totalPaid: 0, count: 0, payments: [] };
 
   const refreshSummary = () => {
     const params = {};
@@ -703,8 +701,6 @@ export default function AccountsPage() {
               <span>Purchases <strong className="text-white">{formatINR(purchases.total)}</strong></span>
               <span className="text-indigo-300">−</span>
               <span>Expenses <strong className="text-white">{formatINR(expenses.total)}</strong></span>
-              <span className="text-indigo-300">−</span>
-              <span>Salaries <strong className="text-white">{formatINR(staff.totalPaid)}</strong></span>
             </div>
           </div>
 
@@ -925,37 +921,6 @@ export default function AccountsPage() {
                 </tr>
               ))}
             />
-          )}
-        </Section>
-      )}
-
-      {tab === "salaries" && (
-        <Section title="Staff Salaries" subtitle="Daily salary settlements per staff (per-day tracked via Attendance/Calendar)" accent="cyan">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
-            <StatTile icon={FiUsers} label="Total Salary Paid" value={staff.dailyPayments?.reduce((s, p) => s + (p.amount || 0), 0) ?? 0} idx={4} />
-            <StatTile icon={FiCalendar} label="Daily Settlements" value={staff.dailyCount ?? staff.dailyPayments?.length ?? 0} idx={3} format={(v) => String(v)} />
-          </div>
-          {(staff.dailyPayments?.length || 0) === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-500">No salary payments recorded in this period.</div>
-          ) : (
-            <div>
-              <Tbl
-                headers={["Staff", "Date", "Status", "Amount", "Paid On"]}
-                rows={staff.dailyPayments.map((p) => (
-                  <tr key={p._id} className="hover:bg-cyan-50/30 transition-colors">
-                    <td className="px-4 py-2.5 text-sm font-bold text-gray-900">{p.staffId?.name || "—"}</td>
-                    <td className="px-4 py-2.5 text-sm text-gray-600">{p.date ? new Date(p.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</td>
-                    <td className="px-4 py-2.5 text-sm text-gray-600">
-                      <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${p.status === "present" ? "bg-green-100 text-green-700" : p.status === "half" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>{p.status || "—"}</span>
-                    </td>
-                    <td className="px-4 py-2.5 text-sm font-bold text-gray-900">{formatINR(p.amount)}</td>
-                    <td className="px-4 py-2.5 text-sm text-gray-600">
-                      {p.paidAt ? new Date(p.paidAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              />
-            </div>
           )}
         </Section>
       )}
