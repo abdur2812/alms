@@ -3,9 +3,11 @@ import Link from "next/link";
 
 // Reusable UI Components
 
-export function PageHeader({ title, subtitle, action, backLink }) {
+export function PageHeader({ title, subtitle, action, backLink, compact = false }) {
   return (
-    <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div
+      className={`${compact ? "mb-4 shrink-0" : "mb-8"} flex flex-col md:flex-row md:items-center md:justify-between gap-4`}
+    >
       <div>
         {backLink && (
           <Link
@@ -28,10 +30,22 @@ export function PageHeader({ title, subtitle, action, backLink }) {
             Back
           </Link>
         )}
-        <h1 className="text-3xl font-bold bg-linear-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+        <h1
+          className={
+            compact
+              ? "text-xl font-semibold tracking-tight text-gray-900"
+              : "text-3xl font-bold bg-linear-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent"
+          }
+        >
           {title}
         </h1>
-        {subtitle && <p className="mt-2 text-sm text-gray-600">{subtitle}</p>}
+        {subtitle && (
+          <p
+            className={`${compact ? "mt-0.5 text-gray-500" : "mt-2 text-gray-600"} text-sm`}
+          >
+            {subtitle}
+          </p>
+        )}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -770,6 +784,160 @@ export function Dropdown({
       {error && (
         <p className="mt-1 text-sm text-red-500 font-medium">{error}</p>
       )}
+    </div>
+  );
+}
+
+// ─── List page layout ─────────────────────────────────────────────────────────
+// A list page fills the viewport: header + toolbar stay put, only the list
+// scrolls, and the pagination bar is pinned to the bottom of the screen.
+// Compose: <ListPage> <PageHeader compact/> <ListToolbar/> <ListPanel> ... </ListPanel> </ListPage>
+
+export function ListPage({ children, className = "" }) {
+  return (
+    <div
+      className={`h-full flex flex-col overflow-hidden bg-gray-50 px-6 pt-5 pb-4 ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// One-line bar that clubs the search box with the filters of a list.
+export function ListToolbar({ children, className = "" }) {
+  return (
+    <div
+      className={`shrink-0 flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100 ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function SearchBox({
+  value,
+  onChange,
+  placeholder,
+  accent = "indigo",
+  className = "",
+}) {
+  const ring =
+    accent === "amber" ? "focus:ring-amber-500" : "focus:ring-indigo-500";
+  return (
+    <div className={`relative w-full sm:w-80 ${className}`}>
+      <svg
+        className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        viewBox="0 0 24 24"
+      >
+        <circle cx="11" cy="11" r="7" />
+        <path strokeLinecap="round" d="M21 21l-4.3-4.3" />
+      </svg>
+      <input
+        type="text"
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className={`block w-full h-9 pl-9 pr-3 text-sm border border-gray-200 rounded-lg bg-gray-50 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 ${ring} focus:border-transparent transition-colors`}
+      />
+    </div>
+  );
+}
+
+// Pill-style single choice. options: [{ value, label, tone? }] where tone is a
+// tailwind text colour class for the active label.
+export function Segmented({ options, value, onChange, className = "" }) {
+  return (
+    <div
+      className={`flex h-9 items-center bg-gray-100 p-0.5 rounded-lg ${className}`}
+    >
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <button
+            key={String(o.value)}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className={`h-full px-3 text-xs font-semibold rounded-md whitespace-nowrap transition-colors ${
+              active
+                ? `bg-white shadow-sm ${o.tone || "text-indigo-700"}`
+                : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function ToolbarDivider() {
+  return <span className="hidden sm:block h-5 w-px bg-gray-200" />;
+}
+
+// "128 invoices" pushed to the far end of a toolbar.
+export function ListCount({ count, label }) {
+  if (typeof count !== "number") return null;
+  return (
+    <span className="ml-auto text-sm text-gray-500 tabular-nums">
+      <span className="font-semibold text-gray-900">
+        {count.toLocaleString("en-IN")}
+      </span>{" "}
+      {count === 1 ? label : `${label}s`}
+    </span>
+  );
+}
+
+// Card that takes the remaining height. Put a <ListScroll> and a
+// <PaginationBar> inside; only <ListScroll> scrolls.
+export function ListPanel({ children, className = "" }) {
+  return (
+    <div
+      className={`flex-1 min-h-0 flex flex-col overflow-hidden bg-white rounded-xl shadow-sm border border-gray-200 ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function ListScroll({ children, className = "" }) {
+  return (
+    <div className={`flex-1 min-h-0 overflow-auto ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+export function PaginationBar({ page, totalPages, total, onChange }) {
+  if (!totalPages || totalPages <= 1) return null;
+  return (
+    <div className="shrink-0 flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/80 px-4 py-2.5 sm:px-6">
+      <p className="text-sm text-gray-500 font-medium">
+        Page <span className="text-indigo-600">{page}</span> of{" "}
+        <span className="text-indigo-600">{totalPages}</span>
+        {typeof total === "number" && <span> • {total} total</span>}
+      </p>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={page <= 1}
+          onClick={() => onChange(Math.max(1, page - 1))}
+        >
+          Previous
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={page >= totalPages}
+          onClick={() => onChange(Math.min(totalPages, page + 1))}
+        >
+          Next
+        </Button>
+      </div>
     </div>
   );
 }

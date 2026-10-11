@@ -3,7 +3,7 @@
 import { useState, useEffect, Fragment } from "react";
 import Link from "next/link";
 import { FiPlus, FiEdit, FiTrash2, FiEye, FiSearch, FiShoppingBag, FiTruck, FiEdit2, FiX, FiCheck, FiFileText, FiChevronDown } from "react-icons/fi";
-import { PageHeader, Card, Button, Badge, LoadingSpinner, EmptyState } from "@/components/UI";
+import { PageHeader, Card, Button, Badge, LoadingSpinner, EmptyState, ListPage, ListToolbar, ListCount, SearchBox, ListPanel, ListScroll, PaginationBar } from "@/components/UI";
 import { purchasesAPI, vendorsAPI } from "@/lib/api";
 import usePersistentState from "@/lib/usePersistentState";
 
@@ -332,7 +332,7 @@ export default function PurchasesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+    <ListPage>
       <style>{`
         @keyframes payDropIn {
           from { opacity: 0; transform: translateY(-10px) scaleY(0.96); transform-origin: top; }
@@ -346,6 +346,7 @@ export default function PurchasesPage() {
         .pay-drop-item { animation: payItemIn 0.3s ease-out both; }
       `}</style>
       <PageHeader
+        compact
         title="Purchases"
         subtitle="Purchase invoices and vendor management"
         action={
@@ -364,44 +365,52 @@ export default function PurchasesPage() {
       />
 
       {error && (
-        <div className="mb-6 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
+        <div className="shrink-0 mb-4 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
           <span>{error}</span>
           <button onClick={() => setError("")} className="ml-auto text-red-400 hover:text-red-600 font-bold">✕</button>
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex bg-white rounded-xl border border-gray-100 shadow-sm p-1 mb-6 w-fit">
-        <button
-          onClick={() => setTab("invoices")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
-            tab === "invoices" ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md" : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          <FiShoppingBag className="h-4 w-4" /> Purchase Invoices
-        </button>
-        <button
-          onClick={() => setTab("vendors")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
-            tab === "vendors" ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-md" : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-            <FiTruck className="h-4 w-4" /> Vendors ({vendorTotal})
-        </button>
-      </div>
+      <ListPanel>
+      <ListToolbar>
+        {tab === "invoices" ? (
+          <SearchBox
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search purchase, invoice, vendor, payment..."
+          />
+        ) : (
+          <SearchBox
+            accent="amber"
+            value={vendorSearch}
+            onChange={(e) => setVendorSearch(e.target.value)}
+            placeholder="Search vendors by name, GST, phone, bank..."
+          />
+        )}
+        <div className="flex h-10 items-center bg-white border border-gray-200 shadow-sm p-1 rounded-lg">
+          <button
+            onClick={() => setTab("invoices")}
+            className={`flex h-full items-center gap-2 px-4 rounded-md text-xs font-semibold whitespace-nowrap transition-all ${
+              tab === "invoices" ? "bg-indigo-600 text-white" : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            <FiShoppingBag className="h-3.5 w-3.5" /> Purchase Invoices
+          </button>
+          <button
+            onClick={() => setTab("vendors")}
+            className={`flex h-full items-center gap-2 px-4 rounded-md text-xs font-semibold whitespace-nowrap transition-all ${
+              tab === "vendors" ? "bg-amber-500 text-white" : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            <FiTruck className="h-3.5 w-3.5" /> Vendors ({vendorTotal})
+          </button>
+        </div>
+        <ListCount count={tab === "invoices" ? purchaseTotal : vendorTotal} label={tab === "invoices" ? "purchase" : "vendor"} />
+      </ListToolbar>
 
       {tab === "invoices" ? (
         <>
-          <Card className="mb-8 animate-fadeIn">
-            <div className="px-6 py-4">
-              <div className="relative">
-                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-10 pr-3 py-3 border-2 border-gray-100 rounded-xl bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Search by purchase, vendor invoice, vendor, or payment details/method..." />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="animate-fadeIn">
+          <div className="flex-1 min-h-0 flex flex-col">
             {loading ? (
               <LoadingSpinner />
             ) : purchaseTotal === 0 ? (
@@ -417,9 +426,9 @@ export default function PurchasesPage() {
               />
             ) : (
               <>
-                <div className="overflow-x-auto">
+                <ListScroll>
                   <table className="min-w-full divide-y divide-gray-100">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
                       <tr>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">S.No</th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
@@ -559,80 +568,30 @@ export default function PurchasesPage() {
                       })}
                   </tbody>
                 </table>
-              </div>
-                {purchaseTotalPages > 1 && (
-                  <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                    <div className="flex-1 flex justify-between sm:hidden">
-                      <button
-                        onClick={() => setPurchasePage(Math.max(1, purchasePage - 1))}
-                        disabled={purchasePage === 1}
-                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Previous
-                      </button>
-                      <button
-                        onClick={() => setPurchasePage(Math.min(purchaseTotalPages, purchasePage + 1))}
-                        disabled={purchasePage === purchaseTotalPages}
-                        className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Next
-                      </button>
-                    </div>
-                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm text-gray-700">
-                          Page <span className="font-medium">{purchasePage}</span> of <span className="font-medium">{purchaseTotalPages}</span> • {purchaseTotal} total
-                        </p>
-                      </div>
-                      <div>
-                        <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                          <button
-                            onClick={() => setPurchasePage(Math.max(1, purchasePage - 1))}
-                            disabled={purchasePage === 1}
-                            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                          >
-                            Previous
-                          </button>
-                          <button
-                            onClick={() => setPurchasePage(Math.min(purchaseTotalPages, purchasePage + 1))}
-                            disabled={purchasePage === purchaseTotalPages}
-                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                          >
-                            Next
-                          </button>
-                        </nav>
-                      </div>
-                    </div>
-                  </div>
-                )}
+              </ListScroll>
+                <PaginationBar page={purchasePage} totalPages={purchaseTotalPages} total={purchaseTotal} onChange={setPurchasePage} />
               </>
             )}
-          </Card>
+          </div>
         </>
        ) : (
         <>
-          {/* Vendor Search */}
-          <Card className="mb-6 animate-fadeIn">
-            <div className="px-6 py-4">
-              <div className="relative">
-                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input type="text" value={vendorSearch} onChange={(e) => setVendorSearch(e.target.value)} className="block w-full pl-10 pr-3 py-3 border-2 border-gray-100 rounded-xl bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Search vendors by name, GST, phone, bank, IFSC..." />
-              </div>
-            </div>
-          </Card>
-
           {/* Add/Edit Vendor Form */}
-          {showVendorForm && <VendorForm onSave={handleAddVendor} onCancel={() => setShowVendorForm(false)} />}
-          {editingVendor && (
-            <VendorForm
-              key={editingVendor._id}
-              initial={editingVendor}
-              onSave={handleUpdateVendor}
-              onCancel={() => setEditingVendor(null)}
-            />
+          {(showVendorForm || editingVendor) && (
+            <div className="shrink-0 max-h-[55vh] overflow-y-auto p-4 border-b border-gray-100">
+              {showVendorForm && <VendorForm onSave={handleAddVendor} onCancel={() => setShowVendorForm(false)} />}
+              {editingVendor && (
+                <VendorForm
+                  key={editingVendor._id}
+                  initial={editingVendor}
+                  onSave={handleUpdateVendor}
+                  onCancel={() => setEditingVendor(null)}
+                />
+              )}
+            </div>
           )}
 
-          <Card className="animate-fadeIn">
+          <div className="flex-1 min-h-0 flex flex-col">
             {vendorsLoading ? (
               <LoadingSpinner />
             ) : vendorTotal === 0 ? (
@@ -648,9 +607,9 @@ export default function PurchasesPage() {
               />
             ) : (
               <>
-              <div className="overflow-x-auto">
+              <ListScroll>
                 <table className="min-w-full divide-y divide-gray-100">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Vendor</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Contact</th>
@@ -721,35 +680,14 @@ export default function PurchasesPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
-              {vendorTotalPages > 1 && (
-                <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                  <p className="text-sm text-gray-700">
-                    Page <span className="font-medium">{vendorPage}</span> of <span className="font-medium">{vendorTotalPages}</span> • {vendorTotal} total
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setVendorPage(Math.max(1, vendorPage - 1))}
-                      disabled={vendorPage === 1}
-                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => setVendorPage(Math.min(vendorTotalPages, vendorPage + 1))}
-                      disabled={vendorPage === vendorTotalPages}
-                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
+              </ListScroll>
+              <PaginationBar page={vendorPage} totalPages={vendorTotalPages} total={vendorTotal} onChange={setVendorPage} />
               </>
             )}
-          </Card>
+          </div>
         </>
       )}
-    </div>
+      </ListPanel>
+    </ListPage>
   );
 }

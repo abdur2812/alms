@@ -7,7 +7,20 @@ import { invoicesAPI, hsnsAPI } from "@/lib/api";
 import usePersistentState from "@/lib/usePersistentState";
 import { formatINR } from "@/lib/formatters";
 import { fetchInvoicesInRange, downloadInvoicesZip } from "@/lib/invoiceZip";
-import { PageHeader, Card, CardBody, Button, Modal } from "@/components/UI";
+import {
+  PageHeader,
+  Button,
+  Modal,
+  ListPage,
+  ListToolbar,
+  ToolbarDivider,
+  ListCount,
+  SearchBox,
+  Segmented,
+  ListPanel,
+  ListScroll,
+  PaginationBar,
+} from "@/components/UI";
 import {
   FiPlus,
   FiEdit,
@@ -31,6 +44,7 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = usePersistentState("invoices.page", 1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(null);
   const [billTypeFilter, setBillTypeFilter] = usePersistentState("invoices.billType", "");
   const [invoiceModeFilter, setInvoiceModeFilter] = usePersistentState("invoices.mode", "");
   const [customerFilter, setCustomerFilter] = usePersistentState("invoices.customer", "");
@@ -94,6 +108,7 @@ export default function InvoicesPage() {
       const response = await invoicesAPI.getAll(params);
       setInvoices(Array.isArray(response?.data?.data) ? response.data.data : []);
       setTotalPages(response?.data?.totalPages || 1);
+      setTotal(response?.data?.total ?? null);
       setError("");
     } catch (err) {
       setError("Failed to fetch invoices");
@@ -236,11 +251,11 @@ export default function InvoicesPage() {
         return;
       }
       const { count, failed } = await downloadInvoicesZip(list, { startDate: zipStart, endDate: zipEnd }, (p) => {
-        if (p.phase === "pdf") setZipProgress(`Generating PDF ${p.done + 1} of ${p.total}...`);
+        if (p.phase === "pdf") setZipProgress(`Creating image ${p.done + 1} of ${p.total}...`);
         else if (p.phase === "zip") setZipProgress("Creating ZIP...");
       });
       if (failed.length) {
-        setZipError(`ZIP downloaded with ${count} PDFs. Failed: ${failed.join(", ")}`);
+        setZipError(`ZIP downloaded with ${count} invoice images. Failed: ${failed.join(", ")}`);
       } else {
         setShowZipModal(false);
       }
@@ -315,8 +330,9 @@ export default function InvoicesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+    <ListPage>
       <PageHeader
+        compact
         title="Invoices"
         subtitle="Manage and track your customer bills"
         action={
@@ -327,7 +343,7 @@ export default function InvoicesPage() {
             </Button>
             <Button onClick={() => setShowZipModal(true)} variant="secondary">
               <FiArchive className="mr-2" />
-              Export PDFs (ZIP)
+              Export JPGs (ZIP)
             </Button>
             <Button onClick={openHsnModal} variant="secondary">
               <FiHash className="mr-2" />
@@ -344,155 +360,71 @@ export default function InvoicesPage() {
         }
       />
 
-      {/* Filter */}
-      <Card className="mb-8 animate-fadeIn">
-        <CardBody className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-indigo-100 rounded-lg">
-              <FiFilter className="h-5 w-5 text-indigo-600" />
-            </div>
-            <span className="text-sm font-semibold text-gray-700">
-              Filter by Type
-            </span>
-            {customerFilter && (
-              <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-medium">
-                Filtered by Customer
-              </span>
-            )}
-          </div>
-
-          <div className="flex gap-2">
-            {customerFilter && (
-              <Button
-                onClick={() => {
-                  setCustomerFilter("");
-                  setBillTypeFilter("");
-                  setInvoiceModeFilter("");
-                  router.replace("/dashboard/invoices", { scroll: false });
-                  setPage(1);
-                }}
-                variant="secondary"
-                size="sm"
-              >
-                Clear Filters
-              </Button>
-            )}
-            <div className="flex bg-gray-100 p-1 rounded-xl">
-              <button
-                onClick={() => {
-                  setBillTypeFilter("");
-                  setPage(1);
-                }}
-                className={`px-6 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-                  billTypeFilter === ""
-                    ? "bg-white text-indigo-600 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                All Bills
-              </button>
-              <button
-                onClick={() => {
-                  setBillTypeFilter("pay");
-                  setPage(1);
-                }}
-                className={`px-6 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-                  billTypeFilter === "pay"
-                    ? "bg-white text-green-600 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Paid Bill
-              </button>
-              <button
-                onClick={() => {
-                  setBillTypeFilter("credit");
-                  setPage(1);
-                }}
-                className={`px-6 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-                  billTypeFilter === "credit"
-                    ? "bg-white text-red-600 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Credit Bill
-              </button>
-            </div>
-            <div className="flex bg-gray-100 p-1 rounded-xl">
-              <button
-                onClick={() => {
-                  setInvoiceModeFilter("");
-                  setPage(1);
-                }}
-                className={`px-5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-                  invoiceModeFilter === ""
-                    ? "bg-white text-indigo-600 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                All Docs
-              </button>
-              <button
-                onClick={() => {
-                  setInvoiceModeFilter("true");
-                  setPage(1);
-                }}
-                className={`px-5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-                  invoiceModeFilter === "true"
-                    ? "bg-white text-green-600 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Tax Invoice
-              </button>
-              <button
-                onClick={() => {
-                  setInvoiceModeFilter("false");
-                  setPage(1);
-                }}
-                className={`px-5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-                  invoiceModeFilter === "false"
-                    ? "bg-white text-amber-600 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Estimate
-              </button>
-            </div>
-          </div>
-        </CardBody>
-      </Card>
-
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl animate-shake">
+        <div className="shrink-0 mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl animate-shake">
           {error}
         </div>
       )}
 
-      {/* Search */}
-      <Card className="mb-8 animate-fadeIn">
-        <CardBody>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <FiSearch className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 text-sm"
-              placeholder="Search by invoice number or customer name..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
+      {/* Invoices table */}
+      <ListPanel>
+        <ListToolbar>
+        <SearchBox
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          placeholder="Search invoice no. or customer..."
+        />
+        <ToolbarDivider />
+        <Segmented
+          value={billTypeFilter}
+          onChange={(v) => {
+            setBillTypeFilter(v);
+            setPage(1);
+          }}
+          options={[
+            { value: "", label: "All Bills" },
+            { value: "pay", label: "Paid Bill", tone: "text-green-600" },
+            { value: "credit", label: "Credit Bill", tone: "text-red-600" },
+          ]}
+        />
+        <Segmented
+          value={invoiceModeFilter}
+          onChange={(v) => {
+            setInvoiceModeFilter(v);
+            setPage(1);
+          }}
+          options={[
+            { value: "", label: "All Docs" },
+            { value: "true", label: "Tax Invoice", tone: "text-green-600" },
+            { value: "false", label: "Estimate", tone: "text-amber-600" },
+          ]}
+        />
+        {customerFilter && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-medium">
+              Filtered by Customer
+            </span>
+            <Button
+              onClick={() => {
+                setCustomerFilter("");
+                setBillTypeFilter("");
+                setInvoiceModeFilter("");
+                router.replace("/dashboard/invoices", { scroll: false });
                 setPage(1);
               }}
-            />
+              variant="secondary"
+              size="sm"
+            >
+              Clear Filters
+            </Button>
           </div>
-        </CardBody>
-      </Card>
-
-      {/* Invoices table */}
-      <Card className="animate-fadeIn">
-        <div className="overflow-x-auto">
+        )}
+        <ListCount count={total} label="invoice" />
+      </ListToolbar>
+        <div className="flex flex-col flex-1 min-h-0">
           {loading ? (
             <div className="p-12 text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
@@ -514,8 +446,9 @@ export default function InvoicesPage() {
             </div>
           ) : (
             <>
-              <table className="min-w-full divide-y divide-gray-100">
-                <thead className="bg-gray-50">
+              <ListScroll>
+                <table className="min-w-full divide-y divide-gray-100">
+                <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                       Invoice No.
@@ -634,60 +567,14 @@ export default function InvoicesPage() {
                   ))}
                 </tbody>
               </table>
+              </ListScroll>
 
               {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                  <div className="flex-1 flex justify-between sm:hidden">
-                    <button
-                      onClick={() => setPage(Math.max(1, page - 1))}
-                      disabled={page === 1}
-                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => setPage(Math.min(totalPages, page + 1))}
-                      disabled={page === totalPages}
-                      className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </div>
-                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm text-gray-700">
-                        Page <span className="font-medium">{page}</span> of{" "}
-                        <span className="font-medium">{totalPages}</span>
-                      </p>
-                    </div>
-                    <div>
-                      <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                        <button
-                          onClick={() => setPage(Math.max(1, page - 1))}
-                          disabled={page === 1}
-                          className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Previous
-                        </button>
-                        <button
-                          onClick={() =>
-                            setPage(Math.min(totalPages, page + 1))
-                          }
-                          disabled={page === totalPages}
-                          className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Next
-                        </button>
-                      </nav>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <PaginationBar page={page} totalPages={totalPages} onChange={setPage} />
             </>
           )}
         </div>
-      </Card>
+      </ListPanel>
       {/* Duplicate Confirmation Modal */}
       <Modal
         isOpen={!!showDuplicateConfirm}
@@ -854,7 +741,7 @@ export default function InvoicesPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            Choose a date range. All invoice PDFs in that range are generated in your browser and saved as one ZIP on this computer.
+            Choose a date range. Every invoice in that range is rendered as a JPG image in your browser and saved as one ZIP on this computer.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <label className="text-sm font-medium text-gray-700">
@@ -921,6 +808,6 @@ export default function InvoicesPage() {
           </div>
         </div>
       </Modal>
-    </div>
+    </ListPage>
   );
 }

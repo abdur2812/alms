@@ -6,7 +6,21 @@ import Link from "next/link";
 import { productsAPI } from "@/lib/api";
 import usePersistentState from "@/lib/usePersistentState";
 import { formatINR } from "@/lib/formatters";
-import { PageHeader, Card, CardBody, Button } from "@/components/UI";
+import {
+  PageHeader,
+  Card,
+  CardBody,
+  Button,
+  ListPage,
+  ListToolbar,
+  ToolbarDivider,
+  ListCount,
+  SearchBox,
+  Segmented,
+  ListPanel,
+  ListScroll,
+  PaginationBar,
+} from "@/components/UI";
 import {
   FiPlus,
   FiEdit,
@@ -26,6 +40,7 @@ export default function ProductsPage() {
   const [search, setSearch] = usePersistentState("products.search", "");
   const [page, setPage] = usePersistentState("products.page", 1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(null);
   const [error, setError] = useState("");
 
   // Low-stock filter driven by URL (dashboard "View all" links here with ?lowStock=true)
@@ -55,10 +70,12 @@ export default function ProductsPage() {
         if (lowStockOnly) params.lowStock = "true";
         response = await productsAPI.getAll(params);
         setTotalPages(response?.data?.totalPages || 1);
+        setTotal(response?.data?.total ?? null);
       } else {
         // Default: show most billed products first, paginated
         response = await productsAPI.getPopular({ page, limit: 20 });
         setTotalPages(response?.data?.totalPages || 1);
+        setTotal(response?.data?.total ?? null);
       }
       setProducts(Array.isArray(response?.data?.data) ? response.data.data : []);
       setError("");
@@ -163,8 +180,9 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+    <ListPage>
       <PageHeader
+        compact
         title="Products"
         subtitle="Manage your product catalogue and stock"
         action={
@@ -187,51 +205,32 @@ export default function ProductsPage() {
         }
       />
 
-      {/* Search */}
-      <Card className="mb-8 animate-fadeIn">
-        <CardBody>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <FiSearch className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 text-sm"
-              placeholder="Search products by name or part no..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
-        </CardBody>
-      </Card>
-
-      {/* Filter */}
-      <div className="flex flex-wrap items-center gap-2 mb-6 animate-fadeIn">
-        <div className="flex bg-white p-1 rounded-xl border border-gray-100 shadow-sm">
-          <button
-            onClick={() => setLowStockFilter(false)}
-            className={`px-5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-              !lowStockOnly
-                ? "bg-white text-indigo-600 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            All Products
-          </button>
-          <button
-            onClick={() => setLowStockFilter(true)}
-            className={`px-5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-              lowStockOnly
-                ? "bg-white text-orange-600 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Low Stock Only
-          </button>
+      {error && (
+        <div className="shrink-0 mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl animate-shake">
+          {error}
         </div>
+      )}
+
+      {/* Products table */}
+      <ListPanel>
+        <ListToolbar>
+        <SearchBox
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          placeholder="Search products by name or part no..."
+        />
+        <ToolbarDivider />
+        <Segmented
+          value={lowStockOnly}
+          onChange={setLowStockFilter}
+          options={[
+            { value: false, label: "All Products" },
+            { value: true, label: "Low Stock Only", tone: "text-orange-600" },
+          ]}
+        />
         {lowStockOnly && (
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-orange-100 text-orange-700 px-3 py-1.5 rounded-full border border-orange-200">
             <FiAlertCircle className="h-3.5 w-3.5" />
@@ -245,17 +244,9 @@ export default function ProductsPage() {
             </button>
           </span>
         )}
-      </div>
-
-      {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl animate-shake">
-          {error}
-        </div>
-      )}
-
-      {/* Products table */}
-      <Card className="animate-fadeIn">
-        <div className="overflow-x-auto">
+        <ListCount count={total} label="product" />
+      </ListToolbar>
+        <div className="flex flex-col flex-1 min-h-0">
           {loading ? (
             <div className="p-12 text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
@@ -279,8 +270,9 @@ export default function ProductsPage() {
             </div>
           ) : (
             <>
-              <table className="min-w-full divide-y divide-gray-100">
-                <thead className="bg-gray-50">
+              <ListScroll>
+                <table className="min-w-full divide-y divide-gray-100">
+                <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                       S.No
@@ -367,54 +359,14 @@ export default function ProductsPage() {
                   ))}
                 </tbody>
               </table>
+              </ListScroll>
 
               {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="bg-white px-6 py-4 flex items-center justify-between border-t border-gray-100">
-                  <div className="flex-1 flex justify-between sm:hidden">
-                    <button
-                      onClick={() => setPage(Math.max(1, page - 1))}
-                      disabled={page === 1}
-                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => setPage(Math.min(totalPages, page + 1))}
-                      disabled={page === totalPages}
-                      className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </div>
-                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                    <p className="text-sm text-gray-700">
-                      Page <span className="font-medium">{page}</span> of{" "}
-                      <span className="font-medium">{totalPages}</span>
-                    </p>
-                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                      <button
-                        onClick={() => setPage(Math.max(1, page - 1))}
-                        disabled={page === 1}
-                        className="relative inline-flex items-center px-4 py-2 rounded-l-xl border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Previous
-                      </button>
-                      <button
-                        onClick={() => setPage(Math.min(totalPages, page + 1))}
-                        disabled={page === totalPages}
-                        className="relative inline-flex items-center px-4 py-2 rounded-r-xl border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Next
-                      </button>
-                    </nav>
-                  </div>
-                </div>
-              )}
+              <PaginationBar page={page} totalPages={totalPages} onChange={setPage} />
             </>
           )}
         </div>
-      </Card>
-    </div>
+      </ListPanel>
+    </ListPage>
   );
 }

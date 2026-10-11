@@ -91,14 +91,12 @@ export default function ViewInvoicePage({ params }) {
       const blob = await pdf(
         isClean ? <Doc invoice={invoice} /> : <Doc invoice={invoice} qrDataUrl={dataUrl} upiUri={uri} />
       ).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${isClean ? "Estimate-Clean" : invoice.isGstBill ? "Invoice" : "Estimate"}-${invoice.invoiceNumber || id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const { pdfBlobToJpgs, saveJpgs } = await import("@/lib/pdfToJpg");
+      const jpgs = await pdfBlobToJpgs(blob);
+      await saveJpgs(
+        jpgs,
+        `${isClean ? "Estimate-Clean" : invoice.isGstBill ? "Invoice" : "Estimate"}-${invoice.invoiceNumber || id}`,
+      );
     } catch (err) {
       alert("Download failed. Please try again.");
     }

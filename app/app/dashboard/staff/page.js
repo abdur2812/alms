@@ -23,6 +23,12 @@ import {
   ConfirmDialog,
   LoadingSpinner,
   EmptyState,
+  ListPage,
+  ListToolbar,
+  ListCount,
+  SearchBox,
+  ListPanel,
+  ListScroll,
 } from "@/components/UI";
 import { staffAPI } from "@/lib/api";
 
@@ -305,8 +311,9 @@ export default function StaffPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+    <ListPage>
       <PageHeader
+        compact
         title="Staff"
         subtitle="Daily attendance — mark present / half / absent"
         action={
@@ -321,24 +328,7 @@ export default function StaffPage() {
         }
       />
 
-      <div className="flex bg-white rounded-xl border border-gray-100 shadow-sm p-1 mb-6 w-fit">
-        <button
-          onClick={() => switchTab("staff")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
-            tab === "staff" ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md" : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          <FiUsers className="h-4 w-4" /> Staff List
-        </button>
-        <button
-          onClick={() => switchTab("attendance")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
-            tab === "attendance" ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md" : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          <FiCalendar className="h-4 w-4" /> Attendance
-        </button>
-      </div>
+      
 
       {toast && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-5 py-2.5 rounded-xl shadow-lg text-sm font-semibold animate-fadeIn">
@@ -347,7 +337,7 @@ export default function StaffPage() {
       )}
 
       {error && (
-        <div className="mb-6 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
+        <div className="shrink-0 mb-4 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
           <FiAlertCircle className="h-4 w-4 shrink-0" /> {error}
           <button onClick={() => setError("")} className="ml-auto text-red-400 hover:text-red-600 font-bold">
             <FiX className="h-4 w-4" />
@@ -355,24 +345,39 @@ export default function StaffPage() {
         </div>
       )}
 
+      <ListPanel>
+      <ListToolbar>
+        {tab === "staff" && (
+          <SearchBox
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search staff..."
+          />
+        )}
+        <div className="flex h-10 items-center bg-white border border-gray-200 shadow-sm p-1 rounded-lg">
+          <button
+            onClick={() => switchTab("staff")}
+            className={`flex h-full items-center gap-2 px-4 rounded-md text-xs font-semibold whitespace-nowrap transition-all ${
+              tab === "staff" ? "bg-cyan-600 text-white" : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            <FiUsers className="h-3.5 w-3.5" /> Staff List
+          </button>
+          <button
+            onClick={() => switchTab("attendance")}
+            className={`flex h-full items-center gap-2 px-4 rounded-md text-xs font-semibold whitespace-nowrap transition-all ${
+              tab === "attendance" ? "bg-cyan-600 text-white" : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            <FiCalendar className="h-3.5 w-3.5" /> Attendance
+          </button>
+        </div>
+        {tab === "staff" && <ListCount count={filteredStaff.length} label="staff" />}
+      </ListToolbar>
+
       {tab === "staff" ? (
         <>
-          <Card className="mb-6 animate-fadeIn">
-            <div className="px-6 py-4">
-              <div className="relative">
-                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-3 border-2 border-gray-100 rounded-xl bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Search staff..."
-                />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="animate-fadeIn">
+          <div className="flex-1 min-h-0 flex flex-col">
             {staffLoading ? (
               <LoadingSpinner />
             ) : filteredStaff.length === 0 ? (
@@ -389,9 +394,9 @@ export default function StaffPage() {
                 }
               />
             ) : (
-              <div className="overflow-x-auto">
+              <ListScroll>
                 <table className="min-w-full divide-y divide-gray-100">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Staff</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Phone</th>
@@ -442,14 +447,14 @@ export default function StaffPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ListScroll>
             )}
-          </Card>
+          </div>
         </>
       ) : (
         <>
           {/* Daily Attendance — redesigned, simple */}
-          <Card className="mb-6 animate-fadeIn overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col">
             <div className="bg-white border-b border-gray-100 px-5 py-4">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
@@ -506,14 +511,14 @@ export default function StaffPage() {
               {saving && <span className="text-xs text-gray-400 font-medium">Saving...</span>}
               <span className="ml-auto text-xs text-gray-500 hidden sm:inline">Tip: Click Present / Half / Absent to mark • Use Pay to settle</span>
             </div>
-            <div className="overflow-x-auto">
+            <ListScroll>
               {attLoading ? (
                 <LoadingSpinner />
               ) : attendanceStaff.length === 0 ? (
                 <div className="p-8 text-center text-sm text-gray-500">No active staff in shop for this date. Add staff from Staff List.</div>
               ) : (
                 <table className="min-w-full divide-y divide-gray-100">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Staff</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider hidden sm:table-cell">Role</th>
@@ -601,16 +606,17 @@ export default function StaffPage() {
                   </tbody>
                 </table>
               )}
-            </div>
-          </Card>
+            </ListScroll>
+          </div>
 
-          <div className="flex justify-center">
+          <div className="shrink-0 flex justify-center py-2 border-t border-gray-100">
             <Link href="/dashboard/staff" className="text-xs text-gray-500 hover:text-gray-700">
               Showing {attendanceStaff.length} active staff • Switch date above to mark other days • View individual report via calendar icon in Staff List
             </Link>
           </div>
         </>
       )}
+      </ListPanel>
 
       <ConfirmDialog
         isOpen={!!confirmDelete}
@@ -638,6 +644,6 @@ export default function StaffPage() {
         }}
         onCancel={() => setConfirmPay(null)}
       />
-    </div>
+    </ListPage>
   );
 }

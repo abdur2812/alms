@@ -20,7 +20,22 @@ import {
   FiEye,
   FiEdit2,
 } from "react-icons/fi";
-import { PageHeader, Card, CardBody, Button, Select } from "@/components/UI";
+import {
+  PageHeader,
+  Card,
+  CardBody,
+  Button,
+  Select,
+  ListPage,
+  ListToolbar,
+  ToolbarDivider,
+  ListCount,
+  SearchBox,
+  Segmented,
+  ListPanel,
+  ListScroll,
+  PaginationBar,
+} from "@/components/UI";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -28,6 +43,7 @@ export default function CustomersPage() {
   const [search, setSearch] = usePersistentState("customers.search", "");
   const [page, setPage] = usePersistentState("customers.page", 1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(null);
   const [error, setError] = useState("");
   const [filterCredit, setFilterCredit] = usePersistentState("customers.credit", false);
   const [expandedCustomer, setExpandedCustomer] = useState(null);
@@ -45,6 +61,7 @@ export default function CustomersPage() {
       const response = await customersAPI.getAll(params);
       setCustomers(response.data.data);
       setTotalPages(response.data.totalPages);
+      setTotal(response.data.total ?? null);
       setError("");
 
       // Debug logging
@@ -83,8 +100,9 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+    <ListPage>
       <PageHeader
+        compact
         title="Customers"
         subtitle="Manage your customer relationships"
         action={
@@ -98,73 +116,42 @@ export default function CustomersPage() {
         }
       />
 
-      {/* Filters and Search */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <Card className="animate-fadeIn">
-          <CardBody>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FiSearch className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                className="block w-full pl-10 pr-3 py-3 border-2 border-gray-100 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
-                placeholder="Search by name or email..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
-          </CardBody>
-        </Card>
-
-        <Card className="animate-fadeIn">
-          <CardBody className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-indigo-100 rounded-lg">
-                <FiFilter className="h-5 w-5 text-indigo-600" />
-              </div>
-              <span className="text-sm font-semibold text-gray-700">
-                Filter by Dues
-              </span>
-            </div>
-            <div className="flex bg-gray-100 p-1 rounded-xl">
-              <button
-                onClick={() => setFilterCredit(false)}
-                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-                  !filterCredit
-                    ? "bg-white text-indigo-600 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                All
-              </button>
-              <button
-                onClick={() => setFilterCredit(true)}
-                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 ${
-                  filterCredit
-                    ? "bg-white text-red-600 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Pending (Credit)
-              </button>
-            </div>
-          </CardBody>
-        </Card>
-      </div>
-
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl animate-shake">
+        <div className="shrink-0 mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl animate-shake">
           {error}
         </div>
       )}
 
       {/* Customers table */}
-      <Card className="animate-fadeIn">
-        <div className="overflow-x-auto">
+      <ListPanel>
+        <ListToolbar>
+        <SearchBox
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          placeholder="Search by name or email..."
+        />
+        <ToolbarDivider />
+        <div className="flex items-center gap-2">
+          <FiFilter className="h-4 w-4 text-indigo-600" />
+          <span className="text-sm font-semibold text-gray-700">Dues</span>
+          <Segmented
+            value={filterCredit}
+            onChange={(v) => {
+              setFilterCredit(v);
+              setPage(1);
+            }}
+            options={[
+              { value: false, label: "All" },
+              { value: true, label: "Pending (Credit)", tone: "text-red-600" },
+            ]}
+          />
+        </div>
+        <ListCount count={total} label="customer" />
+      </ListToolbar>
+        <div className="flex flex-col flex-1 min-h-0">
           {loading ? (
             <div className="p-12 text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
@@ -197,8 +184,9 @@ export default function CustomersPage() {
             </div>
           ) : (
             <>
-              <table className="min-w-full divide-y divide-gray-100">
-                <thead className="bg-gray-50">
+              <ListScroll>
+                <table className="min-w-full divide-y divide-gray-100">
+                <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                       Customer Info
@@ -529,61 +517,14 @@ export default function CustomersPage() {
                   ))}
                 </tbody>
               </table>
+              </ListScroll>
 
               {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="bg-gray-50/50 px-6 py-4 flex items-center justify-between border-t border-gray-100">
-                  <div className="flex-1 flex justify-between sm:hidden">
-                    <Button
-                      onClick={() => setPage(Math.max(1, page - 1))}
-                      disabled={page === 1}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      onClick={() => setPage(Math.min(totalPages, page + 1))}
-                      disabled={page === totalPages}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      Next
-                    </Button>
-                  </div>
-                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm text-gray-500 font-medium">
-                        Showing page{" "}
-                        <span className="text-indigo-600">{page}</span> of{" "}
-                        <span className="text-indigo-600">{totalPages}</span>
-                      </p>
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button
-                        onClick={() => setPage(Math.max(1, page - 1))}
-                        disabled={page === 1}
-                        size="sm"
-                        variant="secondary"
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        onClick={() => setPage(Math.min(totalPages, page + 1))}
-                        disabled={page === totalPages}
-                        size="sm"
-                        variant="secondary"
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <PaginationBar page={page} totalPages={totalPages} onChange={setPage} />
             </>
           )}
         </div>
-      </Card>
-    </div>
+      </ListPanel>
+    </ListPage>
   );
 }

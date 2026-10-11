@@ -189,17 +189,11 @@ export default function PurchaseReportPage() {
     try {
       const comps = await ensurePdf();
       const blob = await comps.pdf(<comps.ReportDoc report={report} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
       // Filename: Purchase-Report-VendorName-YYYY-MM or date-range
       const vendorPart = report.vendor?.name ? `-${report.vendor.name.replace(/\s+/g, "_")}` : vendorDetails ? `-${vendorDetails.name.replace(/\s+/g, "_")}` : "";
       const datePart = report.month ? report.month : `${report.startDate ? new Date(report.startDate).toISOString().slice(0,10) : "all"}_to_${report.endDate ? new Date(report.endDate).toISOString().slice(0,10) : "now"}`;
-      a.download = `Purchase-Report${vendorPart}-${datePart}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const { pdfBlobToJpgs, saveJpgs } = await import("@/lib/pdfToJpg");
+      await saveJpgs(await pdfBlobToJpgs(blob), `Purchase-Report${vendorPart}-${datePart}`);
     } catch (err) {
       alert("Download failed. Please try again.");
     }
@@ -231,7 +225,7 @@ export default function PurchaseReportPage() {
         action={
           <div className="flex gap-2">
             <Button variant="primary" onClick={handleDownload} disabled={!report}>
-              <FiDownload className="mr-2" />Download PDF
+              <FiDownload className="mr-2" />Download JPG
             </Button>
           </div>
         }

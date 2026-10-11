@@ -90,7 +90,7 @@ export default function DashboardLayout({ children }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50">
+    <div className="h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50">
       {/* Mobile sidebar */}
       <div
         className={`fixed inset-0 z-40 lg:hidden ${sidebarOpen ? "" : "pointer-events-none"}`}
@@ -301,9 +301,9 @@ export default function DashboardLayout({ children }) {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-64 h-screen flex flex-col">
         {/* Top bar */}
-        <div className="sticky top-0 z-10 flex h-16 bg-white border-b border-gray-200 lg:hidden">
+        <div className="shrink-0 z-10 flex h-16 bg-white border-b border-gray-200 lg:hidden">
           <button
             type="button"
             className="px-4 text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
@@ -319,7 +319,7 @@ export default function DashboardLayout({ children }) {
         </div>
 
         {/* Page content */}
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>
       </div>
 
       <ConfirmDialog

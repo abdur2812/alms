@@ -1,4 +1,5 @@
 import { invoicesAPI } from "@/lib/api";
+import { createJpgRenderer } from "@/lib/pdfToJpg";
 
 const PAGE_SIZE = 50; // backend list endpoints are capped at 50 per page
 
@@ -21,8 +22,8 @@ export async function fetchInvoicesInRange({ startDate, endDate, isGstBill }, on
   return all;
 }
 
-// Render each invoice to a PDF in the browser and bundle them into one ZIP
-// that is downloaded locally. Nothing is zipped or stored on the server.
+// Render each invoice (PDF → JPG) in the browser and bundle the images into
+// one ZIP that is downloaded locally. Nothing is zipped or stored on the server.
 export async function downloadInvoicesZip(invoices, { startDate, endDate }, onProgress) {
   const [{ pdf }, JSZipMod, invoiceMod, cleanMod, upiMod] = await Promise.all([
     import("@react-pdf/renderer"),
@@ -33,6 +34,7 @@ export async function downloadInvoicesZip(invoices, { startDate, endDate }, onPr
   ]);
   const JSZip = JSZipMod.default || JSZipMod;
   const zip = new JSZip();
+  const renderer = await createJpgRenderer();
   const used = new Set();
   const failed = [];
 
@@ -54,21 +56,26 @@ export async function downloadInvoicesZip(invoices, { startDate, endDate }, onPr
         }
         element = <Doc invoice={inv} qrDataUrl={qr?.dataUrl} upiUri={qr?.uri} />;
       }
-      const blob = await pdf(element).toBlob();
+      const pdfBlob = await pdf(element).toBlob();
+      const pages = await renderer.render(pdfBlob);
       const prefix = isClean ? "Estimate-Clean" : inv.isGstBill ? "Invoice" : "Estimate";
       let name = safeName(`${prefix}-${inv.invoiceNumber || inv._id}`);
       let unique = name;
       for (let n = 2; used.has(unique.toLowerCase()); n++) unique = `${name} (${n})`;
       used.add(unique.toLowerCase());
-      zip.file(`${unique}.pdf`, blob);
+      pages.forEach((img, p) =>
+        zip.file(pages.length === 1 ? `${unique}.jpg` : `${unique}-p${p + 1}.jpg`, img),
+      );
     } catch (err) {
-      console.error("PDF failed for", inv.invoiceNumber, err);
+      console.error("JPG export failed for", inv.invoiceNumber, err);
       failed.push(inv.invoiceNumber || inv._id);
     }
   }
 
+  renderer.close();
   onProgress?.({ phase: "zip", done: invoices.length, total: invoices.length });
-  const content = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+  // JPEGs are already compressed — STORE skips pointless deflate work.
+  const content = await zip.generateAsync({ type: "blob", compression: "STORE" });
   const url = URL.createObjectURL(content);
   const a = document.createElement("a");
   a.href = url;

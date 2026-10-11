@@ -8,7 +8,7 @@ import DateRangePicker from "@/components/DateRangePicker";
 import { accountsAPI, expensesAPI, expenseCategoriesAPI } from "@/lib/api";
 import AccountsReportPDF from "@/components/AccountsReportPDF";
 import HsnReportPDF from "@/components/HsnReportPDF";
-import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
+import { PDFViewer } from "@react-pdf/renderer";
 
 const toDateInput = (d) => {
   const y = d.getFullYear();
@@ -201,17 +201,17 @@ function HsnSection({ range }) {
             >
               <FiDownload className="h-3.5 w-3.5" /> Download CSV
             </button>
-            <PDFDownloadLink
-              document={<HsnReportPDF data={data} range={range} />}
-              fileName={`ALMS-HSN-Report-${range?.startDate ? toDateInput(range.startDate) : "start"}_to_${range?.endDate ? toDateInput(range.endDate) : "end"}.pdf`}
+            <JpgExportButton
+              element={<HsnReportPDF data={data} range={range} />}
+              fileName={`ALMS-HSN-Report-${range?.startDate ? toDateInput(range.startDate) : "start"}_to_${range?.endDate ? toDateInput(range.endDate) : "end"}`}
               className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-xs font-bold rounded-xl hover:from-violet-700 hover:to-indigo-700 shadow-md transition-all"
             >
-              {({ loading: pdfLoading }) => (
+              {(busy) => (
                 <>
-                  <FiDownload className="h-3.5 w-3.5" /> {pdfLoading ? "Preparing..." : "Download PDF"}
+                  <FiDownload className="h-3.5 w-3.5" /> {busy ? "Preparing..." : "Download JPG"}
                 </>
               )}
-            </PDFDownloadLink>
+            </JpgExportButton>
             <button
               onClick={() => setShowPreview((v) => !v)}
               className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl shadow-sm border transition-all ${showPreview ? "bg-violet-600 text-white border-violet-600" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
@@ -414,9 +414,9 @@ function ReportSection() {
         ) : (
           <div className="space-y-4">
             <div className="flex justify-end">
-              <PDFDownloadLink document={<AccountsReportPDF report={data} />} fileName={`ALMS-Accounts-Report-${month}.pdf`} className="px-5 py-2.5 bg-white border border-indigo-200 text-indigo-700 text-sm font-bold rounded-xl hover:bg-indigo-50 shadow-sm">
-                {({ loading: pdfLoading }) => (pdfLoading ? "Preparing PDF..." : "Download PDF")}
-              </PDFDownloadLink>
+              <JpgExportButton element={<AccountsReportPDF report={data} />} fileName={`ALMS-Accounts-Report-${month}`} className="px-5 py-2.5 bg-white border border-indigo-200 text-indigo-700 text-sm font-bold rounded-xl hover:bg-indigo-50 shadow-sm">
+                {(busy) => (busy ? "Preparing JPG..." : "Download JPG")}
+              </JpgExportButton>
             </div>
             <div className="border border-gray-200 rounded-xl overflow-hidden" style={{ height: "800px" }}>
               <PDFViewer width="100%" height="100%" showToolbar={true} style={{ border: "none" }}>
@@ -435,6 +435,34 @@ function ReportSection() {
         onCancel={() => setShowConfirm(false)}
       />
     </div>
+  );
+}
+
+// Renders a react-pdf document on click and saves it as JPG image(s).
+// Unlike PDFDownloadLink it does no work until the user asks for the export.
+function JpgExportButton({ element, fileName, className, children }) {
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const [{ pdf }, { pdfBlobToJpgs, saveJpgs }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("@/lib/pdfToJpg"),
+      ]);
+      const blob = await pdf(element).toBlob();
+      await saveJpgs(await pdfBlobToJpgs(blob), fileName);
+    } catch (e) {
+      console.error(e);
+      alert("Export failed. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" onClick={run} disabled={busy} className={`${className} disabled:opacity-60`}>
+      {children(busy)}
+    </button>
   );
 }
 
