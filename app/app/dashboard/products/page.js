@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { productsAPI } from "@/lib/api";
+import useFitRows from "@/lib/useFitRows";
 import usePersistentState from "@/lib/usePersistentState";
 import { formatINR } from "@/lib/formatters";
 import {
@@ -41,14 +42,19 @@ export default function ProductsPage() {
   const [page, setPage] = usePersistentState("products.page", 1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(null);
+  const { ref: listRef, pageSize, ready } = useFitRows({ deps: [products] });
   const [error, setError] = useState("");
 
   // Low-stock filter driven by URL (dashboard "View all" links here with ?lowStock=true)
   const lowStockOnly = searchParams.get("lowStock") === "true";
 
   useEffect(() => {
-    fetchProducts();
-  }, [page, search, lowStockOnly]);
+    if (ready) fetchProducts();
+  }, [ready, pageSize, page, search, lowStockOnly]);
+
+  useEffect(() => {
+    if (!loading && page > totalPages) setPage(totalPages);
+  }, [loading, page, totalPages]);
 
   const setLowStockFilter = (on) => {
     setPage(1);
@@ -62,7 +68,7 @@ export default function ProductsPage() {
       if (search || lowStockOnly) {
         // Filtered view (search and/or low-stock) uses the filterable endpoint.
         // getPopular doesn't support the lowStock flag.
-        const params = { page, limit: 20 };
+        const params = { page, limit: pageSize };
         if (search) {
           params.search = search;
           params.includePartNo = true;
@@ -73,7 +79,7 @@ export default function ProductsPage() {
         setTotal(response?.data?.total ?? null);
       } else {
         // Default: show most billed products first, paginated
-        response = await productsAPI.getPopular({ page, limit: 20 });
+        response = await productsAPI.getPopular({ page, limit: pageSize });
         setTotalPages(response?.data?.totalPages || 1);
         setTotal(response?.data?.total ?? null);
       }
@@ -212,7 +218,7 @@ export default function ProductsPage() {
       )}
 
       {/* Products table */}
-      <ListPanel>
+      <ListPanel panelRef={listRef}>
         <ListToolbar>
         <SearchBox
           value={search}

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { invoicesAPI, hsnsAPI } from "@/lib/api";
+import useFitRows from "@/lib/useFitRows";
 import usePersistentState from "@/lib/usePersistentState";
 import { formatINR } from "@/lib/formatters";
 import { fetchInvoicesInRange, downloadInvoicesZip } from "@/lib/invoiceZip";
@@ -45,6 +46,7 @@ export default function InvoicesPage() {
   const [page, setPage] = usePersistentState("invoices.page", 1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(null);
+  const { ref: listRef, pageSize, ready } = useFitRows({ deps: [invoices] });
   const [billTypeFilter, setBillTypeFilter] = usePersistentState("invoices.billType", "");
   const [invoiceModeFilter, setInvoiceModeFilter] = usePersistentState("invoices.mode", "");
   const [customerFilter, setCustomerFilter] = usePersistentState("invoices.customer", "");
@@ -93,13 +95,18 @@ export default function InvoicesPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    fetchInvoices();
-  }, [page, billTypeFilter, invoiceModeFilter, customerFilter, search]);
+    if (ready) fetchInvoices();
+  }, [ready, pageSize, page, billTypeFilter, invoiceModeFilter, customerFilter, search]);
+
+  // Page size changed (resize) → keep page in range.
+  useEffect(() => {
+    if (!loading && page > totalPages) setPage(totalPages);
+  }, [loading, page, totalPages]);
 
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      const params = { page, limit: 10 };
+      const params = { page, limit: pageSize };
       if (billTypeFilter) params.billType = billTypeFilter;
       if (invoiceModeFilter) params.isGstBill = invoiceModeFilter;
       if (customerFilter) params.customerId = customerFilter;
@@ -367,7 +374,7 @@ export default function InvoicesPage() {
       )}
 
       {/* Invoices table */}
-      <ListPanel>
+      <ListPanel panelRef={listRef}>
         <ListToolbar>
         <SearchBox
           value={search}

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { customersAPI, invoicesAPI } from "@/lib/api";
+import useFitRows from "@/lib/useFitRows";
 import usePersistentState from "@/lib/usePersistentState";
 import {
   FiPlus,
@@ -44,18 +45,23 @@ export default function CustomersPage() {
   const [page, setPage] = usePersistentState("customers.page", 1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(null);
+  const { ref: listRef, pageSize, ready } = useFitRows({ deps: [customers] });
   const [error, setError] = useState("");
   const [filterCredit, setFilterCredit] = usePersistentState("customers.credit", false);
   const [expandedCustomer, setExpandedCustomer] = useState(null);
 
   useEffect(() => {
-    fetchCustomers();
-  }, [page, search, filterCredit]);
+    if (ready) fetchCustomers();
+  }, [ready, pageSize, page, search, filterCredit]);
+
+  useEffect(() => {
+    if (!loading && page > totalPages) setPage(totalPages);
+  }, [loading, page, totalPages]);
 
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const params = { page, limit: 10 };
+      const params = { page, limit: pageSize };
       if (search) params.search = search;
       if (filterCredit) params.hasCreditInvoices = true;
       const response = await customersAPI.getAll(params);
@@ -123,7 +129,7 @@ export default function CustomersPage() {
       )}
 
       {/* Customers table */}
-      <ListPanel>
+      <ListPanel panelRef={listRef}>
         <ListToolbar>
         <SearchBox
           value={search}

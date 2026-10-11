@@ -3,6 +3,7 @@
 import { useState, useEffect, Fragment } from "react";
 import Link from "next/link";
 import { FiPlus, FiEdit, FiTrash2, FiEye, FiSearch, FiShoppingBag, FiTruck, FiEdit2, FiX, FiCheck, FiFileText, FiChevronDown } from "react-icons/fi";
+import useFitRows from "@/lib/useFitRows";
 import { PageHeader, Card, Button, Badge, LoadingSpinner, EmptyState, ListPage, ListToolbar, ListCount, SearchBox, ListPanel, ListScroll, PaginationBar } from "@/components/UI";
 import { purchasesAPI, vendorsAPI } from "@/lib/api";
 import usePersistentState from "@/lib/usePersistentState";
@@ -153,8 +154,13 @@ export default function PurchasesPage() {
   const [debouncedVendorSearch, setDebouncedVendorSearch] = useState(vendorSearch);
   const [deletingPurchaseId, setDeletingPurchaseId] = useState(null);
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
-  const PURCHASES_PER_PAGE = 10;
-  const VENDORS_PER_PAGE = 10;
+  // Page size = however many rows fill the card (measured, see useFitRows).
+  const { ref: listRef, pageSize, ready } = useFitRows({
+    deps: [purchases, vendors],
+    resetKey: tab,
+  });
+  const PURCHASES_PER_PAGE = pageSize;
+  const VENDORS_PER_PAGE = pageSize;
   const [purchasePage, setPurchasePage] = usePersistentState("purchases.page", 1);
   const [vendorPage, setVendorPage] = usePersistentState("purchases.vendorPage", 1);
 
@@ -236,12 +242,12 @@ export default function PurchasesPage() {
 
   // Fetch only the active tab. Purchases and vendors load independently.
   useEffect(() => {
-    if (tab === "invoices") loadPurchases(purchasePage, debouncedSearch);
-  }, [tab, purchasePage, debouncedSearch]);
+    if (ready && tab === "invoices") loadPurchases(purchasePage, debouncedSearch);
+  }, [ready, pageSize, tab, purchasePage, debouncedSearch]);
 
   useEffect(() => {
-    if (tab === "vendors") loadVendors(vendorPage, debouncedVendorSearch);
-  }, [tab, vendorPage, debouncedVendorSearch]);
+    if (ready && tab === "vendors") loadVendors(vendorPage, debouncedVendorSearch);
+  }, [ready, pageSize, tab, vendorPage, debouncedVendorSearch]);
 
   // Clamp page when totals shrink (e.g., after delete/search)
   useEffect(() => {
@@ -371,7 +377,7 @@ export default function PurchasesPage() {
         </div>
       )}
 
-      <ListPanel>
+      <ListPanel panelRef={listRef}>
       <ListToolbar>
         {tab === "invoices" ? (
           <SearchBox
@@ -578,7 +584,7 @@ export default function PurchasesPage() {
         <>
           {/* Add/Edit Vendor Form */}
           {(showVendorForm || editingVendor) && (
-            <div className="shrink-0 max-h-[55vh] overflow-y-auto p-4 border-b border-gray-100">
+            <div data-fit="fixed" className="shrink-0 max-h-[55vh] overflow-y-auto p-4 border-b border-gray-100">
               {showVendorForm && <VendorForm onSave={handleAddVendor} onCancel={() => setShowVendorForm(false)} />}
               {editingVendor && (
                 <VendorForm

@@ -807,6 +807,7 @@ export function ListPage({ children, className = "" }) {
 export function ListToolbar({ children, className = "" }) {
   return (
     <div
+      data-fit="fixed"
       className={`shrink-0 flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100 ${className}`}
     >
       {children}
@@ -893,9 +894,10 @@ export function ListCount({ count, label }) {
 
 // Card that takes the remaining height. Put a <ListScroll> and a
 // <PaginationBar> inside; only <ListScroll> scrolls.
-export function ListPanel({ children, className = "" }) {
+export function ListPanel({ children, className = "", panelRef }) {
   return (
     <div
+      ref={panelRef}
       className={`flex-1 min-h-0 flex flex-col overflow-hidden bg-white rounded-xl shadow-sm border border-gray-200 ${className}`}
     >
       {children}
