@@ -355,6 +355,13 @@ const S = StyleSheet.create({
     marginBottom: 46,
     color: "#000000",
   },
+  // Signature image sits in the gap between "For <business>" and the line.
+  signImg: {
+    height: 42,
+    objectFit: "contain",
+    alignSelf: "center",
+    marginBottom: 2,
+  },
   sigLine: {
     borderTopWidth: 1,
     borderTopColor: "#000000",
@@ -1153,9 +1160,13 @@ export default function InvoiceDocument({
                       </View>
                       {invoice.isGstBill && (
                         <View style={S.splitRight45}>
-                          <Text style={S.forText}>
+                          <Text style={[S.forText, { marginBottom: 2 }]}>
                             For {biz.business_name}
                           </Text>
+                          <Image
+                            style={S.signImg}
+                            src={assetUrl("/sign.png")}
+                          />
                           <View style={S.sigLine} />
                           <Text style={S.sigLabel}>
                             {decl.signature_label}

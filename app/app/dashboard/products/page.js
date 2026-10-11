@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { productsAPI } from "@/lib/api";
+import usePersistentState from "@/lib/usePersistentState";
 import { formatINR } from "@/lib/formatters";
 import { PageHeader, Card, CardBody, Button } from "@/components/UI";
 import {
@@ -22,8 +23,8 @@ export default function ProductsPage() {
   const router = useRouter();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = usePersistentState("products.search", "");
+  const [page, setPage] = usePersistentState("products.page", 1);
   const [totalPages, setTotalPages] = useState(1);
   const [error, setError] = useState("");
 

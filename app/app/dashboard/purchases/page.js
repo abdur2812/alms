@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FiPlus, FiEdit, FiTrash2, FiEye, FiSearch, FiShoppingBag, FiTruck, FiEdit2, FiX, FiCheck, FiFileText, FiChevronDown } from "react-icons/fi";
 import { PageHeader, Card, Button, Badge, LoadingSpinner, EmptyState } from "@/components/UI";
 import { purchasesAPI, vendorsAPI } from "@/lib/api";
+import usePersistentState from "@/lib/usePersistentState";
 
 const formatINR = (amount) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(amount);
@@ -133,7 +134,7 @@ function VendorForm({ onSave, onCancel, initial }) {
 }
 
 export default function PurchasesPage() {
-  const [tab, setTab] = useState("invoices");
+  const [tab, setTab] = usePersistentState("purchases.tab", "invoices");
   const [purchases, setPurchases] = useState([]);
   const [purchaseTotal, setPurchaseTotal] = useState(0);
   const [purchaseTotalPages, setPurchaseTotalPages] = useState(1);
@@ -145,17 +146,17 @@ export default function PurchasesPage() {
   const [error, setError] = useState("");
   const [showVendorForm, setShowVendorForm] = useState(false);
   const [editingVendor, setEditingVendor] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [vendorSearch, setVendorSearch] = useState("");
+  const [searchTerm, setSearchTerm] = usePersistentState("purchases.search", "");
+  const [vendorSearch, setVendorSearch] = usePersistentState("purchases.vendorSearch", "");
   // Debounced search terms — server is hit only after the user pauses typing.
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [debouncedVendorSearch, setDebouncedVendorSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
+  const [debouncedVendorSearch, setDebouncedVendorSearch] = useState(vendorSearch);
   const [deletingPurchaseId, setDeletingPurchaseId] = useState(null);
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
   const PURCHASES_PER_PAGE = 10;
   const VENDORS_PER_PAGE = 10;
-  const [purchasePage, setPurchasePage] = useState(1);
-  const [vendorPage, setVendorPage] = useState(1);
+  const [purchasePage, setPurchasePage] = usePersistentState("purchases.page", 1);
+  const [vendorPage, setVendorPage] = usePersistentState("purchases.vendorPage", 1);
 
   // Normalise payments: prefer multi-entry array, fall back to legacy single fields
   const getPayments = (p) => {
@@ -214,16 +215,21 @@ export default function PurchasesPage() {
   // Debounce search inputs so each keystroke isn't a server round-trip.
   useEffect(() => {
     const t = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-      setPurchasePage(1);
+      // Only reset to page 1 when the term really changed (not on mount).
+      if (searchTerm !== debouncedSearch) {
+        setDebouncedSearch(searchTerm);
+        setPurchasePage(1);
+      }
     }, 400);
     return () => clearTimeout(t);
   }, [searchTerm]);
 
   useEffect(() => {
     const t = setTimeout(() => {
-      setDebouncedVendorSearch(vendorSearch);
-      setVendorPage(1);
+      if (vendorSearch !== debouncedVendorSearch) {
+        setDebouncedVendorSearch(vendorSearch);
+        setVendorPage(1);
+      }
     }, 400);
     return () => clearTimeout(t);
   }, [vendorSearch]);
@@ -239,16 +245,17 @@ export default function PurchasesPage() {
 
   // Clamp page when totals shrink (e.g., after delete/search)
   useEffect(() => {
-    if (purchasePage > purchaseTotalPages) {
+    // Wait for the first load: totals default to 1 page before data arrives.
+    if (!loading && purchasePage > purchaseTotalPages) {
       setPurchasePage(purchaseTotalPages);
     }
-  }, [purchasePage, purchaseTotalPages]);
+  }, [purchasePage, purchaseTotalPages, loading]);
 
   useEffect(() => {
-    if (vendorPage > vendorTotalPages) {
+    if (!vendorsLoading && vendorPage > vendorTotalPages) {
       setVendorPage(vendorTotalPages);
     }
-  }, [vendorPage, vendorTotalPages]);
+  }, [vendorPage, vendorTotalPages, vendorsLoading]);
 
   const handleAddVendor = async (data) => {
     try {

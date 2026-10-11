@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { customersAPI, invoicesAPI } from "@/lib/api";
+import usePersistentState from "@/lib/usePersistentState";
 import {
   FiPlus,
   FiEdit,
@@ -24,11 +25,11 @@ import { PageHeader, Card, CardBody, Button, Select } from "@/components/UI";
 export default function CustomersPage() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = usePersistentState("customers.search", "");
+  const [page, setPage] = usePersistentState("customers.page", 1);
   const [totalPages, setTotalPages] = useState(1);
   const [error, setError] = useState("");
-  const [filterCredit, setFilterCredit] = useState(false);
+  const [filterCredit, setFilterCredit] = usePersistentState("customers.credit", false);
   const [expandedCustomer, setExpandedCustomer] = useState(null);
 
   useEffect(() => {

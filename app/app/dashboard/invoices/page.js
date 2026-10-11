@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { invoicesAPI, hsnsAPI } from "@/lib/api";
+import usePersistentState from "@/lib/usePersistentState";
 import { formatINR } from "@/lib/formatters";
 import { fetchInvoicesInRange, downloadInvoicesZip } from "@/lib/invoiceZip";
 import { PageHeader, Card, CardBody, Button, Modal } from "@/components/UI";
@@ -28,15 +29,15 @@ export default function InvoicesPage() {
   const searchParams = useSearchParams();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = usePersistentState("invoices.page", 1);
   const [totalPages, setTotalPages] = useState(1);
-  const [billTypeFilter, setBillTypeFilter] = useState("");
-  const [invoiceModeFilter, setInvoiceModeFilter] = useState("");
-  const [customerFilter, setCustomerFilter] = useState("");
+  const [billTypeFilter, setBillTypeFilter] = usePersistentState("invoices.billType", "");
+  const [invoiceModeFilter, setInvoiceModeFilter] = usePersistentState("invoices.mode", "");
+  const [customerFilter, setCustomerFilter] = usePersistentState("invoices.customer", "");
   const [error, setError] = useState("");
   const [converting, setConverting] = useState(null);
   const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentState("invoices.search", "");
 
   // Export-as-ZIP state
   const [showZipModal, setShowZipModal] = useState(false);
@@ -64,6 +65,12 @@ export default function InvoicesPage() {
     const billType = searchParams.get("billType");
     const invoiceMode = searchParams.get("isGstBill");
 
+    // Explicit URL filters override restored ones; start from page 1 then.
+    if (customer || billType || invoiceMode === "true" || invoiceMode === "false") {
+      if (customer && customer !== customerFilter) setPage(1);
+      if (billType && billType !== billTypeFilter) setPage(1);
+      if (invoiceMode && invoiceMode !== invoiceModeFilter) setPage(1);
+    }
     if (customer) setCustomerFilter(customer);
     if (billType) setBillTypeFilter(billType);
     if (invoiceMode === "true" || invoiceMode === "false") {
