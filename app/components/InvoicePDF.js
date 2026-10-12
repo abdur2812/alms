@@ -357,10 +357,10 @@ const S = StyleSheet.create({
   },
   // Signature image sits in the gap between "For <business>" and the line.
   signImg: {
-    height: 42,
+    height: 64,
     objectFit: "contain",
     alignSelf: "center",
-    marginBottom: 2,
+    marginBottom: -2,
   },
   sigLine: {
     borderTopWidth: 1,
