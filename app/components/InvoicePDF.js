@@ -356,8 +356,11 @@ const S = StyleSheet.create({
     color: "#000000",
   },
   // Signature image sits in the gap between "For <business>" and the line.
+  // Sized so the ink width (~98.9% of the image) equals the width of the
+  // "For AL M.S. TRADERS" line above it (Helvetica-Bold 10pt ≈ 106.7pt).
   signImg: {
-    height: 38,
+    width: 108,
+    height: 28.3,
     objectFit: "contain",
     alignSelf: "center",
     marginTop: 6,
