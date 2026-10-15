@@ -17,7 +17,7 @@ import {
 
 const RupeeIcon = ({ className = "" }) => (
   <span
-    className={`inline-flex h-8 w-8 items-center justify-center text-3xl leading-none font-bold text-white ${className}`}
+    className={`inline-flex h-5 w-5 items-center justify-center text-xl leading-none font-bold text-white ${className}`}
     aria-hidden="true"
   >
     ₹
@@ -31,6 +31,8 @@ export default function DashboardPage() {
     totalProducts: 0,
     totalInvoices: 0,
     totalRevenue: 0,
+    monthSales: 0,
+    todaySales: 0,
     lowStockProducts: [],
     recentInvoices: [],
   });
@@ -224,13 +226,23 @@ export default function DashboardPage() {
           isGstBill: "true",
         };
 
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        const todayRangeParams = {
+          startDate: todayStart.toISOString(),
+          endDate: todayEnd.toISOString(),
+          isGstBill: "true",
+        };
+
         const [
+          todayStatsRes,
           customersRes,
           productsRes,
           monthlyStatsRes,
           recentInvoicesRes,
           lowStockRes,
         ] = await Promise.allSettled([
+          invoicesAPI.getStats(todayRangeParams),
           customersAPI.getAll({ limit: 1 }),
           productsAPI.getAll({ limit: 1 }),
           invoicesAPI.getStats(monthRangeParams),
@@ -245,6 +257,13 @@ export default function DashboardPage() {
           monthlyStatsRes.status === "fulfilled"
             ? monthlyStatsRes.value?.data?.data || {}
             : {};
+        const todayStats =
+          todayStatsRes.status === "fulfilled"
+            ? todayStatsRes.value?.data?.data || {}
+            : {};
+        // Total sales = cash (pay) + credit bills
+        const sumSales = (s) =>
+          (s.byBillType || []).reduce((t, b) => t + (b.totalAmount || 0), 0);
         const lowStockProducts =
           lowStockRes.status === "fulfilled" &&
           Array.isArray(lowStockRes.value?.data?.data)
@@ -277,6 +296,8 @@ export default function DashboardPage() {
           totalProducts: productsData?.total || 0,
           totalInvoices: monthlyStats.totalInvoices || 0,
           totalRevenue: monthlyStats.totalRevenue || 0,
+          monthSales: sumSales(monthlyStats),
+          todaySales: sumSales(todayStats),
           lowStockProducts: lowStockProducts.slice(0, 5),
           recentInvoices,
         });
@@ -287,6 +308,8 @@ export default function DashboardPage() {
           totalProducts: 0,
           totalInvoices: 0,
           totalRevenue: 0,
+          monthSales: 0,
+          todaySales: 0,
           lowStockProducts: [],
           recentInvoices: [],
         });
@@ -333,6 +356,20 @@ export default function DashboardPage() {
         color: "bg-indigo-500",
         link: "/dashboard/invoices",
       },
+      {
+        title: "Month Sales",
+        subtitle: "Cash + credit, this month",
+        value: formatINR(stats.monthSales),
+        icon: FiTrendingUp,
+        link: "/dashboard/invoices",
+      },
+      {
+        title: "Today's Sales",
+        subtitle: "Cash + credit, today",
+        value: formatINR(stats.todaySales),
+        icon: FiShoppingBag,
+        link: "/dashboard/invoices",
+      },
     ];
   };
 
@@ -363,8 +400,8 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
           Dashboard
         </h1>
         <p className="mt-2 text-sm text-gray-600">
@@ -372,66 +409,69 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-        {getStatCards().map((stat, index) => {
-          const gradients = [
-            "from-blue-500 to-cyan-500",
-            "from-purple-500 to-pink-500",
-            "from-orange-500 to-red-500",
-            "from-green-500 to-emerald-500",
-          ];
-          const gradient = gradients[index % gradients.length];
+      {/* Stats Grid: counts clubbed in one card, money stats as separate cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
+        {/* Combined counts card */}
+        <div className="col-span-1 sm:col-span-3 xl:col-span-1 h-24 bg-white rounded-xl shadow-md grid grid-cols-3 divide-x divide-gray-100 overflow-hidden">
+          {getStatCards()
+            .slice(0, 3)
+            .map((stat) => (
+              <Link
+                key={stat.title}
+                href={stat.link}
+                className="group flex flex-col items-center justify-center gap-0.5 px-2 hover:bg-gray-50 transition-colors"
+              >
+                <stat.icon className="h-4 w-4 text-gray-400 group-hover:text-indigo-600 transition-colors" />
+                <span className="text-xl font-bold text-gray-900 leading-tight">
+                  {stat.value}
+                </span>
+                <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide truncate max-w-full">
+                  {stat.title.replace("Total ", "")}
+                </span>
+              </Link>
+            ))}
+        </div>
 
-          return (
-            <Link
-              key={index}
-              href={stat.link}
-              className="group relative bg-white overflow-hidden rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
-            >
-              {/* Gradient background overlay */}
-              <div
-                className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}
-              ></div>
-
-              <div className="relative p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">
+        {/* Money cards */}
+        {getStatCards()
+          .slice(3)
+          .map((stat, index) => {
+            const gradients = [
+              "from-green-500 to-emerald-500",
+              "from-teal-500 to-cyan-600",
+              "from-amber-500 to-orange-500",
+            ];
+            const gradient = gradients[index % gradients.length];
+            return (
+              <Link
+                key={stat.title}
+                href={stat.link}
+                className="group relative h-24 bg-white overflow-hidden rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200"
+              >
+                <div
+                  className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}
+                ></div>
+                <div className="relative h-full p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-gray-600 uppercase tracking-wide truncate">
                       {stat.title}
                     </p>
-                    <p className="mt-2 text-3xl font-bold text-gray-900">
+                    <p className="mt-1 text-2xl font-bold text-gray-900 truncate">
                       {stat.value}
                     </p>
+                    {stat.subtitle && (
+                      <p className="mt-0.5 text-xs text-gray-500 truncate">{stat.subtitle}</p>
+                    )}
                   </div>
                   <div
-                    className={`flex-shrink-0 bg-gradient-to-br ${gradient} rounded-2xl p-4 shadow-md`}
+                    className={`flex-shrink-0 bg-gradient-to-br ${gradient} rounded-xl p-2.5 shadow-md`}
                   >
-                    <stat.icon className="h-8 w-8 text-white" />
+                    <stat.icon className="h-5 w-5 text-white" />
                   </div>
                 </div>
-
-                {/* Decorative element */}
-                <div className="mt-4 flex items-center text-sm text-gray-500">
-                  <svg
-                    className="w-4 h-4 mr-1"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 7l5 5m0 0l-5 5m5-5H6"
-                    />
-                  </svg>
-                  View details
-                </div>
-              </div>
-            </Link>
-          );
-        })}
+              </Link>
+            );
+          })}
       </div>
 
       {/* Credit & Purchase Reminders - Grouped by Company with scroll & modals */}
