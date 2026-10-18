@@ -5,6 +5,8 @@ const compression = require("compression");
 require("dotenv").config();
 
 const app = express();
+// Behind a reverse proxy: use the real client IP, not the proxy's, for rate limiting
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 
 // Import routes
@@ -40,10 +42,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// Simple in-memory rate limiter: 120 req/min per IP (single user never hits, but blocks abuse)
+// CORS (before the rate limiter so 429 responses still carry CORS headers)
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+    credentials: false,
+    optionsSuccessStatus: 200,
+  })
+);
+
+// Simple in-memory rate limiter: 600 req/min per IP (a dashboard load alone is ~10 requests)
 const rateMap = new Map();
 const RATE_WINDOW_MS = 60_000;
-const RATE_MAX = 120;
+const RATE_MAX = 600;
 app.use((req, res, next) => {
   const ip = req.ip || req.connection.remoteAddress || "unknown";
   const now = Date.now();
@@ -64,17 +77,6 @@ setInterval(() => {
   const now = Date.now();
   for (const [k, v] of rateMap) if (now - v.start > RATE_WINDOW_MS) rateMap.delete(k);
 }, RATE_WINDOW_MS).unref();
-
-// CORS
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
-    credentials: false,
-    optionsSuccessStatus: 200,
-  })
-);
 
 // Graceful shutdown tracking
 let server;
