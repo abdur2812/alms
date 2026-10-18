@@ -432,9 +432,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Grid: counts clubbed in one card, money stats as separate cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-[1.1fr_repeat(4,1fr)] gap-3 mb-6">
         {/* Combined counts card */}
-        <div className="col-span-1 sm:col-span-3 xl:col-span-1 h-24 bg-white rounded-xl shadow-md grid grid-cols-3 divide-x divide-gray-100 overflow-hidden">
+        <div className="col-span-1 sm:col-span-3 lg:col-span-1 h-24 bg-white rounded-xl shadow-md grid grid-cols-3 divide-x divide-gray-100 overflow-hidden">
           {getStatCards()
             .slice(0, 3)
             .map((stat) => (
@@ -474,12 +474,12 @@ export default function DashboardPage() {
                 <div
                   className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}
                 ></div>
-                <div className="relative h-full p-4 flex items-center justify-between gap-3">
+                <div className="relative h-full p-3 xl:p-4 flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-600 uppercase tracking-wide truncate">
+                    <p className="text-[11px] font-medium text-gray-600 uppercase tracking-normal truncate">
                       {stat.title}
                     </p>
-                    <p className="mt-1 text-2xl font-bold text-gray-900 truncate">
+                    <p className="mt-1 text-lg xl:text-xl font-bold text-gray-900 truncate">
                       {stat.value}
                     </p>
                     {stat.subtitle && (
@@ -487,7 +487,7 @@ export default function DashboardPage() {
                     )}
                   </div>
                   <div
-                    className={`flex-shrink-0 bg-gradient-to-br ${gradient} rounded-xl p-2.5 shadow-md`}
+                    className={`flex-shrink-0 bg-gradient-to-br ${gradient} rounded-xl p-2 shadow-md hidden 2xl:block`}
                   >
                     <stat.icon className="h-5 w-5 text-white" />
                   </div>
