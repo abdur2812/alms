@@ -194,22 +194,22 @@ export default function CustomersPage() {
                 <table className="min-w-full divide-y divide-gray-100">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                       Customer Info
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                       Contact Details
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                       Location
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                       Credit
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                       Orders
                     </th>
-                    <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -218,7 +218,7 @@ export default function CustomersPage() {
                   {customers.map((customer, idx) => (
                     <React.Fragment key={customer._id}>
                       <tr className="hover:bg-indigo-50/30 transition-colors duration-150">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-4 max-w-[260px]">
                           <div className="flex items-center">
                             <div className="h-10 w-10 shrink-0">
                               <div className="h-10 w-10 rounded-full bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
@@ -235,7 +235,7 @@ export default function CustomersPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
                           <div className="flex flex-col space-y-1">
                             <div className="flex items-center text-sm text-gray-600 font-medium">
                               <FiMail className="mr-2 h-3.5 w-3.5 text-indigo-400" />
@@ -247,8 +247,8 @@ export default function CustomersPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-600 font-medium">
+                        <td className="px-3 py-4 max-w-[260px]">
+                          <div className="text-sm text-gray-600 font-medium line-clamp-2 break-words">
                             {(() => {
                               // Show permanent address first (preferred)
                               if (
@@ -326,7 +326,7 @@ export default function CustomersPage() {
                             })()}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
                           {customer.creditAmount > 0 ? (
                             <div className="flex flex-col items-start">
                               <button
@@ -358,14 +358,21 @@ export default function CustomersPage() {
                             </div>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
                           <div className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100">
                             <FiFileText className="mr-1.5 h-3 w-3" />
                             {customer.totalInvoices || 0}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                        <td className="px-3 py-4 whitespace-nowrap text-right text-sm">
                           <div className="flex justify-end space-x-2">
+                            <Link
+                              href={`/dashboard/customers/report?customerId=${customer._id}`}
+                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200"
+                              title="Customer Report"
+                            >
+                              <FiFileText className="h-4 w-4" />
+                            </Link>
                             <Link
                               href={`/dashboard/customers/${customer._id}`}
                               className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200"

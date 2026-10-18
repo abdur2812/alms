@@ -12,6 +12,7 @@ import {
   FiAlertCircle,
   FiTrendingUp,
   FiShoppingBag,
+  FiShoppingCart,
   FiX,
 } from "react-icons/fi";
 
@@ -33,6 +34,7 @@ export default function DashboardPage() {
     totalRevenue: 0,
     monthSales: 0,
     todaySales: 0,
+    monthPurchases: 0,
     lowStockProducts: [],
     recentInvoices: [],
   });
@@ -228,6 +230,8 @@ export default function DashboardPage() {
 
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        const toYMD = (d) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const todayRangeParams = {
           startDate: todayStart.toISOString(),
           endDate: todayEnd.toISOString(),
@@ -241,6 +245,7 @@ export default function DashboardPage() {
           monthlyStatsRes,
           recentInvoicesRes,
           lowStockRes,
+          monthPurchasesRes,
         ] = await Promise.allSettled([
           invoicesAPI.getStats(todayRangeParams),
           customersAPI.getAll({ limit: 1 }),
@@ -248,6 +253,10 @@ export default function DashboardPage() {
           invoicesAPI.getStats(monthRangeParams),
           invoicesAPI.getAll({ limit: 5 }),
           productsAPI.getLowStock(),
+          purchasesAPI.getMonthlyReport({
+            startDate: toYMD(monthStart),
+            endDate: toYMD(monthEnd),
+          }),
         ]);
         const customersData =
           customersRes.status === "fulfilled" ? customersRes.value?.data : null;
@@ -264,6 +273,10 @@ export default function DashboardPage() {
         // Total sales = cash (pay) + credit bills
         const sumSales = (s) =>
           (s.byBillType || []).reduce((t, b) => t + (b.totalAmount || 0), 0);
+        const purchaseTotal = (res) =>
+          res.status === "fulfilled"
+            ? res.value?.data?.data?.total?.amount || 0
+            : 0;
         const lowStockProducts =
           lowStockRes.status === "fulfilled" &&
           Array.isArray(lowStockRes.value?.data?.data)
@@ -298,6 +311,7 @@ export default function DashboardPage() {
           totalRevenue: monthlyStats.totalRevenue || 0,
           monthSales: sumSales(monthlyStats),
           todaySales: sumSales(todayStats),
+          monthPurchases: purchaseTotal(monthPurchasesRes),
           lowStockProducts: lowStockProducts.slice(0, 5),
           recentInvoices,
         });
@@ -310,6 +324,7 @@ export default function DashboardPage() {
           totalRevenue: 0,
           monthSales: 0,
           todaySales: 0,
+          monthPurchases: 0,
           lowStockProducts: [],
           recentInvoices: [],
         });
@@ -369,6 +384,13 @@ export default function DashboardPage() {
         value: formatINR(stats.todaySales),
         icon: FiShoppingBag,
         link: "/dashboard/invoices",
+      },
+      {
+        title: "Month Purchases",
+        subtitle: "All vendors, this month",
+        value: formatINR(stats.monthPurchases),
+        icon: FiShoppingCart,
+        link: "/dashboard/purchases",
       },
     ];
   };
@@ -440,6 +462,7 @@ export default function DashboardPage() {
               "from-green-500 to-emerald-500",
               "from-teal-500 to-cyan-600",
               "from-amber-500 to-orange-500",
+              "from-rose-500 to-pink-500",
             ];
             const gradient = gradients[index % gradients.length];
             return (

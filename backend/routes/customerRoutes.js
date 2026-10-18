@@ -8,6 +8,7 @@ const {
   deleteCustomer,
   getCustomerStats,
   getCreditInvoices,
+  getCustomerReport,
 } = require("../controllers/customerController");
 
 // Basic CRUD routes
@@ -21,6 +22,7 @@ router
 
 // Statistics route
 router.get("/:id/stats", getCustomerStats);
+router.get("/:id/report", getCustomerReport);
 
 // Credit invoices route
 router.get("/:id/credit", getCreditInvoices);

@@ -44,6 +44,7 @@ export const customersAPI = {
   delete: (id) => api.delete(`/api/customers/${id}`),
   getStats: (id) => api.get(`/api/customers/${id}/stats`),
   getCredit: (id) => api.get(`/api/customers/${id}/credit`),
+  getReport: (id, params) => api.get(`/api/customers/${id}/report`, { params }),
 };
 
 // Products API

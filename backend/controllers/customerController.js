@@ -163,3 +163,86 @@ exports.getCreditInvoices = asyncHandler(async (req, res, next) => {
   const totalCredit = (customer.invoices || []).reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
   res.status(200).json({ success: true, data: { totalCredit, creditInvoices: customer.invoices } });
 });
+
+// @desc    Per-customer purchase report: all bills, split into cash (paid) and credit (pending)
+// @route   GET /api/customers/:id/report?month=YYYY-MM | ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+// @access  Public
+// Every bill for the customer in range is listed; billType "credit" bills are the amounts owed. Date is createdAt.
+// Day boundaries are IST (+05:30) since that is the shop's calendar.
+exports.getCustomerReport = asyncHandler(async (req, res, next) => {
+  const { month, startDate, endDate } = req.query;
+  const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const istStart = (d) => new Date(`${d}T00:00:00.000+05:30`);
+  const istEnd = (d) => new Date(`${d}T23:59:59.999+05:30`);
+
+  let start = null;
+  let end = null;
+  let resolvedMonth = null;
+  if (startDate || endDate) {
+    if (startDate) {
+      if (!DAY_RE.test(startDate) || Number.isNaN(istStart(startDate).getTime())) return next(new AppError("Invalid startDate (use YYYY-MM-DD)", 400));
+      start = istStart(startDate);
+    }
+    if (endDate) {
+      if (!DAY_RE.test(endDate) || Number.isNaN(istEnd(endDate).getTime())) return next(new AppError("Invalid endDate (use YYYY-MM-DD)", 400));
+      end = istEnd(endDate);
+    }
+  } else {
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      return next(new AppError("Please provide a valid month (YYYY-MM) or startDate/endDate", 400));
+    }
+    const [y, m] = month.split("-").map(Number);
+    if (m < 1 || m > 12) return next(new AppError("Please provide a valid month (YYYY-MM)", 400));
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const mm = String(m).padStart(2, "0");
+    start = istStart(`${y}-${mm}-01`);
+    end = istEnd(`${y}-${mm}-${String(lastDay).padStart(2, "0")}`);
+    resolvedMonth = month;
+  }
+
+  const customer = await Customer.findById(req.params.id).lean();
+  if (!customer) return next(new AppError(`Customer not found with id: ${req.params.id}`, 404));
+
+  const query = { customerId: customer._id };
+  if (start || end) {
+    query.createdAt = {};
+    if (start) query.createdAt.$gte = start;
+    if (end) query.createdAt.$lte = end;
+  }
+
+  const invoices = await Invoice.find(query)
+    .select("invoiceNumber totalAmount isGstBill billType createdAt")
+    .sort({ createdAt: 1 })
+    .lean();
+
+  const rows = invoices.map((inv) => ({
+    _id: inv._id,
+    invoiceNumber: inv.invoiceNumber,
+    date: inv.createdAt,
+    amount: inv.totalAmount || 0,
+    isGstBill: inv.isGstBill,
+    billType: inv.billType === "credit" ? "credit" : "pay",
+  }));
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const sumOf = (list) => ({ count: list.length, amount: round2(list.reduce((t, r) => t + r.amount, 0)) });
+  const total = sumOf(rows);
+  const credit = sumOf(rows.filter((r) => r.billType === "credit"));
+  const cash = sumOf(rows.filter((r) => r.billType !== "credit"));
+
+  const pa = customer.permanentAddress || {};
+  const address = [pa.companyAddress, pa.city, pa.state, pa.postalCode].filter(Boolean).join(", ");
+
+  res.status(200).json({
+    success: true,
+    data: {
+      month: resolvedMonth,
+      startDate: start,
+      endDate: end,
+      customer: { _id: customer._id, name: customer.name, phone: customer.phone, gstNumber: customer.gstNumber, address },
+      total,
+      credit,
+      cash,
+      invoices: rows,
+    },
+  });
+});

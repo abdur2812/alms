@@ -53,10 +53,17 @@ const S = StyleSheet.create({
     textAlign: "center",
   },
   vendorSub: {
-    fontSize: 7,
+    fontSize: 8,
     color: "#000000",
     textAlign: "center",
     marginTop: 1,
+  },
+  pendingText: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 9,
+    textAlign: "center",
+    marginBottom: 4,
+    color: "#000000",
   },
   // Meta — single divider below, no double line
   metaSection: {
@@ -170,8 +177,6 @@ const S = StyleSheet.create({
   },
   grandTotalRow: {
     flexDirection: "row",
-    borderTopWidth: 0.5,
-    borderTopColor: "#000000",
     paddingVertical: 3,
     marginTop: 4,
   },
@@ -236,9 +241,8 @@ function chunkRows(items, chunkSize) {
   return chunks;
 }
 
-// Order: S.No, Date, Invoice No, Amount, Cheque Details (wider), Cheque Amount, Status, Passed Date
-// Shrunk Date/Invoice/Passed to expand Cheque Details per request
-const COL_WIDTHS = ["6%", "9%", "12%", "12%", "29%", "11%", "10%", "11%"];
+// Order: S.No, Date, Bill Ref, Invoice No, Amount
+const COL_WIDTHS = ["8%", "17%", "25%", "30%", "20%"];
 
 function TableCell({ children, width, align, isLast, isHeader, bg }) {
   const base = isHeader ? (isLast ? S.thLast : S.thCell) : isLast ? S.tdLast : S.tdCell;
@@ -257,50 +261,12 @@ function PurchaseRow({ purchase, idx }) {
         year: "2-digit",
       })
     : "-";
-  const passed = purchase.passedDate
-    ? new Date(purchase.passedDate).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "2-digit",
-      })
-    : "-";
-  // Prefer multi-payment entries; fall back to legacy single fields
-  const pays = Array.isArray(purchase.payments) && purchase.payments.length
-    ? purchase.payments
-    : purchase.chequeDetails || purchase.chequeAmount
-      ? [{
-          method: "cheque",
-          details: purchase.chequeDetails,
-          amount: purchase.chequeAmount,
-          status: purchase.chequeStatus,
-          passedDate: purchase.passedDate,
-        }]
-      : [];
-  const payDetails = pays.length
-    ? pays.map((p) => `${p.method}: ${p.details || "-"}`).join(" | ")
-    : "-";
-  const payAmount = pays.length
-    ? pays.reduce((s, p) => s + (Number(p.amount) || 0), 0)
-    : purchase.chequeAmount != null ? purchase.chequeAmount : "-";
-  const payStatus = pays.length
-    ? [...new Set(pays.map((p) => p.status || "-"))].join("/")
-    : purchase.chequeStatus || "-";
-  const payPassed = pays.length === 1
-    ? (pays[0].passedDate
-        ? new Date(pays[0].passedDate).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "2-digit" })
-        : passed)
-    : pays.length > 1
-      ? `${pays.length} entries`
-      : passed;
   const cells = [
     [String(idx + 1), "center"],
     [date, "center"],
+    [purchase.purchaseNumber || "-", "center"],
     [purchase.invoiceNumber || "-", "center"],
     [fmt(purchase.amount), "right"],
-    [payDetails || "-", "left"],
-    [typeof payAmount === "number" ? fmt(payAmount) : payAmount, "right"],
-    [payStatus || "-", "center"],
-    [payPassed, "center"],
   ];
   return (
     <View style={idx % 2 === 1 ? S.tableRowAlt : S.tableRow}>
@@ -352,8 +318,15 @@ export default function PurchaseReportDocument({ report }) {
 
   const rowChunks = chunkRows(rows, 20);
 
-  const HEADER_LABELS = ["S.No", "Date", "Invoice No", "Amount", "Payment Details", "Pay Amt", "Status", "Passed Date"];
-  const HEADER_ALIGNS = ["center", "center", "center", "right", "left", "right", "center", "center"];
+  const HEADER_LABELS = ["S.No", "Date", "Bill Ref", "Invoice No", "Amount"];
+  const HEADER_ALIGNS = ["center", "center", "center", "center", "right"];
+
+  const pendingLabel = (() => {
+    if (data.startDate && data.endDate) return `Pending bills up to ${fmtDate(data.startDate)} - ${fmtDate(data.endDate)}`;
+    if (data.endDate) return `Pending bills up to ${fmtDate(data.endDate)}`;
+    if (data.startDate) return `Pending bills from ${fmtDate(data.startDate)}`;
+    return "Pending bills";
+  })();
 
   return (
     <Document>
@@ -370,8 +343,11 @@ export default function PurchaseReportDocument({ report }) {
               {/* Vendor name — bordered, no shop info */}
               <View style={S.vendorBox}>
                 <Text style={S.vendorName}>{vendor ? vendor.name : "All Vendors"}</Text>
+                {vendor?.address ? <Text style={S.vendorSub}>{vendor.address}</Text> : null}
                 {vendor?.gstNumber ? <Text style={S.vendorSub}>GSTIN: {vendor.gstNumber}</Text> : null}
               </View>
+
+              <Text style={S.pendingText}>{pendingLabel}</Text>
 
               {/* Meta — simple, no shop */}
               <View style={S.metaSection}>
@@ -416,7 +392,7 @@ export default function PurchaseReportDocument({ report }) {
                       <Text style={S.summaryCount}>({pending.count})</Text>
                       <Text style={S.summaryValue}>{fmt(pending.amount)}</Text>
                     </View>
-                    <View style={S.summaryRow}>
+                    <View style={[S.summaryRow, { borderBottomWidth: 0 }]}>
                       <Text style={S.summaryLabel}>Bounced</Text>
                       <Text style={S.summaryCount}>({bounced.count})</Text>
                       <Text style={S.summaryValue}>{fmt(bounced.amount)}</Text>

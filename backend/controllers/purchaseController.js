@@ -84,7 +84,7 @@ exports.getMonthlyReport = asyncHandler(async (req, res, next) => {
         return next(new AppError("Invalid endDate (use YYYY-MM-DD)", 400));
       }
       // Inclusive end-of-day
-      end.setHours(23, 59, 59, 999);
+      end.setUTCHours(23, 59, 59, 999);
     }
     if (!start && end) {
       // Only end provided → no lower bound, but we still need a start for response; keep start undefined
@@ -123,7 +123,8 @@ exports.getMonthlyReport = asyncHandler(async (req, res, next) => {
     if (!vendor) {
       return next(new AppError("Vendor not found", 404));
     }
-    query.vendorId = vendorId;
+    // Aggregation $match does not auto-cast like find(), so use a real ObjectId
+    query.vendorId = vendor._id;
   }
 
   // Lean + aggregation for sums to avoid loading giant docs twice.
