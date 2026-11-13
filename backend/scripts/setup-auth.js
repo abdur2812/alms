@@ -80,8 +80,8 @@ async function main() {
   const email = (await ask("Admin email (you will log in with this): ")).trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("That does not look like an email address.");
 
-  const pw1 = await ask("New admin password (min 10 characters): ", true);
-  if (pw1.length < 10) throw new Error("Password must be at least 10 characters.");
+  const pw1 = await ask("New admin password (min 6 characters): ", true);
+  if (pw1.length < 6) throw new Error("Password must be at least 6 characters.");
   if (pw1.length > 72) throw new Error("Password must be at most 72 characters.");
   const pw2 = await ask("Type it again: ", true);
   const originsAnswer = (

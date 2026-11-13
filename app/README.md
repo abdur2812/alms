@@ -117,7 +117,7 @@ npm run dev
 
 ### Login
 
-Login uses the backend's `POST /api/auth/login` (JWT, 12h). The token and user are kept in localStorage; a 401 from the API logs you out.
+Login uses the backend's `POST /api/auth/login` (JWT, 7 days). The token and user are kept in localStorage; a 401 from the API logs you out.
 
 ## Project Structure
 

@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 // --- Config (read lazily so the env can be edited + pm2 restarted) ---
 const getSecret = () => process.env.JWT_SECRET || "";
 const secretIsUsable = () => getSecret().length >= 32;
-const getExpiry = () => process.env.JWT_EXPIRES_IN || "12h";
+const getExpiry = () => process.env.JWT_EXPIRES_IN || "7d";
 
 function signToken(payload) {
   return jwt.sign(payload, getSecret(), { algorithm: "HS256", expiresIn: getExpiry() });
