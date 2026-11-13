@@ -16,7 +16,7 @@
 - Atomic `Counter` model (`findOneAndUpdate` + `$inc`) for race-safe invoice/estimate ID generation; counter id `inv-<FYseries>` (GST) and `est` (estimates)
 - On delete, call `Invoice.syncCounterAfterDelete()` to resync counters so the next number reuses gaps
 - Business config (shop details, GSTIN, bank info) in `backend/config/business.js` and `app/lib/businessConfig.js` — keep these in sync
-- Frontend uses React Context (`AuthContext`) for demo auth (admin: `alms@gmail.com` / `alms`)
+- **Auth is real.** `POST /api/auth/login` checks `ADMIN_EMAIL` + bcrypt `ADMIN_PASSWORD_HASH` (backend `.env`) and returns a signed HS256 JWT (12h, `JWT_SECRET`). `middleware/auth.js` `requireAuth` guards every `/api/*` route except `/api/auth/login`, `/api/ping`, `/api/health` (minimal when anonymous). A missing/invalid/expired token gets 401. Set it up with `node backend/scripts/setup-auth.js` (never commit/print secrets). Frontend `AuthContext` calls the login endpoint and `lib/api.js` attaches the Bearer token and logs out on 401. Other hardening lives in `middleware/security.js` (CORS allow-list from `CORS_ORIGIN`, origin guard, write rate limit, `$operator` body rejection, `[audit]` log of writes/refusals).
 - API client in `app/lib/api.js` — functions grouped by resource: `customersAPI`, `productsAPI`, `invoicesAPI`, `staffAPI`, `vendorsAPI`, `purchasesAPI`
 - Search inputs are regex-escaped in controllers (`escapeRegex`) to prevent ReDoS/injection
 - No formal test suite; manual testing via curl/Postman/Thunder Client
@@ -52,4 +52,5 @@
 
 ## ENV / URLs
 - Backend `MONGODB_URI` + `PORT=3000` (+ `CORS_ORIGIN`) in `backend/.env`
-- Frontend `NEXT_PUBLIC_API_URL` in `app/.env.local` (default `https://alms-billing.duckdns.org`); `app/lib/api.js` falls back to that default if unset. Local dev: `http://localhost:3000/api`
+- Frontend `NEXT_PUBLIC_API_URL` (no trailing `/api`; e.g. `https://alms-billing.duckdns.org`). If unset, `app/lib/api.js` uses `http://localhost:3000` when the page is served from localhost (never the live API) and the production URL otherwise.
+- Backend auth/CORS env: `JWT_SECRET` (32+ chars), `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`, `CORS_ORIGIN` (comma-separated allowed origins; `*`/unset = any). nginx must pass `X-Forwarded-For` (`$proxy_add_x_forwarded_for`) so rate limits/lockouts see the real client IP.

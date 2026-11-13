@@ -1,10 +1,24 @@
 import axios from "axios";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://alms-billing.duckdns.org";
+const PRODUCTION_API = "https://alms-billing.duckdns.org";
+
+// Base URL (without a trailing "/api": every call below already starts with /api/...).
+// NEXT_PUBLIC_API_URL wins. If it is unset, a copy running on localhost talks to the LOCAL
+// backend - it must never fall back to the live API - and anything else uses production.
+function resolveBaseURL() {
+  const fromEnv = process.env.NEXT_PUBLIC_API_URL;
+  if (fromEnv) return fromEnv.trim().replace(/\/+$/, "").replace(/\/api$/, "");
+  if (
+    typeof window !== "undefined" &&
+    ["localhost", "127.0.0.1"].includes(window.location.hostname)
+  ) {
+    return "http://localhost:3000";
+  }
+  return PRODUCTION_API;
+}
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: resolveBaseURL(),
   timeout: 30000, // 30s for 512MB + heavy reports (stock snapshots, aggregated reports)
   headers: {
     Accept: "application/json",
@@ -12,10 +26,10 @@ const api = axios.create({
   withCredentials: false,
 });
 
-// Add auth token to requests if available
-// vercel redeploy commit
+// Attach the login token to every request
 api.interceptors.request.use(
   (config) => {
+    config.baseURL = resolveBaseURL();
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -27,10 +41,22 @@ api.interceptors.request.use(
   },
 );
 
-// Response interceptor for error handling
+// 401 = missing/expired/invalid token: drop the session and go to the login page.
+// (A wrong password on the login form is also a 401, but must just show its error message.)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const status = error.response?.status;
+    const url = error.config?.url || "";
+    if (status === 401 && !url.includes("/api/auth/login") && typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      } catch (_) {}
+      if (window.location.pathname !== "/login") {
+        window.location.replace("/login");
+      }
+    }
     return Promise.reject(error);
   },
 );

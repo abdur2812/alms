@@ -105,7 +105,7 @@ Next.js 16 (App Router) + Tailwind CSS 4 + Axios.
 
 | Route | Description |
 |-------|-------------|
-| `/login` | Demo auth (admin: `alms@gmail.com` / `alms`) |
+| `/login` | Admin login (credentials set on the server via `backend/scripts/setup-auth.js`) |
 | `/dashboard` | Home with stats, recent invoices, low-stock alerts |
 | `/dashboard/customers` | Customer list (paginated, searchable) |
 | `/dashboard/customers/new` | Create customer |

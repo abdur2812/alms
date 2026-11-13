@@ -104,7 +104,7 @@ npm install
    Create a `.env.local` file with:
 
 ```
-NEXT_PUBLIC_API_URL=http://localhost:3000/api
+NEXT_PUBLIC_API_URL=http://localhost:3000
 ```
 
 4. Start the development server:
@@ -117,7 +117,7 @@ npm run dev
 
 ### Login
 
-Demo auth via `AuthContext`: login with `alms@gmail.com` / `alms`. The session is kept in localStorage.
+Login uses the backend's `POST /api/auth/login` (JWT, 12h). The token and user are kept in localStorage; a 401 from the API logs you out.
 
 ## Project Structure
 

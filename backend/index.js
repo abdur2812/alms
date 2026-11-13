@@ -5,6 +5,7 @@ const compression = require("compression");
 require("dotenv").config();
 
 const app = express();
+app.disable("x-powered-by");
 // Behind a reverse proxy: use the real client IP, not the proxy's, for rate limiting
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
@@ -20,9 +21,22 @@ const hsnRoutes = require("./routes/hsnRoutes");
 const expenseRoutes = require("./routes/expenseRoutes");
 const expenseCategoryRoutes = require("./routes/expenseCategoryRoutes");
 const accountRoutes = require("./routes/accountRoutes");
+const authRoutes = require("./routes/authRoutes");
 require("./models/Counter");
 
 const { errorHandler } = require("./middleware/errorHandler");
+const { requireAuth, verifyRequest, logAuthStatus } = require("./middleware/auth");
+const {
+  securityHeaders,
+  corsOrigin,
+  originGuard,
+  writeLimiter,
+  rejectOperators,
+  auditLog,
+  getAllowedOrigins,
+} = require("./middleware/security");
+
+app.use(securityHeaders);
 
 // --- Hardening for 512 MB + single-user + Free Tier ---
 
@@ -42,16 +56,22 @@ app.use((req, res, next) => {
   next();
 });
 
+// Audit log of writes and refused requests (hooks the response, so it also sees 401/403/429)
+app.use(auditLog);
+
 // CORS (before the rate limiter so 429 responses still carry CORS headers)
+// Origins come from CORS_ORIGIN (comma-separated); unset or "*" allows any origin.
 app.use(
   cors({
-    origin: "*",
+    origin: corsOrigin,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
     credentials: false,
     optionsSuccessStatus: 200,
   })
 );
+// Refuse browser requests from origins outside the allow-list (no-op when CORS_ORIGIN is "*"/unset)
+app.use(originGuard);
 
 // Simple in-memory rate limiter: 600 req/min per IP (a dashboard load alone is ~10 requests)
 const rateMap = new Map();
@@ -77,6 +97,10 @@ setInterval(() => {
   const now = Date.now();
   for (const [k, v] of rateMap) if (now - v.start > RATE_WINDOW_MS) rateMap.delete(k);
 }, RATE_WINDOW_MS).unref();
+
+// Stricter limit on writes + reject Mongo operator keys ($ne, $gt, ...) in request bodies
+app.use(writeLimiter);
+app.use(rejectOperators);
 
 // Graceful shutdown tracking
 let server;
@@ -136,6 +160,8 @@ async function startServer() {
 
     server = app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT} (512MB-tuned)`);
+      logAuthStatus();
+      if (!getAllowedOrigins()) console.warn("⚠️ CORS_ORIGIN is unset or '*': any website origin is accepted");
     });
 
     // Keep-alive tuning for low memory
@@ -157,18 +183,6 @@ const apiInfo = (req, res) => {
     success: true,
     message: "AL M.S. TRADERS Billing System API",
     version: "1.0.0",
-    endpoints: {
-      customers: "/api/customers",
-      products: "/api/products",
-      invoices: "/api/invoices",
-      staff: "/api/staff",
-      vendors: "/api/vendors",
-      purchases: "/api/purchases",
-      hsns: "/api/hsns",
-      expenses: "/api/expenses",
-      expenseCategories: "/api/expense-categories",
-      accounts: "/api/accounts/summary",
-    },
   });
 };
 app.get("/", apiInfo);
@@ -176,6 +190,9 @@ app.get("/api", apiInfo);
 
 // Health check with memory + DB state
 app.get("/api/health", (req, res) => {
+  const dbState = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
+  // Anonymous callers (uptime monitors) only get status; details need a valid login token
+  if (!verifyRequest(req)) return res.json({ status: "ok", db: dbState });
   const uri = process.env.MONGODB_URI || "";
   const isAtlas = uri.includes("mongodb+srv");
   const mem = process.memoryUsage();
@@ -196,6 +213,10 @@ app.get("/api/health", (req, res) => {
 
 // Lightweight ping for uptime monitors
 app.get("/api/ping", (req, res) => res.json({ ok: true, ts: Date.now() }));
+
+// Login (public) - everything below this line requires a valid token
+app.use("/api/auth", authRoutes);
+app.use("/api", requireAuth);
 
 // API Routes - must be before 404
 app.use("/api/customers", customerRoutes);
