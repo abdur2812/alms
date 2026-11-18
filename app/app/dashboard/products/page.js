@@ -71,7 +71,6 @@ export default function ProductsPage() {
         const params = { page, limit: pageSize };
         if (search) {
           params.search = search;
-          params.includePartNo = true;
         }
         if (lowStockOnly) params.lowStock = "true";
         response = await productsAPI.getAll(params);
@@ -226,7 +225,7 @@ export default function ProductsPage() {
             setSearch(e.target.value);
             setPage(1);
           }}
-          placeholder="Search products by name or part no..."
+          placeholder="Search products by name..."
         />
         <ToolbarDivider />
         <Segmented
@@ -315,11 +314,6 @@ export default function ProductsPage() {
                         <div className="text-sm font-bold text-gray-900">
                           {product.name}
                         </div>
-                        {product.partNo ? (
-                          <div className="text-xs text-gray-500 font-mono truncate max-w-xs">
-                            Part No: {product.partNo}
-                          </div>
-                        ) : null}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-gray-900">

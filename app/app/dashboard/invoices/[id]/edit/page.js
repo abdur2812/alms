@@ -145,11 +145,10 @@ export default function FullEditInvoicePage({ params }) {
     const response = await productsAPI.getAll({
       limit: 20,
       search: searchTerm,
-      includePartNo: true,
     });
     return response.data.data.map((product) => ({
       value: product._id,
-      label: `${product.name}${product.partNo ? ` [${product.partNo}]` : ""} (${formatINR(product.price)})`,
+      label: `${product.name} (${formatINR(product.price)})`,
     }));
   };
 
@@ -536,10 +535,10 @@ export default function FullEditInvoicePage({ params }) {
                                 e.target.value,
                               )
                             }
-                            placeholder="Select product (name or part no)"
+                            placeholder="Select product (name)"
                             options={products.map((p) => ({
                               value: p._id,
-                              label: `${p.name}${p.partNo ? ` [${p.partNo}]` : ""} (${formatINR(p.price)})`,
+                              label: `${p.name} (${formatINR(p.price)})`,
                             }))}
                             onSearch={searchProducts}
                           />

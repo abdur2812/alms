@@ -271,11 +271,10 @@ export default function NewInvoicePage() {
     const response = await productsAPI.getAll({
       limit: 20,
       search: searchTerm,
-      includePartNo: true,
     });
     return response.data.data.map((product) => ({
       value: product._id,
-      label: `${product.name}${product.partNo ? ` [${product.partNo}]` : ""} (${formatINR(product.price)})`,
+      label: `${product.name} (${formatINR(product.price)})`,
     }));
   };
 
@@ -1070,7 +1069,7 @@ export default function NewInvoicePage() {
                           onBlur={() =>
                             setTimeout(() => setShowProductDropdown(false), 150)
                           }
-                          placeholder="Search by name or part no, or enter product name..."
+                          placeholder="Search by name, or enter product name..."
                           autoComplete="off"
                           className="w-full px-4 py-2.5 text-sm border-2 border-gray-100 rounded-xl focus:outline-none focus:border-purple-400 focus:ring-4 focus:ring-purple-100 bg-white text-gray-900 placeholder-gray-400 transition-all duration-200"
                         />

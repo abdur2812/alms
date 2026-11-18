@@ -88,10 +88,10 @@ export default function NewCleanEstimatePage() {
     }
   };
   const searchProducts = async (searchTerm) => {
-    const res = await productsAPI.getAll({ limit: 20, search: searchTerm, includePartNo: true });
+    const res = await productsAPI.getAll({ limit: 20, search: searchTerm });
     return res.data.data.map((p) => ({
       value: p._id,
-      label: `${p.name}${p.partNo ? ` [${p.partNo}]` : ""} (${formatINR(p.price)})`,
+      label: `${p.name} (${formatINR(p.price)})`,
     }));
   };
 
@@ -388,7 +388,7 @@ export default function NewCleanEstimatePage() {
                         onKeyDown={handleProductKeyDown}
                         onFocus={() => setShowProductDropdown(true)}
                         onBlur={() => setTimeout(() => setShowProductDropdown(false), 150)}
-                        placeholder="Search by name or part no, or enter product name"
+                        placeholder="Search by name, or enter product name"
                         className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white"
                       />
                       {showProductDropdown && (
