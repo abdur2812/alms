@@ -71,7 +71,7 @@ export default function DashboardPage() {
     if (append) setCreditLoadingMore(true);
     else setCreditLoading(true);
     try {
-      const res = await customersAPI.getAll({ hasCreditInvoices: "true", limit: 10, page });
+      const res = await customersAPI.getAll({ hasCreditInvoices: "true", limit: 15, page });
       const data = Array.isArray(res.data?.data) ? res.data.data : [];
       const totalPages = res.data?.totalPages || 1;
       if (append) setCreditCustomers((prev) => [...prev, ...data]);
@@ -91,7 +91,7 @@ export default function DashboardPage() {
     if (append) setPurchaseLoadingMore(true);
     else setPurchaseLoading(true);
     try {
-      const res = await purchasesAPI.getAll({ chequeStatus: "Pending", limit: 20, page });
+      const res = await purchasesAPI.getAll({ chequeStatus: "Pending", limit: 15, page });
       const purchases = Array.isArray(res.data?.data) ? res.data.data : [];
       const totalPages = res.data?.totalPages || 1;
       setPurchaseHasMore(page < totalPages);

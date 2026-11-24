@@ -3,8 +3,8 @@
 import { useState, useEffect, Fragment } from "react";
 import Link from "next/link";
 import { FiPlus, FiEdit, FiTrash2, FiEye, FiSearch, FiShoppingBag, FiTruck, FiEdit2, FiX, FiCheck, FiFileText, FiChevronDown } from "react-icons/fi";
-import useFitRows from "@/lib/useFitRows";
-import { PageHeader, Card, Button, Badge, LoadingSpinner, EmptyState, ListPage, ListToolbar, ListCount, SearchBox, ListPanel, ListScroll, PaginationBar } from "@/components/UI";
+import useInfiniteList from "@/lib/useInfiniteList";
+import { PageHeader, Card, Button, Badge, LoadingSpinner, EmptyState, ListPage, ListToolbar, ListCount, SearchBox, ListPanel, ListScroll, LoadMore } from "@/components/UI";
 import { purchasesAPI, vendorsAPI } from "@/lib/api";
 import usePersistentState from "@/lib/usePersistentState";
 
@@ -136,14 +136,6 @@ function VendorForm({ onSave, onCancel, initial }) {
 
 export default function PurchasesPage() {
   const [tab, setTab] = usePersistentState("purchases.tab", "invoices");
-  const [purchases, setPurchases] = useState([]);
-  const [purchaseTotal, setPurchaseTotal] = useState(0);
-  const [purchaseTotalPages, setPurchaseTotalPages] = useState(1);
-  const [vendors, setVendors] = useState([]);
-  const [vendorTotal, setVendorTotal] = useState(0);
-  const [vendorTotalPages, setVendorTotalPages] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [vendorsLoading, setVendorsLoading] = useState(true);
   const [error, setError] = useState("");
   const [showVendorForm, setShowVendorForm] = useState(false);
   const [editingVendor, setEditingVendor] = useState(null);
@@ -154,15 +146,34 @@ export default function PurchasesPage() {
   const [debouncedVendorSearch, setDebouncedVendorSearch] = useState(vendorSearch);
   const [deletingPurchaseId, setDeletingPurchaseId] = useState(null);
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
-  // Page size = however many rows fill the card (measured, see useFitRows).
-  const { ref: listRef, pageSize, ready } = useFitRows({
-    deps: [purchases, vendors],
-    resetKey: tab,
+  // Infinite lists: 15 rows at a time, the next 15 load as the user scrolls.
+  const purchaseList = useInfiniteList({
+    enabled: tab === "invoices",
+    fetcher: (page, limit) => {
+      const params = { page, limit };
+      if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
+      return purchasesAPI.getAll(params);
+    },
+    deps: [debouncedSearch],
   });
-  const PURCHASES_PER_PAGE = pageSize;
-  const VENDORS_PER_PAGE = pageSize;
-  const [purchasePage, setPurchasePage] = usePersistentState("purchases.page", 1);
-  const [vendorPage, setVendorPage] = usePersistentState("purchases.vendorPage", 1);
+  const vendorList = useInfiniteList({
+    enabled: tab === "vendors",
+    fetcher: (page, limit) => {
+      const params = { page, limit };
+      if (debouncedVendorSearch.trim()) params.search = debouncedVendorSearch.trim();
+      return vendorsAPI.getAll(params);
+    },
+    deps: [debouncedVendorSearch],
+  });
+  const purchases = purchaseList.items;
+  const vendors = vendorList.items;
+  const purchaseTotal = purchaseList.total ?? 0;
+  const vendorTotal = vendorList.total ?? 0;
+  const loading = purchaseList.loading;
+  const vendorsLoading = vendorList.loading;
+  const loadPurchases = () => purchaseList.reload();
+  const loadVendors = () => vendorList.reload();
+  const shownError = error || (tab === "invoices" ? purchaseList.error : vendorList.error);
 
   // Normalise payments: prefer multi-entry array, fall back to legacy single fields
   const getPayments = (p) => {
@@ -183,48 +194,11 @@ export default function PurchasesPage() {
   const paymentsTotal = (p) =>
     getPayments(p).reduce((s, pay) => s + (Number(pay.amount) || 0), 0);
 
-  // Server-side pagination + search. Previously this page preloaded 500
-  // purchases + 500 vendors and filtered in memory — slow, and silently
-  // incomplete once the backend clamps limit to 50.
-  const loadPurchases = async (page, search) => {
-    try {
-      setLoading(true);
-      const params = { page, limit: PURCHASES_PER_PAGE };
-      if (search.trim()) params.search = search.trim();
-      const res = await purchasesAPI.getAll(params);
-      setPurchases(res.data.data || []);
-      setPurchaseTotal(res.data.total || 0);
-      setPurchaseTotalPages(res.data.totalPages || 1);
-    } catch (e) {
-      setError(e.response?.data?.message || "Failed to load purchases");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadVendors = async (page, search) => {
-    try {
-      setVendorsLoading(true);
-      const params = { page, limit: VENDORS_PER_PAGE };
-      if (search.trim()) params.search = search.trim();
-      const res = await vendorsAPI.getAll(params);
-      setVendors(res.data.data || []);
-      setVendorTotal(res.data.total || 0);
-      setVendorTotalPages(res.data.totalPages || 1);
-    } catch (e) {
-      setError(e.response?.data?.message || "Failed to load vendors");
-    } finally {
-      setVendorsLoading(false);
-    }
-  };
-
   // Debounce search inputs so each keystroke isn't a server round-trip.
   useEffect(() => {
     const t = setTimeout(() => {
-      // Only reset to page 1 when the term really changed (not on mount).
       if (searchTerm !== debouncedSearch) {
         setDebouncedSearch(searchTerm);
-        setPurchasePage(1);
       }
     }, 400);
     return () => clearTimeout(t);
@@ -234,41 +208,16 @@ export default function PurchasesPage() {
     const t = setTimeout(() => {
       if (vendorSearch !== debouncedVendorSearch) {
         setDebouncedVendorSearch(vendorSearch);
-        setVendorPage(1);
       }
     }, 400);
     return () => clearTimeout(t);
   }, [vendorSearch]);
 
-  // Fetch only the active tab. Purchases and vendors load independently.
-  useEffect(() => {
-    if (ready && tab === "invoices") loadPurchases(purchasePage, debouncedSearch);
-  }, [ready, pageSize, tab, purchasePage, debouncedSearch]);
-
-  useEffect(() => {
-    if (ready && tab === "vendors") loadVendors(vendorPage, debouncedVendorSearch);
-  }, [ready, pageSize, tab, vendorPage, debouncedVendorSearch]);
-
-  // Clamp page when totals shrink (e.g., after delete/search)
-  useEffect(() => {
-    // Wait for the first load: totals default to 1 page before data arrives.
-    if (!loading && purchasePage > purchaseTotalPages) {
-      setPurchasePage(purchaseTotalPages);
-    }
-  }, [purchasePage, purchaseTotalPages, loading]);
-
-  useEffect(() => {
-    if (!vendorsLoading && vendorPage > vendorTotalPages) {
-      setVendorPage(vendorTotalPages);
-    }
-  }, [vendorPage, vendorTotalPages, vendorsLoading]);
-
   const handleAddVendor = async (data) => {
     try {
       await vendorsAPI.create(data);
       setShowVendorForm(false);
-      loadVendors(1, debouncedVendorSearch);
-      setVendorPage(1);
+      loadVendors();
     } catch (e) {
       setError(e.response?.data?.message || "Failed to add vendor");
     }
@@ -277,7 +226,7 @@ export default function PurchasesPage() {
   const handleUpdateVendor = async (data) => {
     try {
       const res = await vendorsAPI.update(editingVendor._id, data);
-      setVendors((prev) => prev.map((v) => (v._id === editingVendor._id ? res.data.data : v)));
+      vendorList.setItems((prev) => prev.map((v) => (v._id === editingVendor._id ? res.data.data : v)));
       setEditingVendor(null);
     } catch (e) {
       setError(e.response?.data?.message || "Failed to update vendor");
@@ -288,7 +237,7 @@ export default function PurchasesPage() {
     if (!confirm("Delete this vendor?")) return;
     try {
       await vendorsAPI.delete(id);
-      loadVendors(vendorPage, debouncedVendorSearch);
+      loadVendors();
     } catch (e) {
       setError(e.response?.data?.message || "Failed to delete vendor");
     }
@@ -299,7 +248,7 @@ export default function PurchasesPage() {
     try {
       setDeletingPurchaseId(id);
       await purchasesAPI.delete(id);
-      loadPurchases(purchasePage, debouncedSearch);
+      loadPurchases();
     } catch (e) {
       setError(e.response?.data?.message || "Failed to delete purchase");
     } finally {
@@ -370,14 +319,14 @@ export default function PurchasesPage() {
         }
       />
 
-      {error && (
+      {shownError && (
         <div className="shrink-0 mb-4 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-medium">
-          <span>{error}</span>
+          <span>{shownError}</span>
           <button onClick={() => setError("")} className="ml-auto text-red-400 hover:text-red-600 font-bold">✕</button>
         </div>
       )}
 
-      <ListPanel panelRef={listRef}>
+      <ListPanel>
       <ListToolbar>
         {tab === "invoices" ? (
           <SearchBox
@@ -448,7 +397,7 @@ export default function PurchasesPage() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-50">
                       {paginatedPurchases.map((purchase, index) => {
-                        const globalIndex = (purchasePage - 1) * PURCHASES_PER_PAGE + index;
+                        const globalIndex = index;
                         const sNo = purchaseTotal - globalIndex;
                         const pays = getPayments(purchase);
                         const isExpanded = expandedPurchaseId === purchase._id;
@@ -574,8 +523,8 @@ export default function PurchasesPage() {
                       })}
                   </tbody>
                 </table>
+                <LoadMore hasMore={purchaseList.hasMore} loading={purchaseList.loadingMore} onLoadMore={purchaseList.loadMore} count={purchases.length} />
               </ListScroll>
-                <PaginationBar page={purchasePage} totalPages={purchaseTotalPages} total={purchaseTotal} onChange={setPurchasePage} />
               </>
             )}
           </div>
@@ -686,8 +635,8 @@ export default function PurchasesPage() {
                     ))}
                   </tbody>
                 </table>
+                <LoadMore hasMore={vendorList.hasMore} loading={vendorList.loadingMore} onLoadMore={vendorList.loadMore} count={vendors.length} />
               </ListScroll>
-              <PaginationBar page={vendorPage} totalPages={vendorTotalPages} total={vendorTotal} onChange={setVendorPage} />
               </>
             )}
           </div>

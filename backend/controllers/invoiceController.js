@@ -348,9 +348,11 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
   }
   if (vehicleNumber !== undefined) invoice.vehicleNumber = vehicleNumber;
 
+  let convertedAt = null;
   if (!wasGstBill && invoice.isGstBill) {
+    convertedAt = new Date();
     invoice.invoiceNumber = await Invoice.generateInvoiceNumber();
-    invoice.numberAssignedAt = new Date();
+    invoice.numberAssignedAt = convertedAt;
     invoice.pendingInvoiceNumber = null;
     // Converting an estimate into a GST bill is a real sale — deduct stock now.
     const qtyById = new Map();
@@ -375,6 +377,13 @@ exports.updateInvoice = asyncHandler(async (req, res, next) => {
   }
 
   await invoice.save();
+
+  // The invoice's date is its createdAt. When an estimate becomes a GST invoice, the invoice date
+  // must be the conversion date, not the estimate's creation date. Mongoose treats createdAt as
+  // immutable, so write it with the native driver.
+  if (convertedAt) {
+    await Invoice.collection.updateOne({ _id: invoice._id }, { $set: { createdAt: convertedAt } });
+  }
 
   const updatedInvoice = await Invoice.findById(invoice._id)
     .populate("customerId", "name phone")

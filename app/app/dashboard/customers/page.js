@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { customersAPI, invoicesAPI } from "@/lib/api";
-import useFitRows from "@/lib/useFitRows";
+import useInfiniteList from "@/lib/useInfiniteList";
 import usePersistentState from "@/lib/usePersistentState";
 import {
   FiPlus,
@@ -35,49 +35,31 @@ import {
   Segmented,
   ListPanel,
   ListScroll,
-  PaginationBar,
+  LoadMore,
 } from "@/components/UI";
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = usePersistentState("customers.search", "");
-  const [page, setPage] = usePersistentState("customers.page", 1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(null);
-  const { ref: listRef, pageSize, ready } = useFitRows({ deps: [customers] });
-  const [error, setError] = useState("");
   const [filterCredit, setFilterCredit] = usePersistentState("customers.credit", false);
   const [expandedCustomer, setExpandedCustomer] = useState(null);
-
-  useEffect(() => {
-    if (ready) fetchCustomers();
-  }, [ready, pageSize, page, search, filterCredit]);
-
-  useEffect(() => {
-    if (!loading && page > totalPages) setPage(totalPages);
-  }, [loading, page, totalPages]);
-
-  const fetchCustomers = async () => {
-    try {
-      setLoading(true);
-      const params = { page, limit: pageSize };
+  const {
+    items: customers,
+    total,
+    loading,
+    loadingMore,
+    error,
+    hasMore,
+    loadMore,
+    reload: fetchCustomers,
+  } = useInfiniteList({
+    fetcher: (page, limit) => {
+      const params = { page, limit };
       if (search) params.search = search;
       if (filterCredit) params.hasCreditInvoices = true;
-      const response = await customersAPI.getAll(params);
-      setCustomers(response.data.data);
-      setTotalPages(response.data.totalPages);
-      setTotal(response.data.total ?? null);
-      setError("");
-
-      // Debug logging
-    } catch (err) {
-      setError("Failed to fetch customers");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return customersAPI.getAll(params);
+    },
+    deps: [search, filterCredit],
+  });
 
   const handleDelete = async (id) => {
     if (!confirm("Are you sure you want to delete this customer?")) return;
@@ -129,13 +111,12 @@ export default function CustomersPage() {
       )}
 
       {/* Customers table */}
-      <ListPanel panelRef={listRef}>
+      <ListPanel>
         <ListToolbar>
         <SearchBox
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
-            setPage(1);
           }}
           placeholder="Search by name or email..."
         />
@@ -147,7 +128,6 @@ export default function CustomersPage() {
             value={filterCredit}
             onChange={(v) => {
               setFilterCredit(v);
-              setPage(1);
             }}
             options={[
               { value: false, label: "All" },
@@ -530,10 +510,8 @@ export default function CustomersPage() {
                   ))}
                 </tbody>
               </table>
+                <LoadMore hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} count={customers.length} />
               </ListScroll>
-
-              {/* Pagination */}
-              <PaginationBar page={page} totalPages={totalPages} onChange={setPage} />
             </>
           )}
         </div>

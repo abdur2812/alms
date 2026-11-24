@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { invoicesAPI, hsnsAPI } from "@/lib/api";
-import useFitRows from "@/lib/useFitRows";
+import useInfiniteList from "@/lib/useInfiniteList";
 import usePersistentState from "@/lib/usePersistentState";
 import { formatINR } from "@/lib/formatters";
 import { fetchInvoicesInRange, downloadInvoicesZip } from "@/lib/invoiceZip";
@@ -20,7 +20,7 @@ import {
   Segmented,
   ListPanel,
   ListScroll,
-  PaginationBar,
+  LoadMore,
 } from "@/components/UI";
 import {
   FiPlus,
@@ -41,19 +41,33 @@ import {
 export default function InvoicesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [invoices, setInvoices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = usePersistentState("invoices.page", 1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(null);
-  const { ref: listRef, pageSize, ready } = useFitRows({ deps: [invoices] });
   const [billTypeFilter, setBillTypeFilter] = usePersistentState("invoices.billType", "");
   const [invoiceModeFilter, setInvoiceModeFilter] = usePersistentState("invoices.mode", "");
   const [customerFilter, setCustomerFilter] = usePersistentState("invoices.customer", "");
-  const [error, setError] = useState("");
   const [converting, setConverting] = useState(null);
   const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(null);
   const [search, setSearch] = usePersistentState("invoices.search", "");
+
+  const {
+    items: invoices,
+    total,
+    loading,
+    loadingMore,
+    error,
+    hasMore,
+    loadMore,
+    reload: fetchInvoices,
+  } = useInfiniteList({
+    fetcher: (page, limit) => {
+      const params = { page, limit };
+      if (billTypeFilter) params.billType = billTypeFilter;
+      if (invoiceModeFilter) params.isGstBill = invoiceModeFilter;
+      if (customerFilter) params.customerId = customerFilter;
+      if (search.trim()) params.search = search.trim();
+      return invoicesAPI.getAll(params);
+    },
+    deps: [billTypeFilter, invoiceModeFilter, customerFilter, search],
+  });
 
   // Export-as-ZIP state
   const [showZipModal, setShowZipModal] = useState(false);
@@ -81,49 +95,12 @@ export default function InvoicesPage() {
     const billType = searchParams.get("billType");
     const invoiceMode = searchParams.get("isGstBill");
 
-    // Explicit URL filters override restored ones; start from page 1 then.
-    if (customer || billType || invoiceMode === "true" || invoiceMode === "false") {
-      if (customer && customer !== customerFilter) setPage(1);
-      if (billType && billType !== billTypeFilter) setPage(1);
-      if (invoiceMode && invoiceMode !== invoiceModeFilter) setPage(1);
-    }
     if (customer) setCustomerFilter(customer);
     if (billType) setBillTypeFilter(billType);
     if (invoiceMode === "true" || invoiceMode === "false") {
       setInvoiceModeFilter(invoiceMode);
     }
   }, [searchParams]);
-
-  useEffect(() => {
-    if (ready) fetchInvoices();
-  }, [ready, pageSize, page, billTypeFilter, invoiceModeFilter, customerFilter, search]);
-
-  // Page size changed (resize) → keep page in range.
-  useEffect(() => {
-    if (!loading && page > totalPages) setPage(totalPages);
-  }, [loading, page, totalPages]);
-
-  const fetchInvoices = async () => {
-    try {
-      setLoading(true);
-      const params = { page, limit: pageSize };
-      if (billTypeFilter) params.billType = billTypeFilter;
-      if (invoiceModeFilter) params.isGstBill = invoiceModeFilter;
-      if (customerFilter) params.customerId = customerFilter;
-      if (search.trim()) params.search = search.trim();
-
-      const response = await invoicesAPI.getAll(params);
-      setInvoices(Array.isArray(response?.data?.data) ? response.data.data : []);
-      setTotalPages(response?.data?.totalPages || 1);
-      setTotal(response?.data?.total ?? null);
-      setError("");
-    } catch (err) {
-      setError("Failed to fetch invoices");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleDelete = async (id) => {
     if (!confirm("Are you sure you want to delete this invoice?")) return;
@@ -374,13 +351,12 @@ export default function InvoicesPage() {
       )}
 
       {/* Invoices table */}
-      <ListPanel panelRef={listRef}>
+      <ListPanel>
         <ListToolbar>
         <SearchBox
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
-            setPage(1);
           }}
           placeholder="Search invoice no. or customer..."
         />
@@ -389,7 +365,6 @@ export default function InvoicesPage() {
           value={billTypeFilter}
           onChange={(v) => {
             setBillTypeFilter(v);
-            setPage(1);
           }}
           options={[
             { value: "", label: "All Bills" },
@@ -401,7 +376,6 @@ export default function InvoicesPage() {
           value={invoiceModeFilter}
           onChange={(v) => {
             setInvoiceModeFilter(v);
-            setPage(1);
           }}
           options={[
             { value: "", label: "All Docs" },
@@ -420,7 +394,6 @@ export default function InvoicesPage() {
                 setBillTypeFilter("");
                 setInvoiceModeFilter("");
                 router.replace("/dashboard/invoices", { scroll: false });
-                setPage(1);
               }}
               variant="secondary"
               size="sm"
@@ -574,10 +547,8 @@ export default function InvoicesPage() {
                   ))}
                 </tbody>
               </table>
+                <LoadMore hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} count={invoices.length} />
               </ListScroll>
-
-              {/* Pagination */}
-              <PaginationBar page={page} totalPages={totalPages} onChange={setPage} />
             </>
           )}
         </div>

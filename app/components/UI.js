@@ -790,7 +790,7 @@ export function Dropdown({
 
 // ─── List page layout ─────────────────────────────────────────────────────────
 // A list page fills the viewport: header + toolbar stay put, only the list
-// scrolls, and the pagination bar is pinned to the bottom of the screen.
+// scrolls, and the list scrolls and loads more rows as you reach the end.
 // Compose: <ListPage> <PageHeader compact/> <ListToolbar/> <ListPanel> ... </ListPanel> </ListPage>
 
 export function ListPage({ children, className = "" }) {
@@ -904,8 +904,7 @@ export function ListCount({ count, label }) {
   );
 }
 
-// Card that takes the remaining height. Put a <ListScroll> and a
-// <PaginationBar> inside; only <ListScroll> scrolls.
+// Card that takes the remaining height. Put a <ListScroll> inside; only it scrolls.
 export function ListPanel({ children, className = "", panelRef }) {
   return (
     <div
@@ -919,39 +918,45 @@ export function ListPanel({ children, className = "", panelRef }) {
 
 export function ListScroll({ children, className = "" }) {
   return (
-    <div className={`flex-1 min-h-0 overflow-auto ${className}`}>
+    <div data-scroll-root className={`flex-1 min-h-0 overflow-auto ${className}`}>
       {children}
     </div>
   );
 }
 
-export function PaginationBar({ page, totalPages, total, onChange }) {
-  if (!totalPages || totalPages <= 1) return null;
+// Sits at the end of a scrolling list. When it comes into view (the user scrolled
+// past the rows loaded so far) it asks for the next batch. Put it inside <ListScroll>
+// (or any scroll box marked data-scroll-root) right after the table.
+export function LoadMore({ hasMore, loading, onLoadMore, count }) {
+  const ref = useRef(null);
+  const cbRef = useRef(onLoadMore);
+  useEffect(() => {
+    cbRef.current = onLoadMore;
+  });
+
+  // `count` changes after every batch, so the observer is re-created and fires
+  // again when the screen is still not full after a load.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !hasMore || loading) return;
+    const root = el.closest("[data-scroll-root]");
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) cbRef.current?.();
+      },
+      { root: root || null, rootMargin: "0px 0px 160px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, loading, count]);
+
+  if (!hasMore && !loading) return null;
   return (
-    <div className="shrink-0 flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/80 px-4 py-2.5 sm:px-6">
-      <p className="text-sm text-gray-500 font-medium">
-        Page <span className="text-indigo-600">{page}</span> of{" "}
-        <span className="text-indigo-600">{totalPages}</span>
-        {typeof total === "number" && <span> • {total} total</span>}
-      </p>
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={page <= 1}
-          onClick={() => onChange(Math.max(1, page - 1))}
-        >
-          Previous
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={page >= totalPages}
-          onClick={() => onChange(Math.min(totalPages, page + 1))}
-        >
-          Next
-        </Button>
-      </div>
+    <div ref={ref} className="flex items-center justify-center gap-2 py-4 text-sm text-gray-400">
+      {loading && (
+        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-indigo-500" />
+      )}
+      {loading ? "Loading more…" : ""}
     </div>
   );
 }

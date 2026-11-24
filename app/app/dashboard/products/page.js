@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { productsAPI } from "@/lib/api";
-import useFitRows from "@/lib/useFitRows";
+import useInfiniteList from "@/lib/useInfiniteList";
 import usePersistentState from "@/lib/usePersistentState";
 import { formatINR } from "@/lib/formatters";
 import {
@@ -20,7 +20,7 @@ import {
   Segmented,
   ListPanel,
   ListScroll,
-  PaginationBar,
+  LoadMore,
 } from "@/components/UI";
 import {
   FiPlus,
@@ -36,60 +36,38 @@ import {
 export default function ProductsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = usePersistentState("products.search", "");
-  const [page, setPage] = usePersistentState("products.page", 1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(null);
-  const { ref: listRef, pageSize, ready } = useFitRows({ deps: [products] });
-  const [error, setError] = useState("");
 
   // Low-stock filter driven by URL (dashboard "View all" links here with ?lowStock=true)
   const lowStockOnly = searchParams.get("lowStock") === "true";
 
-  useEffect(() => {
-    if (ready) fetchProducts();
-  }, [ready, pageSize, page, search, lowStockOnly]);
-
-  useEffect(() => {
-    if (!loading && page > totalPages) setPage(totalPages);
-  }, [loading, page, totalPages]);
-
-  const setLowStockFilter = (on) => {
-    setPage(1);
-    router.replace(`/dashboard/products${on ? "?lowStock=true" : ""}`, { scroll: false });
-  };
-
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      let response;
+  const {
+    items: products,
+    total,
+    loading,
+    loadingMore,
+    error,
+    hasMore,
+    loadMore,
+    reload: fetchProducts,
+  } = useInfiniteList({
+    fetcher: (page, limit) => {
       if (search || lowStockOnly) {
         // Filtered view (search and/or low-stock) uses the filterable endpoint.
         // getPopular doesn't support the lowStock flag.
-        const params = { page, limit: pageSize };
-        if (search) {
-          params.search = search;
-        }
+        const params = { page, limit };
+        if (search) params.search = search;
         if (lowStockOnly) params.lowStock = "true";
-        response = await productsAPI.getAll(params);
-        setTotalPages(response?.data?.totalPages || 1);
-        setTotal(response?.data?.total ?? null);
-      } else {
-        // Default: show most billed products first, paginated
-        response = await productsAPI.getPopular({ page, limit: pageSize });
-        setTotalPages(response?.data?.totalPages || 1);
-        setTotal(response?.data?.total ?? null);
+        return productsAPI.getAll(params);
       }
-      setProducts(Array.isArray(response?.data?.data) ? response.data.data : []);
-      setError("");
-    } catch (err) {
-      setError("Failed to fetch products");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+      // Default: show most billed products first
+      return productsAPI.getPopular({ page, limit });
+    },
+    deps: [search, lowStockOnly],
+  });
+
+  const setLowStockFilter = (on) => {
+    router.replace(`/dashboard/products${on ? "?lowStock=true" : ""}`, { scroll: false });
   };
 
   const handleDelete = async (id) => {
@@ -217,13 +195,12 @@ export default function ProductsPage() {
       )}
 
       {/* Products table */}
-      <ListPanel panelRef={listRef}>
+      <ListPanel>
         <ListToolbar>
         <SearchBox
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
-            setPage(1);
           }}
           placeholder="Search products by name..."
         />
@@ -307,7 +284,7 @@ export default function ProductsPage() {
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-500 font-mono">
-                          {product.serialNo || (page - 1) * 20 + idx + 1}
+                          {product.serialNo || idx + 1}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -359,10 +336,8 @@ export default function ProductsPage() {
                   ))}
                 </tbody>
               </table>
+                <LoadMore hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} count={products.length} />
               </ListScroll>
-
-              {/* Pagination */}
-              <PaginationBar page={page} totalPages={totalPages} onChange={setPage} />
             </>
           )}
         </div>
